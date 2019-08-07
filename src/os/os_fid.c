@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -88,7 +88,6 @@ __os_fileid(env, fname, unique_okay, fidp)
 	 /*
 	  * Use the file name.
 	  *
-	  * XXX
 	  * Cast the first argument, the BREW ARM compiler is unhappy if
 	  * we don't.
 	  */

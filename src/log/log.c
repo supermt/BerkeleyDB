@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -116,6 +116,11 @@ __log_open(env)
 		 */
 		lp->ready_lsn = lp->lsn;
 		if (IS_ENV_REPLICATED(env)) {
+			/*
+			 * The space for bulk_buf is accounted for in
+			 * env_attach() because it depends on whether
+			 * the DB_INIT_REP flag is set.
+			 */
 			if ((ret =
 			    __env_alloc(&dblp->reginfo, MEGABYTE, &bulk)) != 0)
 				goto err;
@@ -140,7 +145,8 @@ __log_open(env)
 "Warning: Ignoring maximum log file size when joining the environment"));
 
 		log_flags = dbenv->lg_flags & ~DB_LOG_AUTO_REMOVE;
-		if ((dbenv->lg_flags & DB_LOG_AUTO_REMOVE))
+		if ((dbenv->lg_flags & DB_LOG_AUTO_REMOVE) &&
+		    lp->db_log_autoremove == 0)
 			__db_msg(env, DB_STR("2586",
 "Warning: Ignoring DB_LOG_AUTO_REMOVE when joining the environment."));
 		if (log_flags != 0 && (ret =
@@ -151,16 +157,34 @@ __log_open(env)
 
 	return (0);
 
-err:	if (dblp->reginfo.addr != NULL) {
-		if (region_locked)
-			LOG_SYSTEM_UNLOCK(env);
-		(void)__env_region_detach(env, &dblp->reginfo, 0);
-	}
-	env->lg_handle = NULL;
-
+err:	if (region_locked)
+		LOG_SYSTEM_UNLOCK(env);
 	(void)__mutex_free(env, &dblp->mtx_dbreg);
-	__os_free(env, dblp);
+	(void)__log_region_detach(env, dblp);
 
+	return (ret);
+}
+
+/*
+ * __log_region_detach --
+ *
+ * PUBLIC: int __log_region_detach __P((ENV *, DB_LOG *));
+ */
+int
+__log_region_detach(env, dblp)
+	ENV *env;
+	DB_LOG *dblp;
+{
+	int ret;
+
+	ret = 0;
+	if (dblp != NULL) {
+		if (dblp->reginfo.addr != NULL)
+			ret = __env_region_detach(env, &dblp->reginfo, 0);
+		/* Discard DB_LOG. */
+		__os_free(env, dblp);
+		env->lg_handle = NULL;
+	}
 	return (ret);
 }
 
@@ -748,11 +772,11 @@ __log_valid(dblp, number, set_persist, fhpp, flags, statusp, versionp)
 
 	/* Validate the header. */
 	if (persist->magic != DB_LOGMAGIC) {
+		ret = USR_ERR(env, EINVAL);
 		__db_errx(env, DB_STR_A("2530",
 		    "Ignoring log file: %s: magic number %lx, not %lx",
 		    "%s %lx %lx"), fname,
 		    (u_long)persist->magic, (u_long)DB_LOGMAGIC);
-		ret = EINVAL;
 		goto err;
 	}
 
@@ -764,10 +788,10 @@ __log_valid(dblp, number, set_persist, fhpp, flags, statusp, versionp)
 	 */
 	if (logversion > DB_LOGVERSION) {
 		/* This is a fatal error--the log file is newer than DB. */
+		ret = USR_ERR(env, EINVAL);
 		__db_errx(env, DB_STR_A("2531",
 		    "Unacceptable log file %s: unsupported log version %lu",
 		    "%s %lu"), fname, (u_long)logversion);
-		ret = EINVAL;
 		goto err;
 	} else if (logversion < DB_LOGOLDVER) {
 		status = DB_LV_OLD_UNREADABLE;
@@ -892,66 +916,68 @@ __log_env_refresh(env)
 	/*
 	 * After we close the files, check for any unlogged closes left in
 	 * the shared memory queue.  If we find any, try to log it, otherwise
-	 * return the error.  We cannot say the environment was closed
-	 * cleanly.
+	 * return the error; we cannot say the environment was closed cleanly.
+	 * This does not use the typical MUTEX_LOCK(), but MUTEX_LOCK_RET(). The
+	 * normal function would immediately return DB_RUNRECOVERY if we are
+	 * closing the env down during a panic. By using MUTEX_LOCK_RET(), we
+	 * continue with the rest of the cleanup.
 	 */
-	MUTEX_LOCK(env, lp->mtx_filelist);
-	SH_TAILQ_FOREACH(fnp, &lp->fq, q, __fname)
-		if (F_ISSET(fnp, DB_FNAME_NOTLOGGED) &&
-		    (t_ret = __dbreg_close_id_int(
-		    env, fnp, DBREG_CLOSE, 1)) != 0)
-			ret = t_ret;
-	MUTEX_UNLOCK(env, lp->mtx_filelist);
-
+	if ((ret = MUTEX_LOCK_RET(env, lp->mtx_filelist)) == 0) {
+		SH_TAILQ_FOREACH(fnp, &lp->fq, q, __fname)
+			if (F_ISSET(fnp, DB_FNAME_NOTLOGGED) &&
+			    (t_ret = __dbreg_close_id_int(
+			    env, fnp, DBREG_CLOSE, 1)) != 0)
+				ret = t_ret;
+		MUTEX_UNLOCK(env, lp->mtx_filelist);
+	}
 	/*
-	 * If a private region, return the memory to the heap.  Not needed for
-	 * filesystem-backed or system shared memory regions, that memory isn't
-	 * owned by any particular process.
+	 * If a private region, return the memory to the heap.  Not
+	 * needed for filesystem-backed or system shared memory regions,
+	 * that memory isn't owned by any particular process.
 	 */
 	if (F_ISSET(env, ENV_PRIVATE)) {
-		reginfo->mtx_alloc = MUTEX_INVALID;
-		/* Discard the flush mutex. */
-		if ((t_ret =
-		    __mutex_free(env, &lp->mtx_flush)) != 0 && ret == 0)
-			ret = t_ret;
+	    reginfo->mtx_alloc = MUTEX_INVALID;
+	    /* Discard the flush mutex. */
+	    if ((t_ret = __mutex_free(env, &lp->mtx_flush)) != 0 && ret == 0)
+		    ret = t_ret;
 
-		/* Discard the buffer. */
-		__env_alloc_free(reginfo, R_ADDR(reginfo, lp->buffer_off));
+	    /* Discard the log buffer. */
+	    __env_alloc_free(reginfo, R_ADDR(reginfo, lp->buffer_off));
 
-		/* Discard stack of free file IDs. */
-		if (lp->free_fid_stack != INVALID_ROFF)
-			__env_alloc_free(reginfo,
-			    R_ADDR(reginfo, lp->free_fid_stack));
+	    /* Discard stack of free file IDs. */
+	    if (lp->free_fid_stack != INVALID_ROFF)
+		    __env_alloc_free(reginfo,
+			R_ADDR(reginfo, lp->free_fid_stack));
 
-		/* Discard the list of in-memory log file markers. */
-		while ((filestart = SH_TAILQ_FIRST(&lp->logfiles,
-		    __db_filestart)) != NULL) {
-			SH_TAILQ_REMOVE(&lp->logfiles, filestart, links,
-			    __db_filestart);
-			__env_alloc_free(reginfo, filestart);
-		}
+	    /* Discard the list of in-memory log file markers. */
+	    while ((filestart = SH_TAILQ_FIRST(&lp->logfiles,
+		__db_filestart)) != NULL) {
+		    SH_TAILQ_REMOVE(&lp->logfiles, filestart, links,
+			__db_filestart);
+		    __env_alloc_free(reginfo, filestart);
+	    }
 
-		while ((filestart = SH_TAILQ_FIRST(&lp->free_logfiles,
-		    __db_filestart)) != NULL) {
-			SH_TAILQ_REMOVE(&lp->free_logfiles, filestart, links,
-			    __db_filestart);
-			__env_alloc_free(reginfo, filestart);
-		}
+	    while ((filestart = SH_TAILQ_FIRST(&lp->free_logfiles,
+		__db_filestart)) != NULL) {
+		    SH_TAILQ_REMOVE(&lp->free_logfiles, filestart, links,
+			__db_filestart);
+		    __env_alloc_free(reginfo, filestart);
+	    }
 
-		/* Discard commit queue elements. */
-		while ((commit = SH_TAILQ_FIRST(&lp->free_commits,
-		    __db_commit)) != NULL) {
-			SH_TAILQ_REMOVE(&lp->free_commits, commit, links,
-			    __db_commit);
-			__env_alloc_free(reginfo, commit);
-		}
+	    /* Discard commit queue elements. */
+	    while ((commit = SH_TAILQ_FIRST(&lp->free_commits,
+		__db_commit)) != NULL) {
+		    SH_TAILQ_REMOVE(&lp->free_commits, commit, links,
+			__db_commit);
+		    __env_alloc_free(reginfo, commit);
+	    }
 
-		/* Discard replication bulk buffer. */
-		if (lp->bulk_buf != INVALID_ROFF) {
-			__env_alloc_free(reginfo,
-			    R_ADDR(reginfo, lp->bulk_buf));
-			lp->bulk_buf = INVALID_ROFF;
-		}
+	    /* Discard replication bulk buffer. */
+	    if (lp->bulk_buf != INVALID_ROFF) {
+		    __env_alloc_free(reginfo,
+			R_ADDR(reginfo, lp->bulk_buf));
+		    lp->bulk_buf = INVALID_ROFF;
+	    }
 	}
 
 	/* Discard the per-thread DBREG mutex. */
@@ -1044,11 +1070,11 @@ __log_region_mutex_max(env)
 
 /*
  * __log_region_size --
- *	Return the amount of space needed for the log region.
- *	Make the region large enough to hold txn_max transaction
- *	detail structures  plus some space to hold thread handles
- *	and the beginning of the alloc region and anything we
- *	need for mutex system resource recording.
+ *	Return the initial amount of space needed for the log region.
+ *	This includes:
+ *	    the log buffer
+ *	    DB_ENV->set_memory_init(DB_MEM_LOGID) log fileid structs
+ *
  * PUBLIC: size_t	__log_region_size __P((ENV *));
  */
 size_t
@@ -1066,14 +1092,19 @@ __log_region_size(env)
 		    LG_BSIZE_INMEM : LG_BSIZE_DEFAULT;
 
 	s = dbenv->lg_bsize;
-	/* Allocate the initial fileid allocation, plus some path name space. */
-	s += dbenv->lg_fileid_init * __env_alloc_size((sizeof(FNAME)) + 16);
+	s += dbenv->lg_fileid_init * __env_alloc_size(sizeof(FNAME) + 16);
 
 	return (s);
 }
 /*
  * __log_region_max --
- *	Return the amount of extra memory to allocate for logging informaition.
+ *	Return how much additional memory to allow for in the environment region
+ *	so that all log-specific data structures can be allocated. The result is
+ *	the maximum of:
+ *	- the initial __log_region_size()
+ *	- the log region size set by DB_ENV->set_lg_regionmax(), or,
+ *	  if that is zero, LG_BASE_REGION_SIZE (about 128K)
+ *
  * PUBLIC: size_t	__log_region_max __P((ENV *));
  */
 size_t
@@ -1082,18 +1113,17 @@ __log_region_max(env)
 {
 
 	DB_ENV *dbenv;
-	size_t s;
+	size_t init_size, s;
 
 	dbenv = env->dbenv;
-	if (dbenv->lg_fileid_init == 0) {
-		if ((s = dbenv->lg_regionmax) == 0)
-			s = LG_BASE_REGION_SIZE;
-	} else if ((s = dbenv->lg_regionmax) != 0 &&
-	     s < dbenv->lg_fileid_init * (__env_alloc_size(sizeof(FNAME)) + 16))
+	if ((s = dbenv->lg_regionmax) == 0)
+		s = LG_BASE_REGION_SIZE;
+	init_size = dbenv->lg_bsize + dbenv->lg_fileid_init *
+		    __env_alloc_size(sizeof(FNAME) + 16);
+	if (s > init_size)
+		s -= init_size;
+	else
 		s = 0;
-	else if (s != 0)
-		s -= dbenv->lg_fileid_init *
-		     (__env_alloc_size(sizeof(FNAME)) + 16);
 
 	return (s);
 }
@@ -1387,7 +1417,7 @@ __log_inmem_lsnoff(dblp, lsnp, offsetp)
 			return (0);
 		}
 
-	return (DB_NOTFOUND);
+	return (USR_ERR(dblp->env, DB_NOTFOUND));
 }
 
 /*
@@ -1679,8 +1709,12 @@ __log_get_oldversion(env, ver)
 		goto err;
 	}
 	firstfnum = lsn.file;
-	if ((ret = __logc_get(logc, &lsn, &rec, DB_LAST)) != 0)
-		goto err;
+	/*
+	 * Get the last on-disk lsn.
+	 */
+	LOG_SYSTEM_LOCK(env);
+	lsn = lp->s_lsn;
+	LOG_SYSTEM_UNLOCK(env);
 	if ((ret = __log_valid(dblp, firstfnum, 0, NULL, 0,
 	    NULL, &oldver)) != 0)
 		goto err;

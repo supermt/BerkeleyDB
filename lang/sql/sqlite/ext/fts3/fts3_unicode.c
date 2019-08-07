@@ -1,4 +1,10 @@
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2012 May 24
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -13,7 +19,7 @@
 ** Implementation of the "unicode" full-text-search tokenizer.
 */
 
-#ifdef SQLITE_ENABLE_FTS4_UNICODE61
+#ifndef SQLITE_DISABLE_FTS3_UNICODE
 
 #include "fts3Int.h"
 #if !defined(SQLITE_CORE) || defined(SQLITE_ENABLE_FTS3)
@@ -136,16 +142,16 @@ static int unicodeAddExceptions(
 ){
   const unsigned char *z = (const unsigned char *)zIn;
   const unsigned char *zTerm = &z[nIn];
-  int iCode;
+  unsigned int iCode;
   int nEntry = 0;
 
   assert( bAlnum==0 || bAlnum==1 );
 
   while( z<zTerm ){
     READ_UTF8(z, zTerm, iCode);
-    assert( (sqlite3FtsUnicodeIsalnum(iCode) & 0xFFFFFFFE)==0 );
-    if( sqlite3FtsUnicodeIsalnum(iCode)!=bAlnum 
-     && sqlite3FtsUnicodeIsdiacritic(iCode)==0 
+    assert( (sqlite3FtsUnicodeIsalnum((int)iCode) & 0xFFFFFFFE)==0 );
+    if( sqlite3FtsUnicodeIsalnum((int)iCode)!=bAlnum 
+     && sqlite3FtsUnicodeIsdiacritic((int)iCode)==0 
     ){
       nEntry++;
     }
@@ -162,13 +168,13 @@ static int unicodeAddExceptions(
     z = (const unsigned char *)zIn;
     while( z<zTerm ){
       READ_UTF8(z, zTerm, iCode);
-      if( sqlite3FtsUnicodeIsalnum(iCode)!=bAlnum 
-       && sqlite3FtsUnicodeIsdiacritic(iCode)==0
+      if( sqlite3FtsUnicodeIsalnum((int)iCode)!=bAlnum 
+       && sqlite3FtsUnicodeIsdiacritic((int)iCode)==0
       ){
         int i, j;
-        for(i=0; i<nNew && aNew[i]<iCode; i++);
+        for(i=0; i<nNew && aNew[i]<(int)iCode; i++);
         for(j=nNew; j>i; j--) aNew[j] = aNew[j-1];
-        aNew[i] = iCode;
+        aNew[i] = (int)iCode;
         nNew++;
       }
     }
@@ -231,7 +237,7 @@ static int unicodeCreate(
 
   for(i=0; rc==SQLITE_OK && i<nArg; i++){
     const char *z = azArg[i];
-    int n = strlen(z);
+    int n = (int)strlen(z);
 
     if( n==19 && memcmp("remove_diacritics=1", z, 19)==0 ){
       pNew->bRemoveDiacritic = 1;
@@ -318,7 +324,7 @@ static int unicodeNext(
 ){
   unicode_cursor *pCsr = (unicode_cursor *)pC;
   unicode_tokenizer *p = ((unicode_tokenizer *)pCsr->base.pTokenizer);
-  int iCode;
+  unsigned int iCode = 0;
   char *zOut;
   const unsigned char *z = &pCsr->aInput[pCsr->iOff];
   const unsigned char *zStart = z;
@@ -330,7 +336,7 @@ static int unicodeNext(
   ** the input.  */
   while( z<zTerm ){
     READ_UTF8(z, zTerm, iCode);
-    if( unicodeIsAlnum(p, iCode) ) break;
+    if( unicodeIsAlnum(p, (int)iCode) ) break;
     zStart = z;
   }
   if( zStart>=zTerm ) return SQLITE_DONE;
@@ -350,7 +356,7 @@ static int unicodeNext(
 
     /* Write the folded case of the last character read to the output */
     zEnd = z;
-    iOut = sqlite3FtsUnicodeFold(iCode, p->bRemoveDiacritic);
+    iOut = sqlite3FtsUnicodeFold((int)iCode, p->bRemoveDiacritic);
     if( iOut ){
       WRITE_UTF8(zOut, iOut);
     }
@@ -358,16 +364,16 @@ static int unicodeNext(
     /* If the cursor is not at EOF, read the next character */
     if( z>=zTerm ) break;
     READ_UTF8(z, zTerm, iCode);
-  }while( unicodeIsAlnum(p, iCode) 
-       || sqlite3FtsUnicodeIsdiacritic(iCode)
+  }while( unicodeIsAlnum(p, (int)iCode) 
+       || sqlite3FtsUnicodeIsdiacritic((int)iCode)
   );
 
   /* Set the output variables and return. */
-  pCsr->iOff = (z - pCsr->aInput);
+  pCsr->iOff = (int)(z - pCsr->aInput);
   *paToken = pCsr->zToken;
-  *pnToken = zOut - pCsr->zToken;
-  *piStart = (zStart - pCsr->aInput);
-  *piEnd = (zEnd - pCsr->aInput);
+  *pnToken = (int)(zOut - pCsr->zToken);
+  *piStart = (int)(zStart - pCsr->aInput);
+  *piEnd = (int)(zEnd - pCsr->aInput);
   *piPos = pCsr->iToken++;
   return SQLITE_OK;
 }
@@ -390,4 +396,4 @@ void sqlite3Fts3UnicodeTokenizer(sqlite3_tokenizer_module const **ppModule){
 }
 
 #endif /* !defined(SQLITE_CORE) || defined(SQLITE_ENABLE_FTS3) */
-#endif /* ifndef SQLITE_ENABLE_FTS4_UNICODE61 */
+#endif /* ifndef SQLITE_DISABLE_FTS3_UNICODE */

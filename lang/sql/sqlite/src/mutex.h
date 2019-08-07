@@ -1,4 +1,10 @@
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2007 August 28
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -25,7 +31,7 @@
 ** Figure out what version of the code to use.  The choices are
 **
 **   SQLITE_MUTEX_OMIT         No mutex logic.  Not even stubs.  The
-**                             mutexes implemention cannot be overridden
+**                             mutexes implementation cannot be overridden
 **                             at start-time.
 **
 **   SQLITE_MUTEX_NOOP         For single-threaded applications.  No

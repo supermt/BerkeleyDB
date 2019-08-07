@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -98,6 +98,8 @@ __log_put(env, lsnp, udbt, flags)
 	int lock_held, need_free, ret;
 	u_int8_t *key;
 
+	COMPQUIET(rep, NULL);
+	
 	dblp = env->lg_handle;
 	lp = dblp->reginfo.primary;
 	db_cipher = env->crypto_handle;
@@ -136,7 +138,20 @@ __log_put(env, lsnp, udbt, flags)
 #endif
 		}
 	}
-	DB_ASSERT(env, !IS_REP_CLIENT(env));
+
+	if (IS_REP_CLIENT(env)) {
+		__db_errx(env, DB_STR("2590",
+			    "log_put is illegal on replication clients"));
+#if  !defined(DIAGNOSTIC)
+		/*
+		 * DB_ASSERT would generate a stack if DIAGNOSTIC is true.
+		 */
+		__os_stack(env);
+		return (__env_panic(env, EINVAL));
+#endif
+
+		DB_ASSERT(env, FALSE);
+	}
 
 	/*
 	 * If we are coming from the logging code, we use an internal flag,
@@ -280,8 +295,7 @@ __log_put(env, lsnp, udbt, flags)
 		 * If the send fails and we're a commit or checkpoint,
 		 * there's nothing we can do;  the record's in the log.
 		 * Flush it, even if we're running with TXN_NOSYNC,
-		 * on the grounds that it should be in durable
-		 * form somewhere.
+		 * on the grounds that it should be in durable form somewhere.
 		 */
 		if (ret != 0 && FLD_ISSET(ctlflags, REPCTL_PERM))
 			LF_SET(DB_FLUSH);
@@ -561,7 +575,12 @@ __log_flush_commit(env, lsnp, flags)
 		    "Write failed on MASTER commit."));
 		return (__env_panic(env, ret));
 	}
-
+	/*
+	 * If this is a panic don't attempt to abort just this transaction;
+	 * it may trip over the panic, and the whole env needs to go anyway.
+	 */
+	if (ret == DB_RUNRECOVERY)
+		return (__env_panic(env, ret));
 	/*
 	 * Else, make sure that the commit record does not get out after we
 	 * abort the transaction.  Do this by overwriting the commit record
@@ -1024,7 +1043,7 @@ __log_flush_int(dblp, lsnp, release)
 				__env_alloc_free(&dblp->reginfo, commit);
 				return (ret);
 			}
-			MUTEX_LOCK(env, commit->mtx_txnwait);
+			MUTEX_LOCK_NO_CTR(env, commit->mtx_txnwait);
 		} else
 			SH_TAILQ_REMOVE(
 			    &lp->free_commits, commit, links, __db_commit);
@@ -1043,7 +1062,7 @@ __log_flush_int(dblp, lsnp, release)
 		    &lp->commits, commit, links, __db_commit);
 		LOG_SYSTEM_UNLOCK(env);
 		/* Wait here for the in-progress flush to finish. */
-		MUTEX_LOCK(env, commit->mtx_txnwait);
+		MUTEX_LOCK_NO_CTR(env, commit->mtx_txnwait);
 		LOG_SYSTEM_LOCK(env);
 
 		lp->ncommit--;
@@ -1118,12 +1137,15 @@ flush:	MUTEX_LOCK(env, lp->mtx_flush);
 		LOG_SYSTEM_UNLOCK(env);
 
 	/* Sync all writes to disk. */
-	if ((ret = __os_fsync(env, dblp->lfhp)) != 0) {
-		MUTEX_UNLOCK(env, lp->mtx_flush);
-		if (release)
-			LOG_SYSTEM_LOCK(env);
-		lp->in_flush--;
-		goto done;
+	if (!lp->nosync) {
+		if ((ret = __os_fsync(env, dblp->lfhp)) != 0) {
+			MUTEX_UNLOCK(env, lp->mtx_flush);
+			if (release)
+				LOG_SYSTEM_LOCK(env);
+			lp->in_flush--;
+			goto done;
+		}
+		STAT(++lp->stat.st_scount);
 	}
 
 	/*
@@ -1143,7 +1165,6 @@ flush:	MUTEX_LOCK(env, lp->mtx_flush);
 		LOG_SYSTEM_LOCK(env);
 
 	lp->in_flush--;
-	STAT(++lp->stat.st_scount);
 
 	/*
 	 * How many flush calls (usually commits) did this call actually sync?
@@ -1155,13 +1176,13 @@ done:
 		first = 1;
 		SH_TAILQ_FOREACH(commit, &lp->commits, links, __db_commit)
 			if (LOG_COMPARE(&lp->s_lsn, &commit->lsn) > 0) {
-				MUTEX_UNLOCK(env, commit->mtx_txnwait);
+				MUTEX_UNLOCK_NO_CTR(env, commit->mtx_txnwait);
 				SH_TAILQ_REMOVE(
 				    &lp->commits, commit, links, __db_commit);
 				ncommit++;
 			} else if (first == 1) {
 				F_SET(commit, DB_COMMIT_FLUSH);
-				MUTEX_UNLOCK(env, commit->mtx_txnwait);
+				MUTEX_UNLOCK_NO_CTR(env, commit->mtx_txnwait);
 				SH_TAILQ_REMOVE(
 				    &lp->commits, commit, links, __db_commit);
 				/*
@@ -1440,7 +1461,7 @@ __log_newfh(dblp, create)
 		    "DB_ENV->log_newfh: %lu", (u_long)lp->lsn.file);
 	else if (status != DB_LV_NORMAL && status != DB_LV_INCOMPLETE &&
 	    status != DB_LV_OLD_READABLE)
-		ret = DB_NOTFOUND;
+		ret = USR_ERR(env, DB_NOTFOUND);
 
 	return (ret);
 }
@@ -1682,27 +1703,10 @@ __log_encrypt_record(env, dbt, hdr, orig)
  * PUBLIC:     u_int32_t, u_int32_t, u_int32_t, u_int32_t,
  * PUBLIC:     DB_LOG_RECSPEC *, ...));
  */
-#ifdef STDC_HEADERS
 int
 __log_put_record_pp(DB_ENV *dbenv, DB *dbp, DB_TXN *txnp, DB_LSN *ret_lsnp,
     u_int32_t flags, u_int32_t rectype, u_int32_t has_data, u_int32_t size,
     DB_LOG_RECSPEC *spec, ...)
-#else
-int
-__log_put_record_pp(dbenv, dbp, txnp, ret_lsnp,
-    flags, rectype, has_data, size,
-    spec, va_alist)
-	DB_ENV *dbenv;
-	DB *dbp;
-	DB_TXN *txnp;
-	DB_LSN *ret_lsnp;
-	u_int32_t flags;
-	u_int32_t rectype;
-	u_int32_t has_data;
-	u_int32_t size;
-	DB_LOG_RECSPEC *spec;
-	va_dcl
-#endif
 {
 	DB_THREAD_INFO *ip;
 	ENV *env;
@@ -1726,7 +1730,7 @@ __log_put_record_pp(dbenv, dbp, txnp, ret_lsnp,
 
 	/* Replication clients should never write log records. */
 	if (IS_REP_CLIENT(env)) {
-		__db_errx(env, DB_STR("2522",
+		__db_errx(env, DB_STR("2511",
 		    "DB_ENV->log_put is illegal on replication clients"));
 		return (EINVAL);
 	}
@@ -1746,26 +1750,10 @@ __log_put_record_pp(dbenv, dbp, txnp, ret_lsnp,
  * PUBLIC:     u_int32_t, u_int32_t, u_int32_t, u_int32_t,
  * PUBLIC:     DB_LOG_RECSPEC *, ...));
  */
-#ifdef STDC_HEADERS
 int
 __log_put_record(ENV *env, DB *dbp, DB_TXN *txnp, DB_LSN *ret_lsnp,
     u_int32_t flags, u_int32_t rectype, u_int32_t has_data, u_int32_t size,
     DB_LOG_RECSPEC *spec, ...)
-#else
-int
-__log_put_record(env, dbp, txnp, ret_lsnp,
-    flags, rectype, has_data, size, spec, va_alist);
-	ENV *env;
-	DB *dbp;
-	DB_TXN *txnp;
-	DB_LSN *ret_lsnp;
-	u_int32_t flags;
-	u_int32_t rectype;
-	u_int32_t has_data;
-	u_int32_t size;
-	DB_LOG_RECSPEC *spec;
-	va_dcl
-#endif
 {
 	va_list argp;
 	int ret;
@@ -1777,26 +1765,10 @@ __log_put_record(env, dbp, txnp, ret_lsnp,
 	return (ret);
 }
 
-#ifdef STDC_HEADERS
 static int
 __log_put_record_int(ENV *env, DB *dbp, DB_TXN *txnp, DB_LSN *ret_lsnp,
     u_int32_t flags, u_int32_t rectype, u_int32_t has_data, u_int32_t size,
     DB_LOG_RECSPEC *spec, va_list argp)
-#else
-int
-__log_put_record_int(env, dbp, txnp, ret_lsnp,
-    flags, rectype, has_data, size, spec, argp);
-	ENV *env;
-	DB *dbp;
-	DB_TXN *txnp;
-	DB_LSN *ret_lsnp;
-	u_int32_t flags;
-	u_int32_t has_data;
-	u_int32_t size;
-	u_int32_t rectype;
-	DB_LOG_RECSPEC *spec;
-	va_list argp;
-#endif
 {
 	DBT *data, *dbt, *header, logrec;
 	DB_LOG_RECSPEC *sp;
@@ -1804,6 +1776,7 @@ __log_put_record_int(env, dbp, txnp, ret_lsnp,
 	DB_TXNLOGREC *lr;
 	LOG *lp;
 	PAGE *pghdrstart;
+	u_int64_t ulltmp;
 	u_int32_t hdrsize, op, zero, uinttmp, txn_num;
 	u_int npad;
 	u_int8_t *bp;
@@ -1850,7 +1823,7 @@ __log_put_record_int(env, dbp, txnp, ret_lsnp,
 			return (ret);
 		/*
 		 * We need to assign begin_lsn while holding region mutex.
-		 * That assignment is done inside the DbEnv->log_put call,
+		 * That assignment is done inside the __log_put call,
 		 * so pass in the appropriate memory location to be filled
 		 * in by the log_put code.
 		 */
@@ -1873,8 +1846,7 @@ __log_put_record_int(env, dbp, txnp, ret_lsnp,
 	}
 
 	if (is_durable || txnp == NULL) {
-		if ((ret =
-		    __os_malloc(env, logrec.size, &logrec.data)) != 0)
+		if ((ret = __os_malloc(env, logrec.size, &logrec.data)) != 0)
 			return (ret);
 	} else {
 		if ((ret = __os_malloc(env,
@@ -1921,6 +1893,11 @@ __log_put_record_int(env, dbp, txnp, ret_lsnp,
 			uinttmp = va_arg(argp, u_int32_t);
 			LOGCOPY_32(env, bp, &uinttmp);
 			bp += sizeof(uinttmp);
+			break;
+		case LOGREC_LONGARG:
+			ulltmp = va_arg(argp, u_int64_t);
+			LOGCOPY_64(env, bp, &ulltmp);
+			bp += sizeof(ulltmp);
 			break;
 		case LOGREC_OP:
 			op = va_arg(argp, u_int32_t);

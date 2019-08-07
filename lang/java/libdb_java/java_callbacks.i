@@ -17,7 +17,7 @@ JAVA_TYPEMAP(_sig, _jclass, jboolean)
 static void __dbj_error(const DB_ENV *dbenv,
     const char *prefix, const char *msg)
 {
-	int detach;
+	int detach, ret;
 	JNIEnv *jenv = __dbj_get_jnienv(&detach);
 	jobject jdbenv = (jobject)DB_ENV_INTERNAL(dbenv);
 	jobject jmsg;
@@ -29,6 +29,11 @@ static void __dbj_error(const DB_ENV *dbenv,
 		(*jenv)->CallNonvirtualVoidMethod(jenv, jdbenv, dbenv_class,
 		    errcall_method, jmsg);
 		(*jenv)->DeleteLocalRef(jenv, jmsg);
+	}
+
+	if ((*jenv)->ExceptionOccurred(jenv)) {
+		/* The exception will be thrown, so this could be any error. */
+		ret = EINVAL;
 	}
 
 	if (detach)
@@ -49,18 +54,26 @@ static void __dbj_env_feedback(DB_ENV *dbenv, int opcode, int percent)
 		__dbj_detach();
 }
 
-static void __dbj_message(const DB_ENV *dbenv, const char *msg)
+static void __dbj_message(const DB_ENV *dbenv,
+    const char *prefix, const char *msg)
 {
-	int detach;
+	int detach, ret;
 	JNIEnv *jenv = __dbj_get_jnienv(&detach);
 	jobject jdbenv = (jobject)DB_ENV_INTERNAL(dbenv);
 	jobject jmsg;
+
+	COMPQUIET(prefix, NULL);
 
 	if (jdbenv != NULL){
 		jmsg = (*jenv)->NewStringUTF(jenv, msg);
 		(*jenv)->CallNonvirtualVoidMethod(jenv, jdbenv, dbenv_class,
 		    msgcall_method, jmsg);
 		(*jenv)->DeleteLocalRef(jenv, jmsg);
+	}
+
+	if ((*jenv)->ExceptionOccurred(jenv)) {
+		/* The exception will be thrown, so this could be any error. */
+		ret = EINVAL;
 	}
 
 	if (detach)
@@ -114,6 +127,11 @@ static void __dbj_panic(DB_ENV *dbenv, int ret)
 		    paniccall_method,
 		    __dbj_get_except(jenv, ret, NULL, NULL, jdbenv));
 
+	if ((*jenv)->ExceptionOccurred(jenv)) {
+		/* The exception will be thrown, so this could be any error. */
+		ret = EINVAL;
+	}
+
 	if (detach)
 		__dbj_detach();
 }
@@ -162,7 +180,7 @@ err:	if (detach)
 
 static void __dbj_event_notify(DB_ENV *dbenv, u_int32_t event_id, void * info)
 {
-	int detach;
+	int detach, ret;
 	JNIEnv *jenv = __dbj_get_jnienv(&detach);
 	jobject jdbenv = (jobject)DB_ENV_INTERNAL(dbenv);
 
@@ -173,6 +191,10 @@ static void __dbj_event_notify(DB_ENV *dbenv, u_int32_t event_id, void * info)
 	case DB_EVENT_PANIC:
 		(*jenv)->CallNonvirtualVoidMethod(jenv, jdbenv,
 		    dbenv_class, panic_event_notify_method);
+		break;
+	case DB_EVENT_REP_AUTOTAKEOVER:
+		(*jenv)->CallNonvirtualVoidMethod(jenv, jdbenv,
+		    dbenv_class, rep_autotakeover_event_notify_method);
 		break;
 	case DB_EVENT_REP_AUTOTAKEOVER_FAILED:
 		(*jenv)->CallNonvirtualVoidMethod(jenv, jdbenv,
@@ -209,6 +231,10 @@ static void __dbj_event_notify(DB_ENV *dbenv, u_int32_t event_id, void * info)
 	case DB_EVENT_REP_INIT_DONE:
 		(*jenv)->CallNonvirtualVoidMethod(jenv, jdbenv,
 		    dbenv_class, rep_init_done_event_notify_method);
+		break;
+	case DB_EVENT_REP_INQUEUE_FULL:
+		(*jenv)->CallNonvirtualVoidMethod(jenv, jdbenv,
+		    dbenv_class, rep_inqueue_full_event_notify_method);
 		break;
 	case DB_EVENT_REP_JOIN_FAILURE:
 		(*jenv)->CallNonvirtualVoidMethod(jenv, jdbenv,
@@ -255,6 +281,11 @@ static void __dbj_event_notify(DB_ENV *dbenv, u_int32_t event_id, void * info)
 	default:
                 dbenv->errx(dbenv, "Unhandled event callback in the Java API");
                 DB_ASSERT(dbenv->env, 0);
+	}
+
+	if ((*jenv)->ExceptionOccurred(jenv)) {
+		/* The exception will be thrown, so this could be any error. */
+		ret = EINVAL;
 	}
 
 done:	if (detach)
@@ -423,6 +454,9 @@ static int __dbj_seckey_create(DB *db,
 	DBT *tresult;
 	int ret;
 
+	jskeys = NULL;
+	jkeyarr = jdataarr = NULL;
+	jkey = jdata = NULL;
 	if (jdb == NULL) {
 		ret = EINVAL;
 		goto err;
@@ -456,6 +490,11 @@ static int __dbj_seckey_create(DB *db,
 
 	jskeys = (jobjectArray)(*jenv)->CallNonvirtualObjectMethod(jenv,
 	    jdb, db_class, seckey_create_method, jkey, jdata);
+
+	if ((*jenv)->ExceptionOccurred(jenv)) {
+		/* The exception will be thrown, so this could be any error. */
+		ret = EINVAL;
+	}
 
 	if (jskeys == NULL ||
 	    (num_skeys = (*jenv)->GetArrayLength(jenv, jskeys)) == 0) {
@@ -533,6 +572,8 @@ static int __dbj_append_recno(DB *db, DBT *dbt, db_recno_t recno)
 	jbyteArray jdbtarr;
 	int ret;
 
+	jdbtarr = NULL;
+	jdbt = NULL;
 	if (jdb == NULL) {
 		ret = EINVAL;
 		goto err;
@@ -1098,6 +1139,44 @@ err:	if (detach)
 		__dbj_detach();
 	return (ret);
 }
+
+static int __dbj_slice(const DB *db, const DBT *dbt1, DBT *dbt2)
+{
+	int detach;
+	JNIEnv *jenv = __dbj_get_jnienv(&detach);
+	jobject jdb = (jobject)DB_INTERNAL(db);
+	jobject jdbt1, jdbt2;
+	jbyteArray jdbtarr1, jdbtarr2;
+	DBT_LOCKED lresult;
+	int ret;
+
+	if (jdb == NULL) {
+		ret = EINVAL;
+		goto err;
+	}
+
+	jdbt1 = jdbt2 = NULL;
+
+	DBT_COPYOUT(1);
+	DBT_COPYOUT(2);
+
+	ret = (int)(*jenv)->CallNonvirtualIntMethod(jenv, jdb, db_class,
+	    slice_method, jdbt1, jdbt2);
+
+	if ((*jenv)->ExceptionOccurred(jenv)) {
+		/* The exception will be thrown, so this could be any error. */
+		ret = EINVAL;
+		goto err;
+	}
+
+	DBT_COPYIN_DATA(2);
+
+err:	DBT_COPIED_FREE(1);
+	DBT_COPIED_FREE(2);
+	if (detach)
+		__dbj_detach();
+	return (ret);
+}
 %}
 
 JAVA_CALLBACK(int (*backup_close_fcn)(DB_ENV *,
@@ -1110,8 +1189,8 @@ JAVA_CALLBACK(void (*db_errcall_fcn)(const DB_ENV *,
     const char *, const char *), com.sleepycat.db.ErrorHandler, error)
 JAVA_CALLBACK(void (*env_feedback_fcn)(DB_ENV *, int, int),
     com.sleepycat.db.FeedbackHandler, env_feedback)
-JAVA_CALLBACK(void (*db_msgcall_fcn)(const DB_ENV *, const char *),
-    com.sleepycat.db.MessageHandler, message)
+JAVA_CALLBACK(void (*db_msgcall_fcn)(const DB_ENV *,
+    const char *, const char *), com.sleepycat.db.MessageHandler, message)
 JAVA_CALLBACK(void (*db_panic_fcn)(DB_ENV *, int),
     com.sleepycat.db.PanicHandler, panic)
 JAVA_CALLBACK(void (*event_notify)(DB_ENV *, u_int32_t, void *),
@@ -1166,3 +1245,5 @@ JAVA_CALLBACK(u_int32_t (*h_hash_fcn)(DB *, const void *, u_int32_t),
     com.sleepycat.db.Hasher, h_hash)
 JAVA_CALLBACK(int (*rep_view_fcn)(DB_ENV *, const char *, int *, u_int32_t),
     com.sleepycat.db.ReplicationViewHandler, rep_view);
+JAVA_CALLBACK(int (*slice_fcn)(const DB *, const DBT *, DBT *), 
+    com.sleepycat.db.Slice, slice)

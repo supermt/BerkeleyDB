@@ -8,13 +8,13 @@
     <meta name="generator" content="DocBook XSL Stylesheets V1.73.2" />
     <link rel="start" href="index.html" title="Berkeley DB C API Reference" />
     <link rel="up" href="index.html" title="Berkeley DB C API Reference" />
-    <link rel="prev" href="envset_blob_threshold.html" title="DB_ENV-&gt;set_blob_threshold()" />
+    <link rel="prev" href="envset_blob_threshold.html" title="DB_ENV-&gt;set_ext_file_threshold()" />
     <link rel="next" href="db_archive.html" title="db_archive" />
   </head>
   <body>
     <div xmlns="" class="navheader">
       <div class="libver">
-        <p>Library Version 12.1.6.0</p>
+        <p>Library Version 18.1.32</p>
       </div>
       <table width="100%" summary="Navigation header">
         <tr>
@@ -44,6 +44,13 @@
                 The following describes the command line utilities that are available for Berkeley
                 DB.
         </p>
+      <p>
+		Please note: db_verify is the primary tool to prove that 
+		a file is a valid and properly structured Berkeley DB database.
+		If there is any possibility that a database might 
+		be corrupt, db_verify must be run on the database before 
+		using it. 
+	</p>
       <div class="sect1" lang="en" xml:lang="en">
         <div class="titlepage">
           <div>
@@ -72,6 +79,12 @@
                   <a class="xref" href="db_checkpoint.html" title="db_checkpoint">db_checkpoint</a>
                 </td>
                 <td>Transaction checkpoint utility</td>
+              </tr>
+              <tr>
+                <td>
+                  <a class="xref" href="db_convert.html" title="db_convert">db_convert</a>
+                </td>
+                <td>Database convert utility</td>
               </tr>
               <tr>
                 <td>
@@ -123,13 +136,10 @@
               </tr>
               <tr>
                 <td>
-                  <a class="xref" href="db_sql_codegen.html" title="db_sql_codegen">db_sql_codegen</a>
-                </td>
-                <td>SQL schema to Berkeley DB code in C</td>
-              </tr>
-              <tr>
-                <td>
-                  <a class="xref" href="dbsql.html" title="dbsql">dbsql</a>
+                  <a class="xref" href="dbsql.html" title="dbsql">
+        <span>dbsql</span>
+        
+    </a>
                 </td>
                 <td>Command line interface to libdb_sql</td>
               </tr>
@@ -177,7 +187,10 @@
           <td width="40%" align="right"> <a accesskey="n" href="db_archive.html">Next</a></td>
         </tr>
         <tr>
-          <td width="40%" align="left" valign="top">DB_ENV-&gt;set_blob_threshold() </td>
+          <td width="40%" align="left" valign="top">
+        <span>DB_ENV-&gt;set_ext_file_threshold()</span>
+        
+     </td>
           <td width="20%" align="center">
             <a accesskey="h" href="index.html">Home</a>
           </td>

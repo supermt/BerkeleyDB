@@ -1,4 +1,10 @@
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2006 August 23
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -11,11 +17,18 @@
 *************************************************************************
 ** Test extension for testing the sqlite3_auto_extension() function.
 */
-#include "tcl.h"
+#if defined(INCLUDE_SQLITE_TCL_H)
+#  include "sqlite_tcl.h"
+#else
+#  include "tcl.h"
+#  ifndef SQLITE_TCLAPI
+#    define SQLITE_TCLAPI
+#  endif
+#endif
 #include "sqlite3ext.h"
 
 #ifndef SQLITE_OMIT_LOAD_EXTENSION
-static SQLITE_EXTENSION_INIT1
+SQLITE_EXTENSION_INIT1
 
 /*
 ** The sqr() SQL function returns the square of its input value.
@@ -87,13 +100,29 @@ static int broken_init(
 **
 ** Register the "sqr" extension to be loaded automatically.
 */
-static int autoExtSqrObjCmd(
+static int SQLITE_TCLAPI autoExtSqrObjCmd(
   void * clientData,
   Tcl_Interp *interp,
   int objc,
   Tcl_Obj *CONST objv[]
 ){
-  int rc = sqlite3_auto_extension((void*)sqr_init);
+  int rc = sqlite3_auto_extension((void(*)(void))sqr_init);
+  Tcl_SetObjResult(interp, Tcl_NewIntObj(rc));
+  return SQLITE_OK;
+}
+
+/*
+** tclcmd:   sqlite3_cancel_auto_extension_sqr
+**
+** Unregister the "sqr" extension.
+*/
+static int SQLITE_TCLAPI cancelAutoExtSqrObjCmd(
+  void * clientData,
+  Tcl_Interp *interp,
+  int objc,
+  Tcl_Obj *CONST objv[]
+){
+  int rc = sqlite3_cancel_auto_extension((void(*)(void))sqr_init);
   Tcl_SetObjResult(interp, Tcl_NewIntObj(rc));
   return SQLITE_OK;
 }
@@ -103,13 +132,29 @@ static int autoExtSqrObjCmd(
 **
 ** Register the "cube" extension to be loaded automatically.
 */
-static int autoExtCubeObjCmd(
+static int SQLITE_TCLAPI autoExtCubeObjCmd(
   void * clientData,
   Tcl_Interp *interp,
   int objc,
   Tcl_Obj *CONST objv[]
 ){
-  int rc = sqlite3_auto_extension((void*)cube_init);
+  int rc = sqlite3_auto_extension((void(*)(void))cube_init);
+  Tcl_SetObjResult(interp, Tcl_NewIntObj(rc));
+  return SQLITE_OK;
+}
+
+/*
+** tclcmd:   sqlite3_cancel_auto_extension_cube
+**
+** Unregister the "cube" extension.
+*/
+static int SQLITE_TCLAPI cancelAutoExtCubeObjCmd(
+  void * clientData,
+  Tcl_Interp *interp,
+  int objc,
+  Tcl_Obj *CONST objv[]
+){
+  int rc = sqlite3_cancel_auto_extension((void(*)(void))cube_init);
   Tcl_SetObjResult(interp, Tcl_NewIntObj(rc));
   return SQLITE_OK;
 }
@@ -119,13 +164,29 @@ static int autoExtCubeObjCmd(
 **
 ** Register the broken extension to be loaded automatically.
 */
-static int autoExtBrokenObjCmd(
+static int SQLITE_TCLAPI autoExtBrokenObjCmd(
   void * clientData,
   Tcl_Interp *interp,
   int objc,
   Tcl_Obj *CONST objv[]
 ){
-  int rc = sqlite3_auto_extension((void*)broken_init);
+  int rc = sqlite3_auto_extension((void(*)(void))broken_init);
+  Tcl_SetObjResult(interp, Tcl_NewIntObj(rc));
+  return SQLITE_OK;
+}
+
+/*
+** tclcmd:   sqlite3_cancel_auto_extension_broken
+**
+** Unregister the broken extension.
+*/
+static int SQLITE_TCLAPI cancelAutoExtBrokenObjCmd(
+  void * clientData,
+  Tcl_Interp *interp,
+  int objc,
+  Tcl_Obj *CONST objv[]
+){
+  int rc = sqlite3_cancel_auto_extension((void(*)(void))broken_init);
   Tcl_SetObjResult(interp, Tcl_NewIntObj(rc));
   return SQLITE_OK;
 }
@@ -138,7 +199,7 @@ static int autoExtBrokenObjCmd(
 **
 ** Reset all auto-extensions
 */
-static int resetAutoExtObjCmd(
+static int SQLITE_TCLAPI resetAutoExtObjCmd(
   void * clientData,
   Tcl_Interp *interp,
   int objc,
@@ -160,6 +221,12 @@ int Sqlitetest_autoext_Init(Tcl_Interp *interp){
           autoExtCubeObjCmd, 0, 0);
   Tcl_CreateObjCommand(interp, "sqlite3_auto_extension_broken",
           autoExtBrokenObjCmd, 0, 0);
+  Tcl_CreateObjCommand(interp, "sqlite3_cancel_auto_extension_sqr",
+          cancelAutoExtSqrObjCmd, 0, 0);
+  Tcl_CreateObjCommand(interp, "sqlite3_cancel_auto_extension_cube",
+          cancelAutoExtCubeObjCmd, 0, 0);
+  Tcl_CreateObjCommand(interp, "sqlite3_cancel_auto_extension_broken",
+          cancelAutoExtBrokenObjCmd, 0, 0);
 #endif
   Tcl_CreateObjCommand(interp, "sqlite3_reset_auto_extension",
           resetAutoExtObjCmd, 0, 0);

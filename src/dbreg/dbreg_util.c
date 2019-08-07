@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1997, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1997, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -9,6 +9,7 @@
 #include "db_config.h"
 
 #include "db_int.h"
+#include "dbinc/blob.h"
 #include "dbinc/db_page.h"
 #include "dbinc/db_am.h"
 #include "dbinc/fop.h"
@@ -36,6 +37,17 @@ __dbreg_add_dbentry(env, dblp, dbp, ndx)
 	ret = 0;
 
 	MUTEX_LOCK(env, dblp->mtx_dbreg);
+#ifdef DEBUG_RECOVER
+	if (dbp != NULL) {
+		char stack[1024];
+
+		__os_stack_text(env, stack, sizeof(stack), 12, 1);
+		__db_msg(env, "dbreg_add %s %s %d %s\n%s", env->db_home,
+		    dbp->fname == NULL ? "in-mem" : dbp->fname, ndx,
+		    IS_REP_MASTER(env) ? "M" : IS_REP_CLIENT(env) ? "C" : "",
+		    stack);
+	}
+#endif
 
 	/*
 	 * Check if we need to grow the table.  Note, ndx is 0-based (the
@@ -77,6 +89,20 @@ __dbreg_rem_dbentry(dblp, ndx)
 {
 	MUTEX_LOCK(dblp->env, dblp->mtx_dbreg);
 	if (dblp->dbentry_cnt > ndx) {
+#ifdef DEBUG_RECOVER
+		DB *dbp = dblp->dbentry[ndx].dbp;
+		ENV *env = dblp->env;
+		char stack[1024];
+
+		dbp = dblp->dbentry[ndx].dbp;
+		env = dblp->env;
+		__os_stack_text(env, stack, sizeof(stack), 12, 1);
+		__db_msg(env, "dbreg_rem %s %s %d %s\n%s", env->db_home,
+		    dbp == NULL ? "no dbp" : dbp->fname == NULL ? "in-mem" :
+		    dbp->fname, ndx,
+		    IS_REP_MASTER(env) ? "M" : IS_REP_CLIENT(env) ? "C" : "",
+		    stack);
+#endif
 		dblp->dbentry[ndx].dbp = NULL;
 		dblp->dbentry[ndx].deleted = 0;
 	}
@@ -103,6 +129,7 @@ __dbreg_log_files(env, opcode)
 	LOG *lp;
 	u_int32_t lopcode;
 	int ret;
+	u_int32_t blob_file_hi, blob_file_lo;
 
 	dblp = env->lg_handle;
 	lp = dblp->reginfo.primary;
@@ -137,11 +164,12 @@ __dbreg_log_files(env, opcode)
 		lopcode = opcode;
 		if ( opcode == DBREG_CHKPNT && F_ISSET(fnp, DBREG_EXCL))
 			lopcode = DBREG_XCHKPNT;
+		SET_LO_HI_VAR(fnp->blob_file_id, blob_file_lo, blob_file_hi);
 		if ((ret = __dbreg_register_log(env, NULL, &r_unused,
 		    F_ISSET(fnp, DB_FNAME_DURABLE) ? 0 : DB_LOG_NOT_DURABLE,
 		    lopcode | F_ISSET(fnp, DB_FNAME_DBREG_MASK),
 		    dbtp, &fid_dbt, fnp->id, fnp->s_type, fnp->meta_pgno,
-		    TXN_INVALID)) != 0)
+		    TXN_INVALID, blob_file_lo, blob_file_hi)) != 0)
 			break;
 	}
 
@@ -387,7 +415,7 @@ __dbreg_id_to_db(env, txn, dbpp, ndx, tryopen)
 	if (ndx >= dblp->dbentry_cnt ||
 	    (!dblp->dbentry[ndx].deleted && dblp->dbentry[ndx].dbp == NULL)) {
 		if (!tryopen || F_ISSET(dblp, DBLOG_RECOVER)) {
-			ret = ENOENT;
+			ret = USR_ERR(env, ENOENT);
 			goto err;
 		}
 
@@ -406,7 +434,7 @@ __dbreg_id_to_db(env, txn, dbpp, ndx, tryopen)
 			 * case this will fail too.  Then it's up to the
 			 * caller to reopen the file.
 			 */
-			return (ENOENT);
+			return (USR_ERR(env, ENOENT));
 
 		/*
 		 * Note that we're relying on fname not to change, even though
@@ -429,24 +457,24 @@ __dbreg_id_to_db(env, txn, dbpp, ndx, tryopen)
 		if ((ret = __dbreg_do_open(env, txn, dblp,
 		    fname->ufid, name, fname->s_type, ndx, fname->meta_pgno,
 		    NULL, TXN_INVALID, F_ISSET(fname, DB_FNAME_INMEM) ?
-		    DBREG_REOPEN : DBREG_OPEN)) != 0)
+		    DBREG_REOPEN : DBREG_OPEN, fname->blob_file_id)) != 0)
 			return (ret);
 
 		*dbpp = dblp->dbentry[ndx].dbp;
-		return (*dbpp == NULL ? DB_DELETED : 0);
+		return (*dbpp == NULL ? USR_ERR(env, DB_DELETED) : 0);
 	}
 
 	/*
 	 * Return DB_DELETED if the file has been deleted (it's not an error).
 	 */
 	if (dblp->dbentry[ndx].deleted) {
-		ret = DB_DELETED;
+		ret = USR_ERR(env, DB_DELETED);
 		goto err;
 	}
 
 	/* It's an error if we don't have a corresponding writable DB. */
 	if ((*dbpp = dblp->dbentry[ndx].dbp) == NULL)
-		ret = ENOENT;
+		ret = USR_ERR(env, ENOENT);
 	else
 		/*
 		 * If we are in recovery, then set that the file has
@@ -540,6 +568,53 @@ __dbreg_fid_to_fname(dblp, fid, have_lock, fnamep)
 }
 
 /*
+ * __dbreg_blob_file_to_fname --
+ *	Traverse the shared-memory list of database file names, looking for
+ *	the entry that matches the passed blob file id.  Returns 0 on success;
+ *	-1 on error.
+ *
+ * PUBLIC: int __dbreg_blob_file_to_fname
+ * PUBLIC:	__P((DB_LOG *, db_seq_t, int, FNAME **));
+ */
+int
+__dbreg_blob_file_to_fname(dblp, blob_file_id, have_lock, fnamep)
+	DB_LOG *dblp;
+	db_seq_t blob_file_id;
+	int have_lock;
+	FNAME **fnamep;
+{
+	ENV *env;
+	FNAME *fnp;
+	LOG *lp;
+	int ret;
+
+	env = dblp->env;
+	lp = dblp->reginfo.primary;
+
+	ret = -1;
+
+	/*
+	 * If blob_file is 0 then blobs are not enabled and the value is not
+	 * unique.
+	 */
+	if (blob_file_id == 0)
+		return (ret);
+
+	if (!have_lock)
+		MUTEX_LOCK(env, lp->mtx_filelist);
+	SH_TAILQ_FOREACH(fnp, &lp->fq, q, __fname)
+		if (fnp->blob_file_id == blob_file_id) {
+			*fnamep = fnp;
+			ret = 0;
+			break;
+		}
+	if (!have_lock)
+		MUTEX_UNLOCK(env, lp->mtx_filelist);
+
+	return (ret);
+}
+
+/*
  * __dbreg_get_name
  *
  * Interface to get name of registered files.  This is mainly diagnostic
@@ -577,11 +652,11 @@ __dbreg_get_name(env, fid, fnamep, dnamep)
  * is not protected by the thread mutex.
  * PUBLIC: int __dbreg_do_open __P((ENV *,
  * PUBLIC:     DB_TXN *, DB_LOG *, u_int8_t *, char *, DBTYPE,
- * PUBLIC:     int32_t, db_pgno_t, void *, u_int32_t, u_int32_t));
+ * PUBLIC:     int32_t, db_pgno_t, void *, u_int32_t, u_int32_t, db_seq_t));
  */
 int
-__dbreg_do_open(env,
-    txn, dblp, uid, name, ftype, ndx, meta_pgno, info, id, opcode)
+__dbreg_do_open(env, txn,
+    dblp, uid, name, ftype, ndx, meta_pgno, info, id, opcode, blob_file_id)
 	ENV *env;
 	DB_TXN *txn;
 	DB_LOG *dblp;
@@ -592,9 +667,10 @@ __dbreg_do_open(env,
 	db_pgno_t meta_pgno;
 	void *info;
 	u_int32_t id, opcode;
+	db_seq_t blob_file_id;
 {
 	DB *dbp;
-	u_int32_t cstat, ret_stat;
+	u_int32_t cstat, open_flags, ret_stat;
 	int ret, t_ret, try_inmem;
 	char *dname, *fname;
 
@@ -645,9 +721,13 @@ retry_inmem:
 	    opcode == DBREG_XREOPEN)
 		F2_SET(dbp, DB2_AM_EXCL|DB2_AM_INTEXCL);
 
+	open_flags = DB_DURABLE_UNKNOWN | DB_ODDFILESIZE;
+	if (txn != NULL && FLD_ISSET(txn->begin_flags, DB_TXN_DISPATCH) &&
+	    FLD_ISSET(env->open_flags, DB_MULTIVERSION) &&
+	     (ftype == DB_BTREE || ftype == DB_HASH))
+		open_flags |= DB_MULTIVERSION;
 	if ((ret = __db_open(dbp, NULL, txn, fname, dname, ftype,
-	    DB_DURABLE_UNKNOWN | DB_ODDFILESIZE,
-	    DB_MODE_600, meta_pgno)) == 0) {
+	    open_flags, DB_MODE_600, meta_pgno)) == 0) {
 skip_open:
 		/*
 		 * Verify that we are opening the same file that we were
@@ -670,7 +750,8 @@ skip_open:
 		 * because there will be no explicit close for this handle and
 		 * we want it to be closed when the transaction ends.
 		 */
-		if (txn != NULL && (ret =
+		if (txn != NULL &&
+		    !FLD_ISSET(txn->begin_flags, DB_TXN_DISPATCH) && (ret =
 		    __txn_record_fname(env, txn, dbp->log_filename)) != 0)
 			goto err;
 		--dbp->log_filename->txn_ref;
@@ -725,6 +806,7 @@ err:		if (cstat == TXN_UNEXPECTED)
 		 * we are closing a non-existent file and need to mark
 		 * it as deleted.
 		 */
+		dbp->blob_file_id = blob_file_id;
 		if (dbp->log_filename == NULL &&
 		    (ret = __dbreg_setup(dbp, name, NULL, id)) != 0)
 			return (ret);
@@ -758,7 +840,7 @@ __dbreg_check_master(env, uid, name)
 	    name, NULL, DB_BTREE, 0, DB_MODE_600, PGNO_BASE_MD);
 
 	if (ret == 0 && memcmp(uid, dbp->fileid, DB_FILE_ID_LEN) != 0)
-		ret = EINVAL;
+		ret = USR_ERR(env, EINVAL);
 
 	(void)__db_close(dbp, NULL, 0);
 	return (ret);

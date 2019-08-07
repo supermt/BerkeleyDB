@@ -9,12 +9,12 @@
     <link rel="start" href="index.html" title="Berkeley DB Installation and Build Guide" />
     <link rel="up" href="build_win.html" title="Chapter 5.  Building Berkeley DB for Windows" />
     <link rel="prev" href="build_win_sql.html" title="Building the SQL API" />
-    <link rel="next" href="win_build_dist_dll.html" title="Distributing DLLs" />
+    <link rel="next" href="build_win_replication_ssl.html" title="Building Secure Sockets Layer (SSL) Support for the Replication Manager" />
   </head>
   <body>
     <div xmlns="" class="navheader">
       <div class="libver">
-        <p>Library Version 12.1.6.0</p>
+        <p>Library Version 18.1.32</p>
       </div>
       <table width="100%" summary="Navigation header">
         <tr>
@@ -23,7 +23,7 @@
         <tr>
           <td width="20%" align="left"><a accesskey="p" href="build_win_sql.html">Prev</a> </td>
           <th width="60%" align="center">Chapter 5.  Building Berkeley DB for Windows </th>
-          <td width="20%" align="right"> <a accesskey="n" href="win_build_dist_dll.html">Next</a></td>
+          <td width="20%" align="right"> <a accesskey="n" href="build_win_replication_ssl.html">Next</a></td>
         </tr>
       </table>
       <hr />
@@ -41,7 +41,7 @@
             for information on sites from which you can download Tcl
             and which Tcl versions are compatible with Berkeley DB.
             These notes assume that Tcl is installed as
-                <code class="filename">d:\tcl</code>, but you can change that
+            <code class="filename">d:\tcl</code>, but you can change that
             if you want.
         </p>
       <p>
@@ -61,23 +61,14 @@
           <li>
                 Set the include directories.
                 <div class="itemizedlist"><ul type="disc"><li>
-                        In Visual Studio 2005/Visual Studio
-                        2008 - Choose <span class="emphasis"><em>Tools -&gt; Options
-                            -&gt; Projects -&gt; VC++
-                            Directories</em></span>. Under the "Show
-                        directories for" pull-down, select "Include
-                        files". Add the full pathname for
-                            <code class="filename">d:\tcl\include</code>, then
-                        click OK. 
-                    </li><li>
-                        In Visual Studio 2010 - Right-click
-                        db_tcl project, choose
-                            <span class="emphasis"><em>Properties-&gt;Configuration
-                            Properties-&gt; VC++
-                            Directories-&gt;Include
-                            Directories</em></span>. Add the full
+                        In Visual Studio 2010/2012/2013/2015 - Right-click
+                        the db_tcl project, choose
+                        <span class="emphasis"><em>Properties-&gt;Configuration
+                        Properties-&gt; VC++
+                        Directories-&gt;Include
+                        Directories</em></span>. Add the full
                         pathnames for
-                            <code class="filename">d:\tcl\include</code>, then
+                       <code class="filename">d:\tcl\include</code>, then
                         click OK. 
                     </li></ul></div>
                 This is the directory that contains
@@ -86,29 +77,22 @@
           <li>
                 Set the library files directory. 
                 <div class="itemizedlist"><ul type="disc"><li>
-                        In Visual Studio 2005/Visual Studio
-                        2008 - Choose <span class="emphasis"><em>Tools -&gt; Options
-                            -&gt; Projects -&gt; VC++
-                            Directories</em></span>. Under the "Show
-                        directories for" pull-down, select "Library
-                        files". Add the full pathname for the
-                            <code class="filename">d:\tcl\lib</code> directory,
-                        then click OK. 
-                    </li><li>
-                        In Visual Studio 2010 - Right-click
-                        db_tcl project, choose
-                            <span class="emphasis"><em>Properties-&gt;Configuration
-                            Properties-&gt; VC++
-                            Directories-&gt;Library
-                            Directories</em></span>. Add the full
+                        In Visual Studio 2010/2012/2013/2015 -
+			Right-click the db_tcl project, choose
+                        <span class="emphasis"><em>Properties-&gt;Configuration
+                        Properties-&gt; VC++
+                        Directories-&gt;Library
+                        Directories</em></span>. Add the full
                         pathname for the
-                            <code class="filename">d:\tcl\lib</code> directory,
+                        <code class="filename">d:\tcl\lib</code> directory,
                         then click OK. 
                     </li></ul></div>
                 This is the directory needed to find
-                    <code class="filename">tcl85.lib</code> (or whatever the
-                library is named in your distribution).</li>
-          <li>Set the build type to Release or Debug in the
+                    <code class="filename">tcl86.lib</code> (or whatever the
+                library is named in your distribution).
+            </li>
+          <li>
+                Set the build type to Release or Debug in the
                 drop-down on the tool bar.
             </li>
           <li>
@@ -122,12 +106,22 @@
             <table class="simplelist" border="0" summary="Simple list">
               <tr>
                 <td>
-                  <code class="filename">build_windows\Win32\Debug\libdb_tcl60d.dll</code>
+                  <code class="filename">build_windows\x64\Debug\libdb_tcl181d.dll</code>
                 </td>
               </tr>
               <tr>
                 <td>
-                  <code class="filename">build_windows\Win32\Release\libdb_tcl60.dll</code>
+                  <code class="filename">build_windows\x64\Release\libdb_tcl181.dll</code>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code class="filename">build_windows\Win32\Debug\libdb_tcl181d.dll</code>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code class="filename">build_windows\Win32\Release\libdb_tcl181.dll</code>
                 </td>
               </tr>
             </table>
@@ -135,15 +129,14 @@
         </ol>
       </div>
       <p>
-            If you use a version different from Tcl 8.5.x you will
+            If you use a version different from Tcl 8.6.x you will
             need to change the name of the Tcl library used in the
-            build (for example, <code class="filename">tcl85.lib</code>) to the
+            build (for example, <code class="filename">tcl86.lib</code>) to the
             appropriate name. To do this, right click on
-                <span class="emphasis"><em>db_tcl</em></span>, go to
-                <span class="emphasis"><em>Properties -&gt; Linker -&gt; Input -&gt;
-                Additional dependencies</em></span> and change
-                <code class="filename">tcl85.lib</code> to match the Tcl
-            version you are using.
+            <span class="emphasis"><em>db_tcl</em></span>, go to
+            <span class="emphasis"><em>Properties -&gt; Linker -&gt; Input -&gt;
+            Additional dependencies</em></span> and change
+            the filename to match the Tcl version you are using.
         </p>
     </div>
     <div class="navfooter">
@@ -154,14 +147,14 @@
           <td width="20%" align="center">
             <a accesskey="u" href="build_win.html">Up</a>
           </td>
-          <td width="40%" align="right"> <a accesskey="n" href="win_build_dist_dll.html">Next</a></td>
+          <td width="40%" align="right"> <a accesskey="n" href="build_win_replication_ssl.html">Next</a></td>
         </tr>
         <tr>
           <td width="40%" align="left" valign="top">Building the SQL API </td>
           <td width="20%" align="center">
             <a accesskey="h" href="index.html">Home</a>
           </td>
-          <td width="40%" align="right" valign="top"> Distributing DLLs</td>
+          <td width="40%" align="right" valign="top"> Building Secure Sockets Layer (SSL) Support for the Replication Manager</td>
         </tr>
       </table>
     </div>

@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1997, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1997, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -28,7 +28,7 @@ __os_mkdir(env, name, mode)
 	dbenv = env == NULL ? NULL : env->dbenv;
 	if (dbenv != NULL &&
 	    FLD_ISSET(dbenv->verbose, DB_VERB_FILEOPS | DB_VERB_FILEOPS_ALL))
-		__db_msg(env, DB_STR_A("0129", "fileops: mkdir %s",
+		__db_msg(env, DB_STR_A("0013", "fileops: mkdir %s",
 		    "%s"), name);
 
 	/* Make the directory, with paranoid permissions. */
@@ -38,14 +38,14 @@ __os_mkdir(env, name, mode)
 	RETRY_CHK((mkdir(name, DB_MODE_700)), ret);
 #endif
 	if (ret != 0)
-		return (__os_posix_err(ret));
+		return (USR_ERR(env, __os_posix_err(ret)));
 
 	/* Set the absolute permissions, if specified. */
 #if !defined(HAVE_VXWORKS)
 	if (mode != 0) {
 		RETRY_CHK((chmod(name, mode)), ret);
 		if (ret != 0)
-			ret = __os_posix_err(ret);
+			ret = USR_ERR(env, __os_posix_err(ret));
 	}
 #endif
 	return (ret);

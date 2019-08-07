@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2009, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2009, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  */
 using System;
@@ -21,11 +21,11 @@ namespace BerkeleyDB {
 
         /// <summary>
         /// Create a database stream pointing to a key/value pair where the
-        /// data item is a blob.
+        /// data item is an external file.
         /// </summary>
         /// <returns>A newly created database stream</returns>
         /// <exception cref="DatabaseException">
-        /// Thrown if the data item is not a blob.
+        /// Thrown if the data item is not an external file.
         /// </exception>
         public DatabaseStream DbStream() {
             return DbStream(new DatabaseStreamConfig());
@@ -33,7 +33,7 @@ namespace BerkeleyDB {
 
         /// <summary>
         /// Create a database stream pointing to a key/value pair where the
-        /// data item is a blob with the given configuration.
+        /// data item is an external file with the given configuration.
         /// </summary>
         /// <param name="cfg">
         /// The configuration properties for the database stream.
@@ -41,7 +41,7 @@ namespace BerkeleyDB {
         /// <returns>A newly created database stream</returns>
         /// <exception cref="DatabaseException">
         /// Thrown if the data of the key/value pair it is pointing to is not
-        /// a blob.
+        /// an external file.
         /// </exception>
         public DatabaseStream DbStream(DatabaseStreamConfig cfg) {
             return new DatabaseStream(dbc.db_stream(cfg.flags), cfg);
@@ -58,9 +58,9 @@ namespace BerkeleyDB {
         /// <param name="keepPosition">
         /// If true, the newly created cursor is initialized to refer to the
         /// same position in the database as the original cursor (if any) and
-        /// hold the same locks (if any). If false, or the original cursor does
+        /// hold the same locks (if any). If false, or if the original cursor does
         /// not hold a database position and locks, the created cursor is
-        /// uninitialized and will behave like a cursor newly created by
+        /// uninitialized and behaves like a cursor newly created by
         /// <see cref="HashDatabase.Cursor"/>.</param>
         /// <returns>A newly created cursor</returns>
         public new HashCursor Duplicate(bool keepPosition) {

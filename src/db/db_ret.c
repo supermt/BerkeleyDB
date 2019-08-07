@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -37,7 +37,7 @@ __db_ret(dbc, h, indx, dbt, memp, memsize)
 	HBLOB hblob;
 	HEAPBLOBHDR bhdr;
 	HEAPHDR *hdr;
-	uintmax_t blob_id;
+	db_seq_t blob_id;
 	int ret;
 	HOFFPAGE ho;
 	off_t blob_size;
@@ -67,9 +67,7 @@ __db_ret(dbc, h, indx, dbt, memp, memsize)
 				break;
 			}
 			memcpy(&hblob, hk, HBLOB_SIZE);
-			GET_BLOB_ID(env, hblob, blob_id, ret);
-			if (ret != 0)
-				return (ret);
+			blob_id = (db_seq_t)hblob.id;
 			GET_BLOB_SIZE(env, hblob, blob_size, ret);
 			if (ret != 0)
 				return (ret);
@@ -91,9 +89,7 @@ __db_ret(dbc, h, indx, dbt, memp, memsize)
 				break;
 			}
 			memcpy(&bhdr, hdr, HEAPBLOBREC_SIZE);
-			GET_BLOB_ID(env, bhdr, blob_id, ret);
-			if (ret != 0)
-				return (ret);
+			blob_id = (db_seq_t)bhdr.id;
 			GET_BLOB_SIZE(env, bhdr, blob_size, ret);
 			if (ret != 0)
 				return (ret);
@@ -119,9 +115,7 @@ __db_ret(dbc, h, indx, dbt, memp, memsize)
 				break;
 			}
 			memcpy(&bl, bk, BBLOB_SIZE);
-			GET_BLOB_ID(env, bl, blob_id, ret);
-			if (ret != 0)
-				return (ret);
+			blob_id = (db_seq_t)bl.id;
 			GET_BLOB_SIZE(env, bl, blob_size, ret);
 			if (ret != 0)
 				return (ret);
@@ -200,7 +194,7 @@ __db_retcopy(env, dbt, data, len, memp, memsize)
 		if (len != 0 && (dbt->data == NULL || dbt->ulen < len))
 			ret = DB_BUFFER_SMALL;
 	} else if (memp == NULL || memsize == NULL)
-		ret = EINVAL;
+		ret = USR_ERR(env, EINVAL);
 	else {
 		if (len != 0 && (*memsize == 0 || *memsize < len)) {
 			if ((ret = __os_realloc(env, len, memp)) == 0)

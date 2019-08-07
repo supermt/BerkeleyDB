@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  */
 /*
  * Copyright (c) 1990, 1993, 1994, 1995, 1996
@@ -82,18 +82,13 @@ __bam_open(dbp, ip, txn, name, base_pgno, flags)
 	 * also specify a comparison routine, they can't know enough about our
 	 * comparison routine to get it right.
 	 */
-	if (t->bt_compare == __bam_defcmp && t->bt_prefix != __bam_defpfx) {
+	if (t->bt_compare == __dbt_defcmp && t->bt_prefix != __bam_defpfx) {
 		__db_errx(dbp->env, DB_STR("1006",
 "prefix comparison may not be specified for default comparison routine"));
 		return (EINVAL);
 	}
 
-	/*
-	 * Verify that the bt_minkey value specified won't cause the
-	 * calculation of ovflsize to underflow [#2406] for this pagesize.
-	 */
-	if (B_MINKEY_TO_OVFLSIZE(dbp, t->bt_minkey, dbp->pgsize) >
-	    B_MINKEY_TO_OVFLSIZE(dbp, DEFMINKEYPAGE, dbp->pgsize)) {
+	if (t->bt_minkey > B_MINKEY_UPPER_LIMIT(dbp)) {
 		__db_errx(dbp->env, DB_STR_A("1007",
 		    "bt_minkey value of %lu too high for page size of %lu",
 		    "%lu %lu"), (u_long)t->bt_minkey, (u_long)dbp->pgsize);
@@ -138,6 +133,7 @@ __bam_metachk(dbp, name, btm)
 		return (DB_OLD_VERSION);
 	case 8:
 	case 9:
+	case 10:
 		break;
 	default:
 		__db_errx(env, DB_STR_A("1009",
@@ -176,8 +172,8 @@ __bam_metachk(dbp, name, btm)
 	else
 		if (F_ISSET(dbp, DB_AM_DUP)) {
 			__db_errx(env, DB_STR_A("1010",
-		"%s: DB_DUP specified to open method but not set in database",
-			    "%s"), name);
+		"%s: %s specified to open method but not set in database",
+			    "%s %s"), name, "DB_DUP");
 			return (EINVAL);
 		}
 
@@ -191,9 +187,9 @@ __bam_metachk(dbp, name, btm)
 			return (ret);
 	} else
 		if (F_ISSET(dbp, DB_AM_RECNUM)) {
-			__db_errx(env, DB_STR_A("1011",
-	    "%s: DB_RECNUM specified to open method but not set in database",
-			    "%s"), name);
+			__db_errx(env, DB_STR_A("1010",
+	    "%s: %s specified to open method but not set in database",
+			    "%s %s"), name, "DB_RECNUM");
 			return (EINVAL);
 		}
 
@@ -203,9 +199,9 @@ __bam_metachk(dbp, name, btm)
 		F_SET(dbp, DB_AM_FIXEDLEN);
 	} else
 		if (F_ISSET(dbp, DB_AM_FIXEDLEN)) {
-			__db_errx(env, DB_STR_A("1012",
-	"%s: DB_FIXEDLEN specified to open method but not set in database",
-			"%s"), name);
+			__db_errx(env, DB_STR_A("1010",
+	"%s: %s specified to open method but not set in database",
+			"%s %s"), name, "DB_FIXEDLEN");
 			return (EINVAL);
 		}
 
@@ -215,9 +211,9 @@ __bam_metachk(dbp, name, btm)
 		F_SET(dbp, DB_AM_RENUMBER);
 	} else
 		if (F_ISSET(dbp, DB_AM_RENUMBER)) {
-			__db_errx(env, DB_STR_A("1013",
-	    "%s: DB_RENUMBER specified to open method but not set in database",
-			    "%s"), name);
+			__db_errx(env, DB_STR_A("1010",
+	    "%s: %s specified to open method but not set in database",
+			    "%s %s"), name, "DB_RENUMBER");
 			return (EINVAL);
 		}
 
@@ -232,9 +228,12 @@ __bam_metachk(dbp, name, btm)
 		}
 
 	if (F_ISSET(&btm->dbmeta, BTM_DUPSORT)) {
-		if (dbp->dup_compare == NULL)
-			dbp->dup_compare = __bam_defcmp;
-		F_SET(dbp, DB_AM_DUPSORT);
+		/* Turning on the DB_DUPSORT flag isnt as simple as just setting
+		 * the bit as previous checks do. Therefore, we reuse
+		 * __db_set_flags() to do it.
+		 */
+		if ((ret = __db_set_flags(dbp, DB_DUPSORT)) != 0)
+			return (ret);
 	} else
 		if (dbp->dup_compare != NULL) {
 			__db_errx(env, DB_STR_A("1015",
@@ -272,14 +271,27 @@ __bam_metachk(dbp, name, btm)
 	dbp->pgsize = btm->dbmeta.pagesize;
 
 	dbp->blob_threshold = btm->blob_threshold;
-	GET_LO_HI(env,
-	    btm->blob_file_lo, btm->blob_file_hi, dbp->blob_file_id, ret);
+	GET_BLOB_FILE_ID(env, btm, dbp->blob_file_id, ret);
 	if (ret != 0)
 		return (ret);
-	GET_LO_HI(env,
-	    btm->blob_sdb_lo, btm->blob_sdb_hi, dbp->blob_sdb_id, ret);
+	GET_BLOB_SDB_ID(env, btm, dbp->blob_sdb_id, ret);
 	if (ret != 0)
 		return (ret);
+	/* Blob databases must be upgraded. */
+	if (vers == 9 && (dbp->blob_file_id != 0 || dbp->blob_sdb_id != 0)) {
+	    __db_errx(env, DB_STR_A("1207",
+"%s: databases that support external files must be upgraded.", "%s"),
+		    name);
+		return (EINVAL);
+	}
+#ifndef HAVE_64BIT_TYPES
+	if (dbp->blob_file_id != 0 || dbp->blob_sdb_id != 0) {
+		__db_errx(env, DB_STR_A("1199",
+		    "%s: external files require 64 integer compiler support.",
+		    "%s"), name);
+		return (DB_OPNOTSUP);
+	}
+#endif
 
 	/* Copy the file's ID. */
 	memcpy(dbp->fileid, btm->dbmeta.uid, DB_FILE_ID_LEN);
@@ -331,8 +343,23 @@ __bam_read_root(dbp, ip, txn, base_pgno, flags)
 	    F_ISSET(dbp, DB_AM_RECOVER) ? DB_RECOVER : 0)) != 0)
 		return (ret);
 
-	/* Get the metadata page. */
-	if ((ret =
+	/*
+	 * Copy a few fields from the metadata page into our bt_internal.  If
+	 * this is the first page of the file (PGNO_BASE_MD) we do not need to
+	 * lock it: these particular fields never change. Even for subdatabases,
+	 * the shared latch that __memp_fget() obtains on the page prevents any
+	 * changes from being made while we are looking at the fields:
+	 *	base_pgno itself - changeable by compact, but only for a subdb
+	 *	meta->root	 - changeable by compact, but only for a subdb
+	 *	meta->minkey	 - settable only before the database is created.
+	 *	meta->re_pad	 - settable only before the database is created.
+	 *	meta->re_len	 - settable only before the database is created.
+	 * The file's revsion count is saved here, to detect when a subdb's root
+	 * or base_pgno is changed by compact. We go to this trouble to allow
+	 * opening a database while a long running update which allocates or
+	 * frees pages has the metadata page write-locked.
+	 */
+	if (base_pgno != PGNO_BASE_MD && (ret =
 	    __db_lget(dbc, 0, base_pgno, DB_LOCK_READ, 0, &metalock)) != 0)
 		goto err;
 	if ((ret = __memp_fget(mpf, &base_pgno, ip, dbc->txn, 0, &meta)) != 0)
@@ -428,6 +455,10 @@ __bam_init_meta(dbp, meta, pgno, lsnp)
 		DB_ASSERT(env, meta->dbmeta.encrypt_alg != 0);
 		meta->crypto_magic = meta->dbmeta.magic;
 	}
+	if (FLD_ISSET(dbp->open_flags, DB_SLICED)) {
+		FLD_SET(meta->dbmeta.metaflags, DBMETA_SLICED);
+		F_SET(&meta->dbmeta, BTM_SLICED);
+	}
 	meta->dbmeta.type = P_BTREEMETA;
 	meta->dbmeta.free = PGNO_INVALID;
 	meta->dbmeta.last_pgno = pgno;
@@ -455,8 +486,8 @@ __bam_init_meta(dbp, meta, pgno, lsnp)
 	meta->re_len = t->re_len;
 	meta->re_pad = (u_int32_t)t->re_pad;
 	meta->blob_threshold = dbp->blob_threshold;
-	SET_LO_HI(meta, dbp->blob_file_id, BTMETA, blob_file_lo, blob_file_hi);
-	SET_LO_HI(meta, dbp->blob_sdb_id, BTMETA, blob_sdb_lo, blob_sdb_hi);
+	SET_BLOB_META_FILE_ID(meta, dbp->blob_file_id, BTMETA);
+	SET_BLOB_META_SDB_ID(meta, dbp->blob_sdb_id, BTMETA);
 
 #ifdef HAVE_PARTITION
 	if ((part = dbp->p_internal) != NULL) {

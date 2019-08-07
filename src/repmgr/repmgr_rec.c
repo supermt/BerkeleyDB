@@ -1,3 +1,11 @@
+/*-
+ * Copyright (c) 2014, 2019 Oracle and/or its affiliates.  All rights reserved.
+ *
+ * See the file LICENSE for license information.
+ *
+ * $Id$
+ */
+
 #include "db_config.h"
 
 #include "db_int.h"
@@ -23,15 +31,12 @@ __repmgr_member_recover(env, dbtp, lsnp, op, info)
 	__repmgr_member_args *argp;
 	int ret;
 
-	COMPQUIET(info, NULL);
-	COMPQUIET(op, DB_TXN_APPLY);
-
 	REC_PRINT(__repmgr_member_print);
 	REC_NOOP_INTRO(__repmgr_member_read);
 
 	/*
 	 * The annotation log record describes the update in enough detail for
-	 * us to be able to optimize our tracking of it at clients sites.
+	 * us to be able to optimize our tracking of it at client sites.
 	 * However, for now we just simply reread the whole (small) database
 	 * each time, since changes happen so seldom (and we need to have the
 	 * code for reading the whole thing anyway, for other cases).
@@ -41,5 +46,7 @@ __repmgr_member_recover(env, dbtp, lsnp, op, info)
 	*lsnp = argp->prev_lsn;
 	ret = 0;
 
+	COMPQUIET(info, NULL);
+	COMPQUIET(op, DB_TXN_APPLY);
 	REC_NOOP_CLOSE;
 }

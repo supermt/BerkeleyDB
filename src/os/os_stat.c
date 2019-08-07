@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1997, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1997, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -30,7 +30,7 @@ __os_exists(env, path, isdirp)
 
 	if (dbenv != NULL &&
 	    FLD_ISSET(dbenv->verbose, DB_VERB_FILEOPS | DB_VERB_FILEOPS_ALL))
-		__db_msg(env, DB_STR_A("0165",
+		__db_msg(env, DB_STR_A("0033",
 		    "fileops: stat %s", "%s"), path);
 
 	if (DB_GLOBAL(j_exists) != NULL)
@@ -93,7 +93,7 @@ __os_ioinfo(env, path, fhp, mbytesp, bytesp, iosizep)
 	/*
 	 * Return the underlying filesystem I/O size, if available.
 	 *
-	 * XXX
+	 * !!!
 	 * Check for a 0 size -- the HP MPE/iX architecture has st_blksize,
 	 * but it's always 0.
 	 */

@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -26,6 +26,7 @@ static int __memp_close_flush_files __P((ENV *, int));
 static int __memp_sync_files __P((ENV *));
 static int __memp_sync_file __P((ENV *,
 		MPOOLFILE *, void *, u_int32_t *, u_int32_t));
+static inline void __update_err_ret(int, int*);
 
 /*
  * __memp_walk_files --
@@ -57,11 +58,14 @@ __memp_walk_files(env, mp, func, arg, countp, flags)
 			if ((t_ret = func(env,
 			    mfp, arg, countp, flags)) != 0 && ret == 0)
 				ret = t_ret;
-			if (ret != 0 && !LF_ISSET(DB_STAT_MEMP_NOERROR))
+			if (ret != 0 &&
+			    (!LF_ISSET(DB_STAT_MEMP_NOERROR) ||
+			    ret == DB_BUFFER_SMALL))
 				break;
 		}
 		MUTEX_UNLOCK(env, hp->mtx_hash);
-		if (ret != 0 && !LF_ISSET(DB_STAT_MEMP_NOERROR))
+		if (ret != 0 &&
+		    (!LF_ISSET(DB_STAT_MEMP_NOERROR) || ret == DB_BUFFER_SMALL))
 			break;
 	}
 	return (ret);
@@ -95,9 +99,11 @@ __memp_discard_all_mpfs (env, mp)
 		while ((mfp = SH_TAILQ_FIRST(
 		    &hp->hash_bucket, __mpoolfile)) != NULL) {
 			MUTEX_LOCK(env, mfp->mutex);
-			if ((t_ret = __memp_mf_discard(dbmp, mfp, 1)) != 0 &&
-			    ret == 0)
-				ret = t_ret;
+			if ((t_ret = __memp_mf_discard(dbmp, mfp, 1)) != 0) {
+				if (ret == 0)
+					ret = t_ret;
+				break;
+			}
 		}
 		MUTEX_UNLOCK(env, hp->mtx_hash);
 	}
@@ -350,7 +356,7 @@ __memp_sync_int(env, dbmfp, trickle_max, flags, wrote_totalp, interruptedp)
 			 * we started.
 			 */
 #ifdef DIAGNOSTIC
-			if (SH_TAILQ_FIRST(&hp->hash_bucket, __bh) == NULL)
+			if (SH_TAILQ_EMPTY(&hp->hash_bucket))
 #else
 			if (atomic_read(&hp->hash_page_dirty) == 0)
 #endif
@@ -521,7 +527,7 @@ __memp_sync_int(env, dbmfp, trickle_max, flags, wrote_totalp, interruptedp)
 		}
 
 		/* Pin the buffer into memory. */
-		atomic_inc(env, &bhp->ref);
+		(void)atomic_inc(env, &bhp->ref);
 		MUTEX_UNLOCK(env, mutex);
 		MUTEX_READLOCK(env, bhp->mtx_buf);
 		DB_ASSERT(env, !F_ISSET(bhp, BH_EXCLUSIVE));
@@ -534,7 +540,7 @@ __memp_sync_int(env, dbmfp, trickle_max, flags, wrote_totalp, interruptedp)
 		 * dirty, so we can't just write it).
 		 */
 		if (SH_CHAIN_HASNEXT(bhp, vc)) {
-			atomic_dec(env, &bhp->ref);
+			(void)atomic_dec(env, &bhp->ref);
 			MUTEX_UNLOCK(env, bhp->mtx_buf);
 			continue;
 		}
@@ -566,7 +572,7 @@ __memp_sync_int(env, dbmfp, trickle_max, flags, wrote_totalp, interruptedp)
 			} else {
 				/* The buffer is being backed up, try again. */
 				if (t_ret == EAGAIN) {
-					atomic_dec(env, &bhp->ref);
+					(void)atomic_dec(env, &bhp->ref);
 					MUTEX_UNLOCK(env, bhp->mtx_buf);
 					continue;
 				}
@@ -585,7 +591,7 @@ __memp_sync_int(env, dbmfp, trickle_max, flags, wrote_totalp, interruptedp)
 
 		/* Discard our buffer reference. */
 		DB_ASSERT(env, atomic_read(&bhp->ref) > 0);
-		atomic_dec(env, &bhp->ref);
+		(void)atomic_dec(env, &bhp->ref);
 		MUTEX_UNLOCK(env, bhp->mtx_buf);
 
 		/* Check if the call has been interrupted. */
@@ -868,14 +874,17 @@ mpsync:	if ((ret = __db_appname(env, appname,
 			if ((t_ret =
 			    __os_closehandle(env, fhp)) != 0 && ret == 0)
 				ret = t_ret;
-		} else {
+		} else if (appname != DB_APP_BLOB) {
 			/* We may be syncing the blob meta db. */
-			if (appname != DB_APP_BLOB) {
-				__os_free(env, rpath);
-				appname = DB_APP_BLOB;
-				goto mpsync;
-			}
+			__os_free(env, rpath);
+			appname = DB_APP_BLOB;
+			goto mpsync;
 		}
+		/* This usually means that it was removed outside of BDB. */
+		if (ret != 0)
+			__db_errx(env, DB_STR_A("3047",
+			    "__memp_mf_sync: Could not sync %s: %s", "%s %s"),
+			    rpath, db_strerror(ret));
 		__os_free(env, rpath);
 	}
 
@@ -971,4 +980,153 @@ __bhcmp(p1, p2)
 	if (bhp1->track_pgno > bhp2->track_pgno)
 		return (1);
 	return (0);
+}
+
+/*
+ * __memp_purge_dead_files --
+ *	Remove all dead files and their buffers from the mpool. The caller
+ *	cannot hold any lock on the dead MPOOLFILE handles, their buffers
+ *	or their hash buckets. 
+ *	
+ *	Use this wrapper over __memp_purge_dead when the number of buffers
+ *	and dirty buffers is not of interest to the caller.
+ *
+ * PUBLIC: int __memp_purge_dead_files __P((ENV *));
+ */
+int
+__memp_purge_dead_files(env)
+	ENV *env;
+{
+	return __memp_purge_dead(env, NULL, NULL);
+}
+
+/*
+ * __memp_purge_dead --
+ *	Remove all dead files and their buffers from the mpool. The caller
+ *	cannot hold any lock on the dead MPOOLFILE handles, their buffers
+ *	or their hash buckets.  Optionally return the total and dirty
+ *	buffer counts.
+ *
+ * PUBLIC: int __memp_purge_dead __P((ENV *, u_int32_t *, u_int32_t *));
+ */
+int
+__memp_purge_dead(env, totalp, dirtyp)
+	ENV *env;
+	u_int32_t *totalp;
+	u_int32_t *dirtyp;
+{
+	BH *bhp;
+	DB_MPOOL *dbmp;
+	DB_MPOOL_HASH *hp, *hp_end;
+	REGINFO *infop;
+	MPOOL *c_mp, *mp;
+	MPOOLFILE *mfp;
+	u_int32_t i_cache, dirty, total;
+	int ret, t_ret, h_lock;
+
+	if (!MPOOL_ON(env))
+		return (0);
+
+	dbmp = env->mp_handle;
+	mp = dbmp->reginfo[0].primary;
+	ret = t_ret = h_lock = 0;
+	dirty = total = 0;
+
+	/*
+	 * Walk each cache's list of buffers and free all buffers whose
+	 * MPOOLFILE is marked as dead.
+	 */
+	for (i_cache = 0; i_cache < mp->nreg; i_cache++) {
+		infop = &dbmp->reginfo[i_cache];
+		c_mp = infop->primary;
+		total += c_mp->pages;
+
+		hp = R_ADDR(infop, c_mp->htab);
+		hp_end = &hp[c_mp->htab_buckets];
+		for (; hp < hp_end; hp++) {
+			/* Skip empty buckets. */
+			if (SH_TAILQ_EMPTY(&hp->hash_bucket))
+				continue;
+
+			dirty += (u_int32_t)atomic_read(&hp->hash_page_dirty);
+
+			/*
+			 * Search for a dead buffer. Other places that call
+			 * __memp_bhfree() acquire the buffer lock before the
+			 * hash bucket lock. Even though we acquire the two
+			 * locks in reverse order, we cannot deadlock here
+			 * because we don't block waiting for the locks.
+			 */
+			if ((t_ret = MUTEX_TRYLOCK(env, hp->mtx_hash)) != 0) {
+				__update_err_ret(t_ret, &ret);
+				continue;
+			}
+			h_lock = 1;
+			SH_TAILQ_FOREACH(bhp, &hp->hash_bucket, hq, __bh) {
+				/* Skip buffers that are being used. */
+				if (BH_REFCOUNT(bhp) > 0)
+					continue;
+
+				mfp = R_ADDR(dbmp->reginfo, bhp->mf_offset);
+				if (!mfp->deadfile)
+					continue;
+
+				/* Found a dead buffer. Prepare to free it. */
+				if ((t_ret =
+				    MUTEX_TRYLOCK(env, bhp->mtx_buf)) != 0) {
+					__update_err_ret(t_ret, &ret);
+					continue;
+				}
+
+				DB_ASSERT(env, (!F_ISSET(bhp, BH_EXCLUSIVE) &&
+				    BH_REFCOUNT(bhp) == 0));
+				F_SET(bhp, BH_EXCLUSIVE);
+				(void)atomic_inc(env, &bhp->ref);
+
+				__memp_bh_clear_dirty(env, hp, bhp);
+
+				/*
+				 * Free the buffer. The buffer and hash bucket
+				 * are unlocked by __memp_bhfree.
+				 */
+				if ((t_ret = __memp_bhfree(dbmp, infop, mfp,
+				    hp, bhp, BH_FREE_FREEMEM)) == 0)
+					/*
+					 * Decrement hp, so the next turn will
+					 * search the same bucket again.
+					 */
+					hp--;
+				else
+					__update_err_ret(t_ret, &ret);
+
+				/*
+				 * The hash bucket is unlocked, we need to
+				 * start over again.
+				 */
+				h_lock = 0;
+				break;
+			}
+
+			if (h_lock) {
+				MUTEX_UNLOCK(env, hp->mtx_hash);
+				h_lock = 0;
+			}
+		}
+	}
+
+	if (dirtyp != NULL)
+		*dirtyp = dirty;
+	if (totalp != NULL)
+		*totalp = total;
+
+	return (ret);
+}
+
+static inline void
+__update_err_ret(t_ret, retp)
+	int t_ret;
+	int *retp;
+{
+	if (t_ret != 0 && t_ret != DB_LOCK_NOTGRANTED && *retp == 0)
+		*retp = t_ret;
 }

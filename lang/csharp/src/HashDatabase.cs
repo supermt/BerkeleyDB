@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2009, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2009, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  */
 using System;
@@ -35,16 +35,18 @@ namespace BerkeleyDB {
         private void Config(HashDatabaseConfig cfg) {
             base.Config(cfg);
             /* 
-             * Database.Config calls set_flags, but that doesn't get the Hash
+             * Database.Config calls set_flags, but that does not get the Hash
              * specific flags.  No harm in calling it again.
              */
             db.set_flags(cfg.flags);
 
             if (cfg.BlobDir != null && cfg.Env == null)
-                db.set_blob_dir(cfg.BlobDir);
+                db.set_ext_file_dir(cfg.BlobDir);
+            if (cfg.ExternalFileDir != null && cfg.Env == null)
+                db.set_ext_file_dir(cfg.ExternalFileDir);
 
             if (cfg.blobThresholdIsSet)
-                db.set_blob_threshold(cfg.BlobThreshold, 0);
+                db.set_ext_file_threshold(cfg.BlobThreshold, 0);
             
             if (cfg.HashFunction != null)
                 HashFunction = cfg.HashFunction;
@@ -90,15 +92,15 @@ namespace BerkeleyDB {
         /// the database can only be accessed by sharing the single database
         /// object that created it, in circumstances where doing so is safe.
         /// </para>
-        /// <para>
+          /// <para>
         /// If <see cref="DatabaseConfig.AutoCommit"/> is set, the operation
-        /// will be implicitly transaction protected. Note that transactionally
-        /// protected operations on a datbase object requires the object itself
+        /// is implicitly transaction protected. Transactionally
+        /// protected operations on a database object requires the object itself
         /// be transactionally protected during its open.
         /// </para>
         /// </remarks>
         /// <param name="Filename">
-        /// The name of an underlying file that will be used to back the
+        /// The name of an underlying file used to back the
         /// database. In-memory databases never intended to be preserved on disk
         /// may be created by setting this parameter to null.
         /// </param>
@@ -122,18 +124,18 @@ namespace BerkeleyDB {
         /// object that created it, in circumstances where doing so is safe. If
         /// <paramref name="Filename"/> is null and
         /// <paramref name="DatabaseName"/> is non-null, the database can be
-        /// opened by other threads of control and will be replicated to client
+        /// opened by other threads of control and be replicated to client
         /// sites in any replication group.
         /// </para>
         /// <para>
         /// If <see cref="DatabaseConfig.AutoCommit"/> is set, the operation
-        /// will be implicitly transaction protected. Note that transactionally
-        /// protected operations on a datbase object requires the object itself
+        /// is implicitly transaction protected. Transactionally
+        /// protected operations on a database object requires the object itself
         /// be transactionally protected during its open.
         /// </para>
         /// </remarks>
         /// <param name="Filename">
-        /// The name of an underlying file that will be used to back the
+        /// The name of an underlying file used to back the
         /// database. In-memory databases never intended to be preserved on disk
         /// may be created by setting this parameter to null.
         /// </param>
@@ -162,15 +164,15 @@ namespace BerkeleyDB {
         /// </para>
         /// <para>
         /// If <paramref name="txn"/> is null, but
-        /// <see cref="DatabaseConfig.AutoCommit"/> is set, the operation will
-        /// be implicitly transaction protected. Note that transactionally
-        /// protected operations on a datbase object requires the object itself
-        /// be transactionally protected during its open. Also note that the
+        /// <see cref="DatabaseConfig.AutoCommit"/> is set, the operation
+        /// is implicitly transaction protected. Transactionally
+        /// protected operations on a database object requires the object itself
+        /// be transactionally protected during its open. The
         /// transaction must be committed before the object is closed.
         /// </para>
         /// </remarks>
         /// <param name="Filename">
-        /// The name of an underlying file that will be used to back the
+        /// The name of an underlying file used to back the
         /// database. In-memory databases never intended to be preserved on disk
         /// may be created by setting this parameter to null.
         /// </param>
@@ -201,21 +203,21 @@ namespace BerkeleyDB {
         /// the database can only be accessed by sharing the single database 
         /// object that created it, in circumstances where doing so is safe. If
         /// <paramref name="Filename"/> is null and
-        /// <paramref name="DatabaseName"/> is non-null, the database can be
-        /// opened by other threads of control and will be replicated to client
+        /// <paramref name="DatabaseName"/> is non-null, the database can be      
+        /// opened by other threads of control and be replicated to client
         /// sites in any replication group.
         /// </para>
         /// <para>
         /// If <paramref name="txn"/> is null, but
-        /// <see cref="DatabaseConfig.AutoCommit"/> is set, the operation will
-        /// be implicitly transaction protected. Note that transactionally
-        /// protected operations on a datbase object requires the object itself
-        /// be transactionally protected during its open. Also note that the
+        /// <see cref="DatabaseConfig.AutoCommit"/> is set, the operation
+        /// is implicitly transaction protected. Transactionally
+        /// protected operations on a database object requires the object itself
+        /// be transactionally protected during its open. The
         /// transaction must be committed before the object is closed.
         /// </para>
         /// </remarks>
         /// <param name="Filename">
-        /// The name of an underlying file that will be used to back the
+        /// The name of an underlying file used to back the
         /// database. In-memory databases never intended to be preserved on disk
         /// may be created by setting this parameter to null.
         /// </param>
@@ -287,12 +289,22 @@ namespace BerkeleyDB {
 
         #region Properties
         /// <summary>
-        /// The path of the directory where blobs are stored.
+        /// The path of the directory where external files are stored.
+        /// </summary>
+        public string ExternalFileDir {
+            get {
+                string dir;
+                db.get_ext_file_dir(out dir);
+                return dir;
+            }
+        }
+	/// <summary>
+        /// Deprecated.  Replaced by ExternalFileDir.
         /// </summary>
         public string BlobDir {
             get {
                 string dir;
-                db.get_blob_dir(out dir);
+                db.get_ext_file_dir(out dir);
                 return dir;
             }
         }
@@ -307,19 +319,30 @@ namespace BerkeleyDB {
 
         /// <summary>
         /// The threshold value in bytes beyond which data items are stored as
-        /// blobs.
+        /// external files.
         /// <para>
         /// Any data item that is equal to or larger in size than the
-        /// threshold value will automatically be stored as a blob.
+        /// threshold value is automatically stored as a external file.
         /// </para>
         /// <para>
-        /// A value of 0 indicates that blobs are not used by the database.
+        /// A value of 0 indicates that external files are not used by the
+	/// database.
         /// </para>
+        /// </summary>
+        public uint ExternalFileThreshold {
+            get {
+                uint ret = 0;
+                db.get_ext_file_threshold(ref ret);
+                return ret;
+            }
+        }
+	/// <summary>
+        /// Deprecated.  Replaced by ExternalFileThreshold.
         /// </summary>
         public uint BlobThreshold {
             get {
                 uint ret = 0;
-                db.get_blob_threshold(ref ret);
+                db.get_ext_file_threshold(ref ret);
                 return ret;
             }
         }
@@ -423,8 +446,8 @@ namespace BerkeleyDB {
         /// </summary>
         /// <remarks>
         /// If the operation occurs in a transactional database, the operation
-        /// will be implicitly transaction protected using multiple
-        /// transactions. These transactions will be periodically committed to
+        /// is implicitly transaction protected using multiple
+        /// transactions. These transactions are periodically committed to
         /// avoid locking large sections of the tree. Any deadlocks encountered
         /// cause the compaction operation to be retried from the point of the
         /// last transaction commit.
@@ -450,8 +473,8 @@ namespace BerkeleyDB {
         /// </para>
         /// <para>
         /// If <paramref name="txn"/> is null, but the operation occurs in a
-        /// transactional database, the operation will be implicitly transaction
-        /// protected using multiple transactions. These transactions will be
+        /// transactional database, the operation is implicitly transaction
+        /// protected using multiple transactions. These transactions are
         /// periodically committed to avoid locking large sections of the tree.
         /// Any deadlocks encountered cause the compaction operation to be
         /// retried from the point of the last transaction commit.
@@ -584,7 +607,7 @@ namespace BerkeleyDB {
         /// </param>
         /// <param name="isoDegree">
         /// The level of isolation for database reads.
-        /// <see cref="Isolation.DEGREE_ONE"/> will be silently ignored for 
+        /// <see cref="Isolation.DEGREE_ONE"/> is silently ignored for 
         /// databases which did not specify
         /// <see cref="DatabaseConfig.ReadUncommitted"/>.
         /// </param>
@@ -728,7 +751,7 @@ namespace BerkeleyDB {
         /// </param>
         /// <param name="isoDegree">
         /// The level of isolation for database reads.
-        /// <see cref="Isolation.DEGREE_ONE"/> will be silently ignored for 
+        /// <see cref="Isolation.DEGREE_ONE"/> is silently ignored for 
         /// databases which did not specify
         /// <see cref="DatabaseConfig.ReadUncommitted"/>.
         /// </param>

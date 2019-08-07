@@ -8,20 +8,23 @@
     <meta name="generator" content="DocBook XSL Stylesheets V1.73.2" />
     <link rel="start" href="index.html" title="Berkeley DB C API Reference" />
     <link rel="up" href="env.html" title="Chapter 5.  The DB_ENV Handle" />
-    <link rel="prev" href="envlsn_reset.html" title="DB_ENV-&gt;lsn_reset()" />
+    <link rel="prev" href="envmsg.html" title="DB_ENV-&gt;msg()" />
     <link rel="next" href="envremove.html" title="DB_ENV-&gt;remove()" />
   </head>
   <body>
     <div xmlns="" class="navheader">
       <div class="libver">
-        <p>Library Version 12.1.6.0</p>
+        <p>Library Version 18.1.32</p>
       </div>
       <table width="100%" summary="Navigation header">
         <tr>
-          <th colspan="3" align="center">DB_ENV-&gt;open()</th>
+          <th colspan="3" align="center">
+        <span xmlns="http://www.w3.org/1999/xhtml">DB_ENV-&gt;open()</span>
+        
+    </th>
         </tr>
         <tr>
-          <td width="20%" align="left"><a accesskey="p" href="envlsn_reset.html">Prev</a> </td>
+          <td width="20%" align="left"><a accesskey="p" href="envmsg.html">Prev</a> </td>
           <th width="60%" align="center">Chapter 5. 
                 The DB_ENV Handle
         </th>
@@ -34,7 +37,10 @@
       <div class="titlepage">
         <div>
           <div>
-            <h2 class="title" style="clear: both"><a id="envopen"></a>DB_ENV-&gt;open()</h2>
+            <h2 class="title" style="clear: both"><a id="envopen"></a>
+        <span>DB_ENV-&gt;open()</span>
+        
+    </h2>
           </div>
         </div>
       </div>
@@ -56,7 +62,10 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
             
         </span> If
          <code class="methodname">DB_ENV-&gt;open()</code> fails, the 
-         <a class="xref" href="envclose.html" title="DB_ENV-&gt;close()">DB_ENV-&gt;close()</a>  method must be
+         <a class="xref" href="envclose.html" title="DB_ENV-&gt;close()">
+        <span>DB_ENV-&gt;close()</span>
+        
+    </a>  method must be
          called to discard the <a class="link" href="env.html" title="Chapter 5.  The DB_ENV Handle">DB_ENV</a>
          handle.
     </p>
@@ -76,7 +85,7 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp1393728"></a>Parameters</h3>
+              <h3 class="title"><a id="idm140113486249728"></a>Parameters</h3>
             </div>
           </div>
         </div>
@@ -84,7 +93,7 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp1342432"></a>db_home</h4>
+                <h4 class="title"><a id="idm140113486234688"></a>db_home</h4>
               </div>
             </div>
           </div>
@@ -110,7 +119,7 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp1340728"></a>flags</h4>
+                <h4 class="title"><a id="idm140113486247520"></a>flags</h4>
               </div>
             </div>
           </div>
@@ -172,7 +181,10 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
                         unnecessary. When the DB_INIT_LOCK flag is specified, it
                         is usually necessary to run a deadlock detector, as
                         well. See <a class="link" href="db_deadlock.html" title="db_deadlock">db_deadlock</a> 
-                        and <a class="xref" href="lockdetect.html" title="DB_ENV-&gt;lock_detect()">DB_ENV-&gt;lock_detect()</a>  
+                        and <a class="xref" href="lockdetect.html" title="DB_ENV-&gt;lock_detect()">
+        <span>DB_ENV-&gt;lock_detect()</span>
+        
+    </a>  
                         for more information.
                     </p>
               </li>
@@ -361,6 +373,9 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
                 <p>
                         Lock shared Berkeley DB environment files and
                         memory-mapped databases into memory.
+			If the operating systems does not support the
+			<code class="function">mlock()</code> system call,
+			then this flag has no effect.
                     </p>
               </li>
               <li>
@@ -368,7 +383,10 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
                          <code class="literal">DB_FAILCHK</code>
                     </p>
                 <p>
-                        Internally call the <a class="xref" href="envfailchk.html" title="DB_ENV-&gt;failchk()">DB_ENV-&gt;failchk()</a>  
+                        Internally call the <a class="xref" href="envfailchk.html" title="DB_ENV-&gt;failchk()">
+        <span>DB_ENV-&gt;failchk()</span>
+        
+    </a>  
                         method as part of opening the environment.  When
                         <code class="literal">DB_FAILCHK</code> is specified, a check is
                         made to ensure all
@@ -553,7 +571,7 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp1341160"></a>mode</h4>
+                <h4 class="title"><a id="idm140113486186000"></a>mode</h4>
               </div>
             </div>
           </div>
@@ -582,7 +600,7 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp1399296"></a>Errors</h3>
+              <h3 class="title"><a id="idm140113486231760"></a>Errors</h3>
             </div>
           </div>
         </div>
@@ -598,7 +616,7 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp1415360"></a>DB_RUNRECOVERY</h4>
+                <h4 class="title"><a id="idm140113486125568"></a>DB_RUNRECOVERY</h4>
               </div>
             </div>
           </div>
@@ -613,7 +631,7 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp1410544"></a>DB_VERSION_MISMATCH</h4>
+                <h4 class="title"><a id="idm140113486155376"></a>DB_VERSION_MISMATCH</h4>
               </div>
             </div>
           </div>
@@ -626,7 +644,7 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp1472368"></a>EAGAIN</h4>
+                <h4 class="title"><a id="idm140113486218528"></a>EAGAIN</h4>
               </div>
             </div>
           </div>
@@ -638,7 +656,7 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp1472792"></a>EINVAL</h4>
+                <h4 class="title"><a id="idm140113486233408"></a>EINVAL</h4>
               </div>
             </div>
           </div>
@@ -656,7 +674,7 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp1427480"></a>ENOENT</h4>
+                <h4 class="title"><a id="idm140113486114448"></a>ENOENT</h4>
               </div>
             </div>
           </div>
@@ -669,7 +687,7 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp1457952"></a>Class</h3>
+              <h3 class="title"><a id="idm140113486128064"></a>Class</h3>
             </div>
           </div>
         </div>
@@ -681,7 +699,7 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp1439008"></a>See Also</h3>
+              <h3 class="title"><a id="idm140113486132640"></a>See Also</h3>
             </div>
           </div>
         </div>
@@ -694,18 +712,24 @@ DB_ENV-&gt;open(DB_ENV *dbenv, char *db_home, u_int32_t flags, int mode);  </pre
       <hr />
       <table width="100%" summary="Navigation footer">
         <tr>
-          <td width="40%" align="left"><a accesskey="p" href="envlsn_reset.html">Prev</a> </td>
+          <td width="40%" align="left"><a accesskey="p" href="envmsg.html">Prev</a> </td>
           <td width="20%" align="center">
             <a accesskey="u" href="env.html">Up</a>
           </td>
           <td width="40%" align="right"> <a accesskey="n" href="envremove.html">Next</a></td>
         </tr>
         <tr>
-          <td width="40%" align="left" valign="top">DB_ENV-&gt;lsn_reset() </td>
+          <td width="40%" align="left" valign="top">
+        <span>DB_ENV-&gt;msg()</span>
+        
+     </td>
           <td width="20%" align="center">
             <a accesskey="h" href="index.html">Home</a>
           </td>
-          <td width="40%" align="right" valign="top"> DB_ENV-&gt;remove()</td>
+          <td width="40%" align="right" valign="top"> 
+        <span>DB_ENV-&gt;remove()</span>
+        
+    </td>
         </tr>
       </table>
     </div>

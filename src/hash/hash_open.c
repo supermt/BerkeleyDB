@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  */
 /*
  * Copyright (c) 1990, 1993, 1994
@@ -107,11 +107,11 @@ __ham_open(dbp, ip, txn, name, base_pgno, flags)
 			hashp->h_hash = dbmeta->version < 5
 			? __ham_func4 : __ham_func5;
 		hashp->h_nelem = hcp->hdr->nelem;
-		if (F_ISSET(dbmeta, DB_HASH_DUP))
+		if (F_ISSET(dbmeta, HASHM_DUP))
 			F_SET(dbp, DB_AM_DUP);
-		if (F_ISSET(dbmeta, DB_HASH_DUPSORT))
+		if (F_ISSET(dbmeta, HASHM_DUPSORT))
 			F_SET(dbp, DB_AM_DUPSORT);
-		if (F_ISSET(dbmeta, DB_HASH_SUBDB))
+		if (F_ISSET(dbmeta, HASHM_SUBDB))
 			F_SET(dbp, DB_AM_SUBDB);
 		if (PGNO(hcp->hdr) == PGNO_BASE_MD &&
 		    !F_ISSET(dbp, DB_AM_RECOVER) &&
@@ -119,10 +119,10 @@ __ham_open(dbp, ip, txn, name, base_pgno, flags)
 		    __memp_set_last_pgno(dbp->mpf, dbmeta->last_pgno)) != 0)
 			goto err;
 	} else if (!IS_RECOVERING(env) && !F_ISSET(dbp, DB_AM_RECOVER)) {
+		ret = USR_ERR(env, EINVAL);
 		__db_errx(env, DB_STR_A("1124",
 		    "%s: Invalid hash meta page %lu", "%s %lu"),
 		    name, (u_long)base_pgno);
-		ret = EINVAL;
 	}
 
 	/* Release the meta data page */
@@ -170,6 +170,7 @@ __ham_metachk(dbp, name, hashm)
 	case 7:
 	case 8:
 	case 9:
+	case 10:
 		break;
 	default:
 		__db_errx(env, DB_STR_A("1126",
@@ -194,21 +195,20 @@ __ham_metachk(dbp, name, hashm)
 	 * and type based on metadata info.
 	 */
 	if ((ret = __db_fchk(env,
-	    "DB->open", hashm->dbmeta.flags,
-	    DB_HASH_DUP | DB_HASH_SUBDB | DB_HASH_DUPSORT)) != 0)
+	    "DB->open", hashm->dbmeta.flags, HASHM_MASK)) != 0)
 		return (ret);
 
-	if (F_ISSET(&hashm->dbmeta, DB_HASH_DUP))
+	if (F_ISSET(&hashm->dbmeta, HASHM_DUP))
 		F_SET(dbp, DB_AM_DUP);
 	else
 		if (F_ISSET(dbp, DB_AM_DUP)) {
-			__db_errx(env, DB_STR_A("1127",
-	    "%s: DB_DUP specified to open method but not set in database",
-			    "%s"), name);
+			__db_errx(env, DB_STR_A("1010",
+	    "%s: %s specified to open method but not set in database",
+			    "%s %s"), name, "DB_DUP");
 			return (EINVAL);
 		}
 
-	if (F_ISSET(&hashm->dbmeta, DB_HASH_SUBDB))
+	if (F_ISSET(&hashm->dbmeta, HASHM_SUBDB))
 		F_SET(dbp, DB_AM_SUBDB);
 	else
 		if (F_ISSET(dbp, DB_AM_SUBDB)) {
@@ -218,9 +218,9 @@ __ham_metachk(dbp, name, hashm)
 			return (EINVAL);
 		}
 
-	if (F_ISSET(&hashm->dbmeta, DB_HASH_DUPSORT)) {
+	if (F_ISSET(&hashm->dbmeta, HASHM_DUPSORT)) {
 		if (dbp->dup_compare == NULL)
-			dbp->dup_compare = __bam_defcmp;
+			dbp->dup_compare = __dbt_defcmp;
 	} else
 		if (dbp->dup_compare != NULL) {
 			__db_errx(env, DB_STR_A("1129",
@@ -233,14 +233,28 @@ __ham_metachk(dbp, name, hashm)
 	dbp->pgsize = hashm->dbmeta.pagesize;
 
 	dbp->blob_threshold = hashm->blob_threshold;
-	GET_LO_HI(env,
-	    hashm->blob_file_lo, hashm->blob_file_hi, dbp->blob_file_id, ret);
+	GET_BLOB_FILE_ID(env, hashm, dbp->blob_file_id, ret);
 	if (ret != 0)
 		return (ret);
-	GET_LO_HI(env,
-	    hashm->blob_sdb_lo, hashm->blob_sdb_hi, dbp->blob_sdb_id, ret);
+	GET_BLOB_SDB_ID(env, hashm, dbp->blob_sdb_id, ret);
 	if (ret != 0)
 		return (ret);
+	/* Blob databases must be upgraded. */
+	if (vers == 9 && (dbp->blob_file_id != 0 || dbp->blob_sdb_id != 0)) {
+	    __db_errx(env, DB_STR_A("1207",
+"%s: databases that support external files must be upgraded.", "%s"),
+		    name);
+		return (EINVAL);
+	}
+#ifndef HAVE_64BIT_TYPES
+	if (dbp->blob_file_id != 0 || dbp->blob_sdb_id != 0) {
+		__db_errx(env, DB_STR_A("1199",
+		    "%s: external files require 64 integer compiler support.",
+		    "%s"),
+		    name);
+		return (EINVAL);
+	}
+#endif
 
 	/* Copy the file's ID. */
 	memcpy(dbp->fileid, hashm->dbmeta.uid, DB_FILE_ID_LEN);
@@ -299,6 +313,8 @@ __ham_init_meta(dbp, meta, pgno, lsnp)
 		DB_ASSERT(env, meta->dbmeta.encrypt_alg != 0);
 		meta->crypto_magic = meta->dbmeta.magic;
 	}
+	if (FLD_ISSET(dbp->open_flags, DB_SLICED))
+		FLD_SET(meta->dbmeta.metaflags, DBMETA_SLICED);
 	meta->dbmeta.type = P_HASHMETA;
 	meta->dbmeta.free = PGNO_INVALID;
 	meta->dbmeta.last_pgno = pgno;
@@ -310,15 +326,19 @@ __ham_init_meta(dbp, meta, pgno, lsnp)
 	meta->h_charkey = hashp->h_hash(dbp, CHARKEY, sizeof(CHARKEY));
 	memcpy(meta->dbmeta.uid, dbp->fileid, DB_FILE_ID_LEN);
 	meta->blob_threshold = dbp->blob_threshold;
-	SET_LO_HI(meta, dbp->blob_file_id, HMETA, blob_file_lo, blob_file_hi);
-	SET_LO_HI(meta, dbp->blob_sdb_id, HMETA, blob_sdb_lo, blob_sdb_hi);
+	SET_BLOB_META_FILE_ID(meta, dbp->blob_file_id, HMETA);
+	SET_BLOB_META_SDB_ID(meta, dbp->blob_sdb_id, HMETA);
 
 	if (F_ISSET(dbp, DB_AM_DUP))
-		F_SET(&meta->dbmeta, DB_HASH_DUP);
+		F_SET(&meta->dbmeta, HASHM_DUP);
 	if (F_ISSET(dbp, DB_AM_SUBDB))
-		F_SET(&meta->dbmeta, DB_HASH_SUBDB);
+		F_SET(&meta->dbmeta, HASHM_SUBDB);
 	if (dbp->dup_compare != NULL)
-		F_SET(&meta->dbmeta, DB_HASH_DUPSORT);
+		F_SET(&meta->dbmeta, HASHM_DUPSORT);
+	if (FLD_ISSET(dbp->open_flags, DB_SLICED)) {
+		FLD_SET(meta->dbmeta.metaflags, DBMETA_SLICED);
+		F_SET(&meta->dbmeta, HASHM_SLICED);
+	}
 
 #ifdef HAVE_PARTITION
 	if ((part = dbp->p_internal) != NULL) {

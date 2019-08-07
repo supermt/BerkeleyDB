@@ -1,6 +1,6 @@
-# See the file LICENSE for redistribution information.
+# Copyright (c) 2012, 2019 Oracle and/or its affiliates.  All rights reserved.
 #
-# Copyright (c) 2012, 2013 Oracle and/or its affiliates.  All rights reserved.
+# See the file LICENSE for license information.
 #
 # $Id$
 #
@@ -29,27 +29,36 @@ proc repmgr113 { {tnum "113"} } {
 
 	# Test zero nthreads in taking over subordinate process.
 	repmgr113_zero_nthreads $tnum
+
+	# Test listener takeover on each site in a preferred master repgroup.
+	repmgr113_prefmas $tnum
 }
 
 proc repmgr113_loop { {tnum "113"} } {
 	global testdir
+	global ipversion
 
 	puts "\tRepmgr$tnum.loop: Run short-lived processes to\
 	    perform multiple takeovers."
 	env_cleanup $testdir
 
+	set hoststr [get_hoststr $ipversion]
 	foreach {mport c1port c2port} [available_ports 3] {}
 	file mkdir [set mdir $testdir/MASTER]
 	file mkdir [set c1dir $testdir/CLIENT1]
 	file mkdir [set c2dir $testdir/CLIENT2]
 	make_dbconfig $mdir \
-	    [list [list repmgr_site 127.0.0.1 $mport db_local_site on]]
+	    [list [list repmgr_site $hoststr $mport db_local_site on]]
 	make_dbconfig $c1dir \
-	    [list [list repmgr_site 127.0.0.1 $c1port db_local_site on] \
-	    [list repmgr_site 127.0.0.1 $mport db_bootstrap_helper on]]
+	    [list [list repmgr_site $hoststr $c1port db_local_site on] \
+	    [list repmgr_site $hoststr $mport db_bootstrap_helper on]]
 	make_dbconfig $c2dir \
-	    [list [list repmgr_site 127.0.0.1 $c2port db_local_site on] \
-	    [list repmgr_site 127.0.0.1 $mport db_bootstrap_helper on]]
+	    [list [list repmgr_site $hoststr $c2port db_local_site on] \
+	    [list repmgr_site $hoststr $mport db_bootstrap_helper on]]
+
+	setup_repmgr_ssl $mdir
+	setup_repmgr_ssl $c1dir
+	setup_repmgr_ssl $c2dir
 
 	puts "\t\tRepmgr$tnum.loop.a: Start master and client1."
 	set cmds {
@@ -245,27 +254,34 @@ proc repmgr113_loop { {tnum "113"} } {
 
 proc repmgr113_test { {tnum "113"} } {
 	global testdir
+	global ipversion
 
 	puts "\tRepmgr$tnum.test: Takeover in any subordinate process and\
 	    election delay due to the takeover on master"
 	env_cleanup $testdir
 
+	set hoststr [get_hoststr $ipversion]
 	foreach {mport c1port c2port c3port} [available_ports 4] {}
 	file mkdir [set mdir $testdir/MASTER]
 	file mkdir [set c1dir $testdir/CLIENT1]
 	file mkdir [set c2dir $testdir/CLIENT2]
 	file mkdir [set c3dir $testdir/CLIENT3]
 	make_dbconfig $mdir \
-	    [list [list repmgr_site 127.0.0.1 $mport db_local_site on]]
+	    [list [list repmgr_site $hoststr $mport db_local_site on]]
 	make_dbconfig $c1dir \
-	    [list [list repmgr_site 127.0.0.1 $c1port db_local_site on] \
-	    [list repmgr_site 127.0.0.1 $mport db_bootstrap_helper on]]
+	    [list [list repmgr_site $hoststr $c1port db_local_site on] \
+	    [list repmgr_site $hoststr $mport db_bootstrap_helper on]]
 	make_dbconfig $c2dir \
-	    [list [list repmgr_site 127.0.0.1 $c2port db_local_site on] \
-	    [list repmgr_site 127.0.0.1 $mport db_bootstrap_helper on]]
+	    [list [list repmgr_site $hoststr $c2port db_local_site on] \
+	    [list repmgr_site $hoststr $mport db_bootstrap_helper on]]
 	make_dbconfig $c3dir \
-	    [list [list repmgr_site 127.0.0.1 $c3port db_local_site on] \
-	    [list repmgr_site 127.0.0.1 $mport db_bootstrap_helper on]]
+	    [list [list repmgr_site $hoststr $c3port db_local_site on] \
+	    [list repmgr_site $hoststr $mport db_bootstrap_helper on]]
+
+	setup_repmgr_ssl $mdir
+	setup_repmgr_ssl $c1dir
+	setup_repmgr_ssl $c2dir
+	setup_repmgr_ssl $c3dir
 
 	# Test case 1: Test listener takeover on master.
 	# 2 sites, master and client1
@@ -532,7 +548,7 @@ proc repmgr113_test { {tnum "113"} } {
 	# Remove client1.  Verify c1_4 doesn't take over listener role.
 	puts "\t\tRepmgr$tnum.test.n: Remove client1 and verify no takeover on\
 	    client1."
-	puts $m_8 "remove $c1port"
+	puts $m_8 "remove $hoststr $c1port"
 	await_condition {[expr [$m_env rep_get_nsites] == 1]}
 	tclsleep 3
 	set takeover_count [stat_field $c1_env repmgr_stat \
@@ -664,15 +680,18 @@ proc repmgr113_test { {tnum "113"} } {
 
 proc repmgr113_zero_nthreads { {tnum "113"} } {
 	global testdir
+	global ipversion
 
 	puts "\tRepmgr$tnum.zero.nthreads: Test automatic takeover by a\
 	    subordinate process configured with zero nthreads."
 	env_cleanup $testdir
 
+	set hoststr [get_hoststr $ipversion]
 	foreach {mport} [available_ports 1] {}
 	file mkdir [set mdir $testdir/MASTER]
 	make_dbconfig $mdir \
-	    [list [list repmgr_site 127.0.0.1 $mport db_local_site on]]
+	    [list [list repmgr_site $hoststr $mport db_local_site on]]
+	setup_repmgr_ssl $mdir
 
 	puts "\t\tRepmgr$tnum.zero.nthreads.a: Start master listener."
 	set cmds {
@@ -687,7 +706,7 @@ proc repmgr113_zero_nthreads { {tnum "113"} } {
 	    configured with 0 message threads."
 	set m_2 [berkdb_env -home $mdir -txn -rep -thread -event -errpfx \
 	    "MASTER" -errfile $testdir/m_2_output]
-	$m_2 repmgr -local [list 127.0.0.1 $mport] -start master -msgth 0
+	$m_2 repmgr -local [list $hoststr $mport] -start master -msgth 0
 
 	puts "\t\tRepmgr$tnum.zero.nthreads.c: Close listener, verify takeover\
 	    happens in the subordinate process."
@@ -700,6 +719,179 @@ proc repmgr113_zero_nthreads { {tnum "113"} } {
 	error_check_good m_takeover $takeover_count 1
 	set ev [find_event [$m_2 event_info] autotakeover_failed]
 	error_check_good m_no_autotakeover_failed [string length $ev] 0
+	set ev2 [find_event [$m_2 event_info] autotakeover]
+	error_check_good m_autotakeover_event [is_substr $ev2 "autotakeover"] 1
 	$m_2 close
 }
 
+proc repmgr113_prefmas { {tnum "113"} } {
+	global testdir
+	global ipversion
+
+	# Test case 10: Test listener takeover in preferred master repgroup.
+	# 2 sites, master and client
+	# 2 master processes, m_1 (listener) and m_2
+	# 2 client processes, c_1 (listener) and c_2
+	#
+	# Start all processes.  Perform a put from the initial master
+	# listener process m_1.  Stop client listener c_1.  Verify c_2
+	# takes over listener role on client.  Stop master listener m_1.
+	# Verify m_2 takes over listener role on master.  Perform another
+	# put from the post-takeover master listener process m_2.  Verify
+	# both puts are present on client.
+
+	puts "\tRepmgr$tnum.pm: Perform a takeover on each preferred\
+	    master site."
+	env_cleanup $testdir
+
+	set hoststr [get_hoststr $ipversion]
+	foreach {mport cport} [available_ports 2] {}
+	file mkdir [set mdir $testdir/MASTER]
+	file mkdir [set cdir $testdir/CLIENT]
+	# The "all" ack_policy guarantees that replication is complete before
+	# put operations return.
+	make_dbconfig $mdir \
+	    [list [list repmgr_site $hoststr $mport db_local_site on] \
+	    "rep_set_config db_repmgr_conf_prefmas_master on" \
+	    "repmgr_set_ack_policy db_repmgr_acks_all"]
+	make_dbconfig $cdir \
+	    [list [list repmgr_site $hoststr $cport db_local_site on] \
+	    [list repmgr_site $hoststr $mport db_bootstrap_helper on] \
+	    "rep_set_config db_repmgr_conf_prefmas_client on" \
+	    "repmgr_set_ack_policy db_repmgr_acks_all"]
+
+	setup_repmgr_ssl $mdir
+	setup_repmgr_ssl $cdir
+
+	puts "\t\tRepmgr$tnum.pm.a: Start master and client."
+	set cmds {
+		"home $mdir"
+		"output $testdir/m_1_output"
+		"open_env"
+		"start client"
+	}
+	set m_1 [open_site_prog [subst $cmds]]
+	set m_env [berkdb_env -home $mdir]
+	set cmds {
+		"home $cdir"
+		"output $testdir/c_1_output"
+		"open_env"
+		"start client"
+	}
+	set c_1 [open_site_prog [subst $cmds]]
+	set c_env [berkdb_env -home $cdir]
+	await_startup_done $c_env
+
+	puts "\t\tRepmgr$tnum.pm.b: Start a subordinate process on each site."
+	set cmds {
+		"home $mdir"
+		"output $testdir/m_2_output"
+		"open_env"
+		"start client"
+	}
+	set m_2 [open_site_prog [subst $cmds]]
+	set count 0
+	puts $m_2 "is_connected $cport"
+	while {! [gets $m_2]} {
+		if {[incr count] > 30} {
+			error "FAIL: couldn't connect to client\
+			    within 30 seconds"
+		}
+		tclsleep 1
+		puts $m_2 "is_connected $cport"
+	}
+	set cmds {
+		"home $cdir"
+		"output $testdir/c_2_output"
+		"open_env"
+		"start client"
+	}
+	set c_2 [open_site_prog [subst $cmds]]
+	set count 0
+	puts $c_2 "is_connected $mport"
+	while {! [gets $c_2]} {
+		if {[incr count] > 30} {
+			error "FAIL: couldn't connect to master\
+			    within 30 seconds"
+		}
+		tclsleep 1
+		puts $c_2 "is_connected $mport"
+	}
+
+	puts "\t\tRepmgr$tnum.pm.c: Perform a master put before takeovers."
+	puts $m_1 "open_db test.db"
+	puts $m_1 "put initKey initValue"
+	puts $m_1 "echo initPut"
+	set sentinel [gets $m_1]
+	error_check_good echo_initPut $sentinel "initPut"
+
+	puts "\t\tRepmgr$tnum.pm.d: Perform a client site takeover."
+	close $c_1
+	set count 0
+	set c_takeover_count [stat_field $c_env repmgr_stat \
+	    "Automatic replication process takeovers"]
+	while { $c_takeover_count < 1 } {
+		if {[incr count] > 30} {
+			error "FAIL: couldn't take over on client\
+			    in 30 seconds"
+		}
+		tclsleep 1
+		set c_takeover_count [stat_field $c_env repmgr_stat \
+		    "Automatic replication process takeovers"]
+	}
+	# Pause to refresh c_2 connection to m_1.
+	tclsleep 3
+	puts $c_2 "is_connected $mport"
+	while {! [gets $c_2]} {
+		if {[incr count] > 30} {
+			error "FAIL: couldn't connect to master\
+			    within 30 seconds"
+		}
+		tclsleep 1
+		puts $c_2 "is_connected $mport"
+	}
+
+	puts "\t\tRepmgr$tnum.pm.e: Perform a preferred master site takeover."
+	close $m_1
+	set count 0
+	set m_takeover_count [stat_field $m_env repmgr_stat \
+	    "Automatic replication process takeovers"]
+	while { $m_takeover_count < 1 } {
+		if {[incr count] > 30} {
+			error "FAIL: couldn't take over on master\
+			    in 30 seconds"
+		}
+		tclsleep 1
+		set m_takeover_count [stat_field $m_env repmgr_stat \
+		    "Automatic replication process takeovers"]
+	}
+	# Pause to let c_2 establish its main connection to new master
+	# listener process m_2.
+	tclsleep 3
+	puts $c_2 "is_connected $mport"
+	while {! [gets $c_2]} {
+		if {[incr count] > 30} {
+			error "FAIL: couldn't connect to master\
+			    within 30 seconds"
+		}
+		tclsleep 1
+		puts $c_2 "is_connected $mport"
+	}
+
+	puts "\t\tRepmgr$tnum.pm.f: Perform a master put after takeovers."
+	puts $m_2 "open_db test.db"
+	puts $m_2 "put tookoverKey tookoverValue"
+	puts $m_2 "echo tookoverPut"
+	set sentinel [gets $m_2]
+	error_check_good echo_tookoverPut $sentinel "tookoverPut"
+
+	puts "\t\tRepmgr$tnum.pm.g: Verify both master puts are on client."
+	puts $c_2 "open_db test.db"
+	set expected {{initKey initValue} {tookoverKey tookoverValue}}
+	verify_client_data $c_env test.db $expected
+
+	$c_env close
+	close $c_2
+	$m_env close
+	close $m_2
+}

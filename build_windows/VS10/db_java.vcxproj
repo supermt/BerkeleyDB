@@ -60,21 +60,41 @@
       <PreprocessorDefinitions>DB_CREATE_DLL;_UNICODE;UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>libdb60d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libdb181d.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CustomBuildStep>
       <Command>
 echo compiling Berkeley DB Java classes 
 mkdir "./$(OutDir)/classes/" 
-javac -g -target 1.5 -d "$(OutDir)\classes" -classpath "$(OutDir)\classes" ..\..\lang\java\src\com\sleepycat\db\*.java ..\..\lang\java\src\com\sleepycat\db\internal\*.java ..\..\lang\java\src\com\sleepycat\asm\*.java ..\..\lang\java\src\com\sleepycat\bind\*.java ..\..\lang\java\src\com\sleepycat\bind\serial\*.java ..\..\lang\java\src\com\sleepycat\bind\tuple\*.java ..\..\lang\java\src\com\sleepycat\collections\*.java ..\..\lang\java\src\com\sleepycat\compat\*.java ..\..\lang\java\src\com\sleepycat\persist\*.java ..\..\lang\java\src\com\sleepycat\persist\evolve\*.java ..\..\lang\java\src\com\sleepycat\persist\impl\*.java ..\..\lang\java\src\com\sleepycat\persist\model\*.java ..\..\lang\java\src\com\sleepycat\persist\raw\*.java ..\..\lang\java\src\com\sleepycat\util\*.java ..\..\lang\java\src\com\sleepycat\util\keyrange\*.java
+javac -g -d "$(OutDir)\classes" -classpath "$(OutDir)\classes" ..\..\lang\java\src\com\sleepycat\db\*.java ..\..\lang\java\src\com\sleepycat\db\internal\*.java ..\..\lang\java\src\com\sleepycat\asm\*.java ..\..\lang\java\src\com\sleepycat\bind\*.java ..\..\lang\java\src\com\sleepycat\bind\serial\*.java ..\..\lang\java\src\com\sleepycat\bind\tuple\*.java ..\..\lang\java\src\com\sleepycat\collections\*.java ..\..\lang\java\src\com\sleepycat\compat\*.java ..\..\lang\java\src\com\sleepycat\persist\*.java ..\..\lang\java\src\com\sleepycat\persist\evolve\*.java ..\..\lang\java\src\com\sleepycat\persist\impl\*.java ..\..\lang\java\src\com\sleepycat\persist\model\*.java ..\..\lang\java\src\com\sleepycat\persist\raw\*.java ..\..\lang\java\src\com\sleepycat\util\*.java ..\..\lang\java\src\com\sleepycat\util\keyrange\*.java
 java -classpath $(OutDir)\classes com.sleepycat.persist.model.ClassEnhancer $(OutDir)\classes
 echo compiling examples
 mkdir "$(OutDir)\classes.ex"
-javac -g -target 1.5 -d "$(OutDir)\classes.ex" -classpath "$(OutDir)\classes;$(OutDir)\classes.ex" ..\..\examples/java\src\db\*.java ..\..\examples/java\src\db\GettingStarted\*.java ..\..\examples/java\src\db\repquote\*.java ..\..\examples/java\src\db\repquote_gsg\*.java ..\..\examples/java\src\db\txn\*.java ..\..\examples/java\src\collections\access\*.java ..\..\examples/java\src\collections\hello\*.java ..\..\examples/java\src\collections\ship\basic\*.java ..\..\examples/java\src\collections\ship\entity\*.java ..\..\examples/java\src\collections\ship\factory\*.java ..\..\examples/java\src\collections\ship\index\*.java ..\..\examples/java\src\collections\ship\marshal\*.java ..\..\examples/java\src\collections\ship\sentity\*.java ..\..\examples/java\src\collections\ship\tuple\*.java ..\..\examples/java\src\persist\*.java ..\..\examples/java\src\persist\gettingStarted\*.java ..\..\examples/java\src\persist\txn\*.java
-echo creating jar files
-jar cfm "$(OutDir)/db.jar" ../..\lang/java/jarManifestEntries -C "$(OutDir)\classes" .
-jar cf "$(OutDir)/dbexamples.jar" -C "$(OutDir)\classes.ex" .
-echo Java build finished</Command>
+javac -g -d "$(OutDir)\classes.ex" -classpath "$(OutDir)\classes;$(OutDir)\classes.ex" ..\..\examples/java\src\db\*.java ..\..\examples/java\src\db\GettingStarted\*.java ..\..\examples/java\src\db\repquote\*.java ..\..\examples/java\src\db\repquote_gsg\*.java ..\..\examples/java\src\db\txn\*.java ..\..\examples/java\src\collections\access\*.java ..\..\examples/java\src\collections\hello\*.java ..\..\examples/java\src\collections\ship\basic\*.java ..\..\examples/java\src\collections\ship\entity\*.java ..\..\examples/java\src\collections\ship\factory\*.java ..\..\examples/java\src\collections\ship\index\*.java ..\..\examples/java\src\collections\ship\marshal\*.java ..\..\examples/java\src\collections\ship\sentity\*.java ..\..\examples/java\src\collections\ship\tuple\*.java ..\..\examples/java\src\persist\*.java ..\..\examples/java\src\persist\gettingStarted\*.java ..\..\examples/java\src\persist\txn\*.java 
+echo creating jar files 
+cd $(OutDir) 
+jar cfm "db.jar" ../../..\lang/java/jarManifestEntries -C "classes" . 
+jar cf "dbexamples.jar" -C "classes.ex" . 
+echo Java build finished 
+
+java -fullversion 2&gt; java_version.txt
+for /f tokens^=2-5^ delims^=.-_^" %%j in (java_version.txt) do set "jver=%%j%%k"
+del java_version.txt
+if %jver% LSS 18 ( 
+  echo Skipping Berkeley DB GUI, it requires Java 1.8 or higher.
+  exit 0
+)
+echo compiling Berkeley DB GUI classes 
+cd .. 
+mkdir "./$(OutDir)/classes.gui/" 
+javac -g -d "$(OutDir)\classes.gui" -classpath "$(OutDir)\classes;$(OutDir)\classes.gui;$(CLASSPATH)" ..\..\util\db_gui\*.java ..\..\util\db_gui\datapage\*.java ..\..\util\db_gui\dbpage\*.java ..\..\util\db_gui\envpage\*.java 
+copy ..\..\util\db_gui\datapage\*.fxml "$(OutDir)\classes.gui\db_gui\datapage" 
+copy ..\..\util\db_gui\dbpage\*.fxml "$(OutDir)\classes.gui\db_gui\dbpage" 
+copy ..\..\util\db_gui\envpage\*.fxml "$(OutDir)\classes.gui\db_gui\envpage" 
+echo creating jar files 
+cd $(OutDir) 
+jar cf "db_gui.jar" -C "classes.gui" . 
+echo Berkeyley DB GUI build finished</Command>
       <Outputs>force_compilation.txt;%(Outputs)</Outputs>
     </CustomBuildStep>
   </ItemDefinitionGroup>
@@ -83,21 +103,41 @@ echo Java build finished</Command>
       <PreprocessorDefinitions>DB_CREATE_DLL;_UNICODE;UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>libdb60.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libdb181.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CustomBuildStep>
       <Command>
 echo compiling Berkeley DB Java classes 
 mkdir "./$(OutDir)/classes/" 
-javac -g -target 1.5 -d "$(OutDir)\classes" -classpath "$(OutDir)\classes" ..\..\lang\java\src\com\sleepycat\db\*.java ..\..\lang\java\src\com\sleepycat\db\internal\*.java ..\..\lang\java\src\com\sleepycat\asm\*.java ..\..\lang\java\src\com\sleepycat\bind\*.java ..\..\lang\java\src\com\sleepycat\bind\serial\*.java ..\..\lang\java\src\com\sleepycat\bind\tuple\*.java ..\..\lang\java\src\com\sleepycat\collections\*.java ..\..\lang\java\src\com\sleepycat\compat\*.java ..\..\lang\java\src\com\sleepycat\persist\*.java ..\..\lang\java\src\com\sleepycat\persist\evolve\*.java ..\..\lang\java\src\com\sleepycat\persist\impl\*.java ..\..\lang\java\src\com\sleepycat\persist\model\*.java ..\..\lang\java\src\com\sleepycat\persist\raw\*.java ..\..\lang\java\src\com\sleepycat\util\*.java ..\..\lang\java\src\com\sleepycat\util\keyrange\*.java
+javac -g -d "$(OutDir)\classes" -classpath "$(OutDir)\classes" ..\..\lang\java\src\com\sleepycat\db\*.java ..\..\lang\java\src\com\sleepycat\db\internal\*.java ..\..\lang\java\src\com\sleepycat\asm\*.java ..\..\lang\java\src\com\sleepycat\bind\*.java ..\..\lang\java\src\com\sleepycat\bind\serial\*.java ..\..\lang\java\src\com\sleepycat\bind\tuple\*.java ..\..\lang\java\src\com\sleepycat\collections\*.java ..\..\lang\java\src\com\sleepycat\compat\*.java ..\..\lang\java\src\com\sleepycat\persist\*.java ..\..\lang\java\src\com\sleepycat\persist\evolve\*.java ..\..\lang\java\src\com\sleepycat\persist\impl\*.java ..\..\lang\java\src\com\sleepycat\persist\model\*.java ..\..\lang\java\src\com\sleepycat\persist\raw\*.java ..\..\lang\java\src\com\sleepycat\util\*.java ..\..\lang\java\src\com\sleepycat\util\keyrange\*.java
 java -classpath $(OutDir)\classes com.sleepycat.persist.model.ClassEnhancer $(OutDir)\classes
 echo compiling examples
 mkdir "$(OutDir)\classes.ex"
-javac -g -target 1.5 -d "$(OutDir)\classes.ex" -classpath "$(OutDir)\classes;$(OutDir)\classes.ex" ..\..\examples/java\src\db\*.java ..\..\examples/java\src\db\GettingStarted\*.java ..\..\examples/java\src\db\repquote\*.java ..\..\examples/java\src\db\repquote_gsg\*.java ..\..\examples/java\src\db\txn\*.java ..\..\examples/java\src\collections\access\*.java ..\..\examples/java\src\collections\hello\*.java ..\..\examples/java\src\collections\ship\basic\*.java ..\..\examples/java\src\collections\ship\entity\*.java ..\..\examples/java\src\collections\ship\factory\*.java ..\..\examples/java\src\collections\ship\index\*.java ..\..\examples/java\src\collections\ship\marshal\*.java ..\..\examples/java\src\collections\ship\sentity\*.java ..\..\examples/java\src\collections\ship\tuple\*.java ..\..\examples/java\src\persist\*.java ..\..\examples/java\src\persist\gettingStarted\*.java ..\..\examples/java\src\persist\txn\*.java
-echo creating jar files
-jar cfm "$(OutDir)/db.jar" ../..\lang/java/jarManifestEntries -C "$(OutDir)\classes" .
-jar cf "$(OutDir)/dbexamples.jar" -C "$(OutDir)\classes.ex" .
-echo Java build finished</Command>
+javac -g -d "$(OutDir)\classes.ex" -classpath "$(OutDir)\classes;$(OutDir)\classes.ex" ..\..\examples/java\src\db\*.java ..\..\examples/java\src\db\GettingStarted\*.java ..\..\examples/java\src\db\repquote\*.java ..\..\examples/java\src\db\repquote_gsg\*.java ..\..\examples/java\src\db\txn\*.java ..\..\examples/java\src\collections\access\*.java ..\..\examples/java\src\collections\hello\*.java ..\..\examples/java\src\collections\ship\basic\*.java ..\..\examples/java\src\collections\ship\entity\*.java ..\..\examples/java\src\collections\ship\factory\*.java ..\..\examples/java\src\collections\ship\index\*.java ..\..\examples/java\src\collections\ship\marshal\*.java ..\..\examples/java\src\collections\ship\sentity\*.java ..\..\examples/java\src\collections\ship\tuple\*.java ..\..\examples/java\src\persist\*.java ..\..\examples/java\src\persist\gettingStarted\*.java ..\..\examples/java\src\persist\txn\*.java 
+echo creating jar files 
+cd $(OutDir) 
+jar cfm "db.jar" ../../..\lang/java/jarManifestEntries -C "classes" . 
+jar cf "dbexamples.jar" -C "classes.ex" . 
+echo Java build finished 
+
+java -fullversion 2&gt; java_version.txt
+for /f tokens^=2-5^ delims^=.-_^" %%j in (java_version.txt) do set "jver=%%j%%k"
+del java_version.txt
+if %jver% LSS 18 ( 
+  echo Skipping Berkeley DB GUI, it requires Java 1.8 or higher.
+  exit 0
+)
+echo compiling Berkeley DB GUI classes 
+cd .. 
+mkdir "./$(OutDir)/classes.gui/" 
+javac -g -d "$(OutDir)\classes.gui" -classpath "$(OutDir)\classes;$(OutDir)\classes.gui;$(CLASSPATH)" ..\..\util\db_gui\*.java ..\..\util\db_gui\datapage\*.java ..\..\util\db_gui\dbpage\*.java ..\..\util\db_gui\envpage\*.java 
+copy ..\..\util\db_gui\datapage\*.fxml "$(OutDir)\classes.gui\db_gui\datapage" 
+copy ..\..\util\db_gui\dbpage\*.fxml "$(OutDir)\classes.gui\db_gui\dbpage" 
+copy ..\..\util\db_gui\envpage\*.fxml "$(OutDir)\classes.gui\db_gui\envpage" 
+echo creating jar files 
+cd $(OutDir) 
+jar cf "db_gui.jar" -C "classes.gui" . 
+echo Berkeyley DB GUI build finished</Command>
       <Outputs>force_compilation.txt;%(Outputs)</Outputs>
     </CustomBuildStep>
   </ItemDefinitionGroup>
@@ -106,21 +146,41 @@ echo Java build finished</Command>
       <PreprocessorDefinitions>DB_CREATE_DLL;_UNICODE;UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>libdb60d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libdb181d.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CustomBuildStep>
       <Command>
 echo compiling Berkeley DB Java classes 
 mkdir "./$(OutDir)/classes/" 
-javac -g -target 1.5 -d "$(OutDir)\classes" -classpath "$(OutDir)\classes" ..\..\lang\java\src\com\sleepycat\db\*.java ..\..\lang\java\src\com\sleepycat\db\internal\*.java ..\..\lang\java\src\com\sleepycat\asm\*.java ..\..\lang\java\src\com\sleepycat\bind\*.java ..\..\lang\java\src\com\sleepycat\bind\serial\*.java ..\..\lang\java\src\com\sleepycat\bind\tuple\*.java ..\..\lang\java\src\com\sleepycat\collections\*.java ..\..\lang\java\src\com\sleepycat\compat\*.java ..\..\lang\java\src\com\sleepycat\persist\*.java ..\..\lang\java\src\com\sleepycat\persist\evolve\*.java ..\..\lang\java\src\com\sleepycat\persist\impl\*.java ..\..\lang\java\src\com\sleepycat\persist\model\*.java ..\..\lang\java\src\com\sleepycat\persist\raw\*.java ..\..\lang\java\src\com\sleepycat\util\*.java ..\..\lang\java\src\com\sleepycat\util\keyrange\*.java
+javac -g -d "$(OutDir)\classes" -classpath "$(OutDir)\classes" ..\..\lang\java\src\com\sleepycat\db\*.java ..\..\lang\java\src\com\sleepycat\db\internal\*.java ..\..\lang\java\src\com\sleepycat\asm\*.java ..\..\lang\java\src\com\sleepycat\bind\*.java ..\..\lang\java\src\com\sleepycat\bind\serial\*.java ..\..\lang\java\src\com\sleepycat\bind\tuple\*.java ..\..\lang\java\src\com\sleepycat\collections\*.java ..\..\lang\java\src\com\sleepycat\compat\*.java ..\..\lang\java\src\com\sleepycat\persist\*.java ..\..\lang\java\src\com\sleepycat\persist\evolve\*.java ..\..\lang\java\src\com\sleepycat\persist\impl\*.java ..\..\lang\java\src\com\sleepycat\persist\model\*.java ..\..\lang\java\src\com\sleepycat\persist\raw\*.java ..\..\lang\java\src\com\sleepycat\util\*.java ..\..\lang\java\src\com\sleepycat\util\keyrange\*.java
 java -classpath $(OutDir)\classes com.sleepycat.persist.model.ClassEnhancer $(OutDir)\classes
 echo compiling examples
 mkdir "$(OutDir)\classes.ex"
-javac -g -target 1.5 -d "$(OutDir)\classes.ex" -classpath "$(OutDir)\classes;$(OutDir)\classes.ex" ..\..\examples/java\src\db\*.java ..\..\examples/java\src\db\GettingStarted\*.java ..\..\examples/java\src\db\repquote\*.java ..\..\examples/java\src\db\repquote_gsg\*.java ..\..\examples/java\src\db\txn\*.java ..\..\examples/java\src\collections\access\*.java ..\..\examples/java\src\collections\hello\*.java ..\..\examples/java\src\collections\ship\basic\*.java ..\..\examples/java\src\collections\ship\entity\*.java ..\..\examples/java\src\collections\ship\factory\*.java ..\..\examples/java\src\collections\ship\index\*.java ..\..\examples/java\src\collections\ship\marshal\*.java ..\..\examples/java\src\collections\ship\sentity\*.java ..\..\examples/java\src\collections\ship\tuple\*.java ..\..\examples/java\src\persist\*.java ..\..\examples/java\src\persist\gettingStarted\*.java ..\..\examples/java\src\persist\txn\*.java
-echo creating jar files
-jar cfm "$(OutDir)/db.jar" ../..\lang/java/jarManifestEntries -C "$(OutDir)\classes" .
-jar cf "$(OutDir)/dbexamples.jar" -C "$(OutDir)\classes.ex" .
-echo Java build finished</Command>
+javac -g -d "$(OutDir)\classes.ex" -classpath "$(OutDir)\classes;$(OutDir)\classes.ex" ..\..\examples/java\src\db\*.java ..\..\examples/java\src\db\GettingStarted\*.java ..\..\examples/java\src\db\repquote\*.java ..\..\examples/java\src\db\repquote_gsg\*.java ..\..\examples/java\src\db\txn\*.java ..\..\examples/java\src\collections\access\*.java ..\..\examples/java\src\collections\hello\*.java ..\..\examples/java\src\collections\ship\basic\*.java ..\..\examples/java\src\collections\ship\entity\*.java ..\..\examples/java\src\collections\ship\factory\*.java ..\..\examples/java\src\collections\ship\index\*.java ..\..\examples/java\src\collections\ship\marshal\*.java ..\..\examples/java\src\collections\ship\sentity\*.java ..\..\examples/java\src\collections\ship\tuple\*.java ..\..\examples/java\src\persist\*.java ..\..\examples/java\src\persist\gettingStarted\*.java ..\..\examples/java\src\persist\txn\*.java 
+echo creating jar files 
+cd $(OutDir) 
+jar cfm "db.jar" ../../..\lang/java/jarManifestEntries -C "classes" . 
+jar cf "dbexamples.jar" -C "classes.ex" . 
+echo Java build finished 
+
+java -fullversion 2&gt; java_version.txt
+for /f tokens^=2-5^ delims^=.-_^" %%j in (java_version.txt) do set "jver=%%j%%k"
+del java_version.txt
+if %jver% LSS 18 ( 
+  echo Skipping Berkeley DB GUI, it requires Java 1.8 or higher.
+  exit 0
+)
+echo compiling Berkeley DB GUI classes 
+cd .. 
+mkdir "./$(OutDir)/classes.gui/" 
+javac -g -d "$(OutDir)\classes.gui" -classpath "$(OutDir)\classes;$(OutDir)\classes.gui;$(CLASSPATH)" ..\..\util\db_gui\*.java ..\..\util\db_gui\datapage\*.java ..\..\util\db_gui\dbpage\*.java ..\..\util\db_gui\envpage\*.java 
+copy ..\..\util\db_gui\datapage\*.fxml "$(OutDir)\classes.gui\db_gui\datapage" 
+copy ..\..\util\db_gui\dbpage\*.fxml "$(OutDir)\classes.gui\db_gui\dbpage" 
+copy ..\..\util\db_gui\envpage\*.fxml "$(OutDir)\classes.gui\db_gui\envpage" 
+echo creating jar files 
+cd $(OutDir) 
+jar cf "db_gui.jar" -C "classes.gui" . 
+echo Berkeyley DB GUI build finished</Command>
       <Outputs>force_compilation.txt;%(Outputs)</Outputs>
     </CustomBuildStep>
   </ItemDefinitionGroup>
@@ -129,21 +189,41 @@ echo Java build finished</Command>
       <PreprocessorDefinitions>DB_CREATE_DLL;_UNICODE;UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>libdb60.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libdb181.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CustomBuildStep>
       <Command>
 echo compiling Berkeley DB Java classes 
 mkdir "./$(OutDir)/classes/" 
-javac -g -target 1.5 -d "$(OutDir)\classes" -classpath "$(OutDir)\classes" ..\..\lang\java\src\com\sleepycat\db\*.java ..\..\lang\java\src\com\sleepycat\db\internal\*.java ..\..\lang\java\src\com\sleepycat\asm\*.java ..\..\lang\java\src\com\sleepycat\bind\*.java ..\..\lang\java\src\com\sleepycat\bind\serial\*.java ..\..\lang\java\src\com\sleepycat\bind\tuple\*.java ..\..\lang\java\src\com\sleepycat\collections\*.java ..\..\lang\java\src\com\sleepycat\compat\*.java ..\..\lang\java\src\com\sleepycat\persist\*.java ..\..\lang\java\src\com\sleepycat\persist\evolve\*.java ..\..\lang\java\src\com\sleepycat\persist\impl\*.java ..\..\lang\java\src\com\sleepycat\persist\model\*.java ..\..\lang\java\src\com\sleepycat\persist\raw\*.java ..\..\lang\java\src\com\sleepycat\util\*.java ..\..\lang\java\src\com\sleepycat\util\keyrange\*.java
+javac -g -d "$(OutDir)\classes" -classpath "$(OutDir)\classes" ..\..\lang\java\src\com\sleepycat\db\*.java ..\..\lang\java\src\com\sleepycat\db\internal\*.java ..\..\lang\java\src\com\sleepycat\asm\*.java ..\..\lang\java\src\com\sleepycat\bind\*.java ..\..\lang\java\src\com\sleepycat\bind\serial\*.java ..\..\lang\java\src\com\sleepycat\bind\tuple\*.java ..\..\lang\java\src\com\sleepycat\collections\*.java ..\..\lang\java\src\com\sleepycat\compat\*.java ..\..\lang\java\src\com\sleepycat\persist\*.java ..\..\lang\java\src\com\sleepycat\persist\evolve\*.java ..\..\lang\java\src\com\sleepycat\persist\impl\*.java ..\..\lang\java\src\com\sleepycat\persist\model\*.java ..\..\lang\java\src\com\sleepycat\persist\raw\*.java ..\..\lang\java\src\com\sleepycat\util\*.java ..\..\lang\java\src\com\sleepycat\util\keyrange\*.java
 java -classpath $(OutDir)\classes com.sleepycat.persist.model.ClassEnhancer $(OutDir)\classes
 echo compiling examples
 mkdir "$(OutDir)\classes.ex"
-javac -g -target 1.5 -d "$(OutDir)\classes.ex" -classpath "$(OutDir)\classes;$(OutDir)\classes.ex" ..\..\examples/java\src\db\*.java ..\..\examples/java\src\db\GettingStarted\*.java ..\..\examples/java\src\db\repquote\*.java ..\..\examples/java\src\db\repquote_gsg\*.java ..\..\examples/java\src\db\txn\*.java ..\..\examples/java\src\collections\access\*.java ..\..\examples/java\src\collections\hello\*.java ..\..\examples/java\src\collections\ship\basic\*.java ..\..\examples/java\src\collections\ship\entity\*.java ..\..\examples/java\src\collections\ship\factory\*.java ..\..\examples/java\src\collections\ship\index\*.java ..\..\examples/java\src\collections\ship\marshal\*.java ..\..\examples/java\src\collections\ship\sentity\*.java ..\..\examples/java\src\collections\ship\tuple\*.java ..\..\examples/java\src\persist\*.java ..\..\examples/java\src\persist\gettingStarted\*.java ..\..\examples/java\src\persist\txn\*.java
-echo creating jar files
-jar cfm "$(OutDir)/db.jar" ../..\lang/java/jarManifestEntries -C "$(OutDir)\classes" .
-jar cf "$(OutDir)/dbexamples.jar" -C "$(OutDir)\classes.ex" .
-echo Java build finished</Command>
+javac -g -d "$(OutDir)\classes.ex" -classpath "$(OutDir)\classes;$(OutDir)\classes.ex" ..\..\examples/java\src\db\*.java ..\..\examples/java\src\db\GettingStarted\*.java ..\..\examples/java\src\db\repquote\*.java ..\..\examples/java\src\db\repquote_gsg\*.java ..\..\examples/java\src\db\txn\*.java ..\..\examples/java\src\collections\access\*.java ..\..\examples/java\src\collections\hello\*.java ..\..\examples/java\src\collections\ship\basic\*.java ..\..\examples/java\src\collections\ship\entity\*.java ..\..\examples/java\src\collections\ship\factory\*.java ..\..\examples/java\src\collections\ship\index\*.java ..\..\examples/java\src\collections\ship\marshal\*.java ..\..\examples/java\src\collections\ship\sentity\*.java ..\..\examples/java\src\collections\ship\tuple\*.java ..\..\examples/java\src\persist\*.java ..\..\examples/java\src\persist\gettingStarted\*.java ..\..\examples/java\src\persist\txn\*.java 
+echo creating jar files 
+cd $(OutDir) 
+jar cfm "db.jar" ../../..\lang/java/jarManifestEntries -C "classes" . 
+jar cf "dbexamples.jar" -C "classes.ex" . 
+echo Java build finished 
+
+java -fullversion 2&gt; java_version.txt
+for /f tokens^=2-5^ delims^=.-_^" %%j in (java_version.txt) do set "jver=%%j%%k"
+del java_version.txt
+if %jver% LSS 18 ( 
+  echo Skipping Berkeley DB GUI, it requires Java 1.8 or higher.
+  exit 0
+)
+echo compiling Berkeley DB GUI classes 
+cd .. 
+mkdir "./$(OutDir)/classes.gui/" 
+javac -g -d "$(OutDir)\classes.gui" -classpath "$(OutDir)\classes;$(OutDir)\classes.gui;$(CLASSPATH)" ..\..\util\db_gui\*.java ..\..\util\db_gui\datapage\*.java ..\..\util\db_gui\dbpage\*.java ..\..\util\db_gui\envpage\*.java 
+copy ..\..\util\db_gui\datapage\*.fxml "$(OutDir)\classes.gui\db_gui\datapage" 
+copy ..\..\util\db_gui\dbpage\*.fxml "$(OutDir)\classes.gui\db_gui\dbpage" 
+copy ..\..\util\db_gui\envpage\*.fxml "$(OutDir)\classes.gui\db_gui\envpage" 
+echo creating jar files 
+cd $(OutDir) 
+jar cf "db_gui.jar" -C "classes.gui" . 
+echo Berkeyley DB GUI build finished</Command>
       <Outputs>force_compilation.txt;%(Outputs)</Outputs>
     </CustomBuildStep>
   </ItemDefinitionGroup>
@@ -155,7 +235,7 @@ echo Java build finished</Command>
   </ImportGroup>
   <ItemGroup>
     <ProjectReference Condition="exists('db.vcxproj')" Include="db.vcxproj">
-      <Project>{fd045d60-abad-4a6c-9794-9bfb085fc3e7}</Project>
+      <Project>{FD045D60-ABAD-4A6C-9794-9BFB085FC3E7}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
   </ItemGroup>

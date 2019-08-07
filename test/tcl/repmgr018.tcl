@@ -1,6 +1,6 @@
-# See the file LICENSE for redistribution information.
+# Copyright (c) 2007, 2019 Oracle and/or its affiliates.  All rights reserved.
 #
-# Copyright (c) 2007, 2013 Oracle and/or its affiliates.  All rights reserved.
+# See the file LICENSE for license information.
 #
 # $Id$
 #
@@ -35,6 +35,7 @@ proc repmgr018_sub { method niter tnum largs } {
 	global testdir
 	global rep_verbose
 	global verbose_type
+	global ipversion
 	set nsites 2
 
 	set verbargs ""
@@ -44,6 +45,7 @@ proc repmgr018_sub { method niter tnum largs } {
 
 	env_cleanup $testdir
 	set ports [available_ports $nsites]
+	set hoststr [get_hoststr $ipversion]
 
 	set masterdir $testdir/MASTERDIR
 	set clientdir $testdir/CLIENTDIR
@@ -51,13 +53,16 @@ proc repmgr018_sub { method niter tnum largs } {
 	file mkdir $masterdir
 	file mkdir $clientdir
 
+	setup_repmgr_ssl $masterdir	
+	setup_repmgr_ssl $clientdir
+	
 	# Open a master.
 	puts "\tRepmgr$tnum.a: Start a master."
 	set ma_envcmd "berkdb_env_noerr -create $verbargs -errpfx MASTER \
 	    -home $masterdir -txn -rep -thread"
 	set masterenv [eval $ma_envcmd]
 	$masterenv repmgr -ack all \
-	    -local [list 127.0.0.1 [lindex $ports 0]] \
+	    -local [list $hoststr [lindex $ports 0]] \
 	    -start master
 
 	# Open a client
@@ -66,8 +71,8 @@ proc repmgr018_sub { method niter tnum largs } {
 	    -home $clientdir -txn -rep -thread"
 	set clientenv [eval $cl_envcmd]
 	$clientenv repmgr -ack all \
-	    -local [list 127.0.0.1 [lindex $ports 1]] \
-	    -remote [list 127.0.0.1 [lindex $ports 0]] \
+	    -local [list $hoststr [lindex $ports 1]] \
+	    -remote [list $hoststr [lindex $ports 0]] \
 	    -start client
 	await_startup_done $clientenv
 
@@ -107,8 +112,8 @@ proc repmgr018_sub { method niter tnum largs } {
 	# Open -recover to clear env region, including startup_done value.
 	set clientenv [eval $cl_envcmd -recover]
 	$clientenv repmgr -ack all \
-	    -local [list 127.0.0.1 [lindex $ports 1]] \
-	    -remote [list 127.0.0.1 [lindex $ports 0]] \
+	    -local [list $hoststr [lindex $ports 1]] \
+	    -remote [list $hoststr [lindex $ports 0]] \
 	    -start client
 	await_startup_done $clientenv
 	$clientenv close
@@ -121,8 +126,8 @@ proc repmgr018_sub { method niter tnum largs } {
 	# Open -recover to clear env region, including startup_done value.
 	set clientenv [eval $cl_envcmd -recover]
 	$clientenv repmgr -ack all \
-	    -local [list 127.0.0.1 [lindex $ports 1]] \
-	    -remote [list 127.0.0.1 [lindex $ports 0]] \
+	    -local [list $hoststr [lindex $ports 1]] \
+	    -remote [list $hoststr [lindex $ports 0]] \
 	    -start client
 	await_startup_done $clientenv
 	$clientenv close

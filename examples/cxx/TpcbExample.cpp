@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1997, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1997, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file EXAMPLES-LICENSE for license information.
  *
  * $Id$
  */
@@ -246,7 +246,7 @@ usage()
 }
 
 TpcbExample::TpcbExample(const char *home, int cachesize, int flags)
-:	DbEnv(0)
+:	DbEnv((u_int32_t)0)
 {
 	u_int32_t local_flags;
 

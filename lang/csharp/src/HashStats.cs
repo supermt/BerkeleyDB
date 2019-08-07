@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2009, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2009, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  */
 using System;
@@ -31,7 +31,7 @@ namespace BerkeleyDB {
         /// </summary>
         public ulong BucketPagesFreeBytes { get { return st.hash_bfree; } }
         /// <summary>
-        /// Number of dup pages. 
+        /// Number of duplicate pages. 
         /// </summary>
         public uint DuplicatePages { get { return st.hash_dup; } }
         /// <summary>
@@ -55,13 +55,17 @@ namespace BerkeleyDB {
         /// </summary>
         public uint MagicNumber { get { return st.hash_magic; } }
         /// <summary>
-        /// Number of blob records.
+        /// Deprecated.  Replaced by nExternalFiles.
         /// </summary>
-        public uint nBlobRecords { get { return st.hash_nblobs; } }
+        public uint nBlobRecords { get { return st.hash_ext_files; } }
         /// <summary>
         /// Number of data items. 
         /// </summary>
         public uint nData { get { return st.hash_ndata; } }
+	/// <summary>
+        /// Number of external file records.
+        /// </summary>
+        public uint nExternalFiles { get { return st.hash_ext_files; } }
         /// <summary>
         /// Number of hash buckets. 
         /// </summary>
@@ -75,7 +79,7 @@ namespace BerkeleyDB {
         /// </summary>
         public uint OverflowPages { get { return st.hash_overflows; } }
         /// <summary>
-        /// Bytes free on ovfl pages. 
+        /// Bytes free on overflow pages. 
         /// </summary>
         public ulong OverflowPagesFreeBytes { get { return st.hash_ovfl_free; } }
         /// <summary>

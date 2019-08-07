@@ -1,9 +1,8 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2001, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2001, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file EXAMPLES-LICENSE for license information.
  *
- * $Id$
  */
 
 package db.repquote;
@@ -12,11 +11,8 @@ import java.io.FileNotFoundException;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.IOException;
-import java.lang.Thread;
-import java.lang.InterruptedException;
 
 import com.sleepycat.db.*;
-import db.repquote.RepConfig;
 
 /**
  * RepQuoteExample is a simple but complete demonstration of a replicated
@@ -143,20 +139,21 @@ public class RepQuoteExample
                     isCreator = true;
                 /* "local" should be host:port. */
                 i++;
-                String[] words = argv[i].split(":");
-                if (words.length != 2) {
+                /* Look for index of the last colon in the argv[i] string. */
+                int sep = argv[i].lastIndexOf(':');
+                if (sep == -1 || sep == 0) {
                     System.err.println(
-                        "Invalid host specification host:port needed.");
+                        "Invalid local host specification host:port needed.");
                     usage();
                 }
                 try {
-                    tmpPort = Integer.parseInt(words[1]);
+                    tmpPort = Integer.parseInt(argv[i].substring(sep + 1));
                 } catch (NumberFormatException nfe) {
-                    System.err.println("Invalid host specification, " +
+                    System.err.println("Invalid local host specification, " +
                         "could not parse port number.");
                     usage();
                 }
-                config.setThisHost(words[0], tmpPort, isCreator);
+                config.setThisHost(argv[i].substring(0, sep), tmpPort, isCreator);
             } else if (argv[i].compareTo("-M") == 0) {
                 config.startPolicy = ReplicationManagerStartPolicy.REP_MASTER;
             } else if (argv[i].compareTo("-p") == 0) {
@@ -171,20 +168,21 @@ public class RepQuoteExample
                 if (argv[i].equals("-R"))
                     isPeer = true;
                 i++;
-                String[] words = argv[i].split(":");
-                if (words.length != 2) {
+                /* Look for index of the last colon in the argv[i] string. */
+                int sep = argv[i].lastIndexOf(':');
+                if (sep == -1 || sep == 0) {
                     System.err.println(
-                        "Invalid host specification host:port needed.");
+                        "Invalid remote host specification host:port needed.");
                     usage();
                 }
                 try {
-                    tmpPort = Integer.parseInt(words[1]);
+                    tmpPort = Integer.parseInt(argv[i].substring(sep + 1));
                 } catch (NumberFormatException nfe) {
-                    System.err.println("Invalid host specification, " +
+                    System.err.println("Invalid remote host specification, " +
                         "could not parse port number.");
                     usage();
                 }
-                config.addOtherHost(words[0], tmpPort, isPeer);
+                config.addOtherHost(argv[i].substring(0, sep), tmpPort, isPeer);
             } else if (argv[i].compareTo("-v") == 0) {
                 config.verbose = true;
             } else {
@@ -232,6 +230,26 @@ public class RepQuoteExample
         EnvironmentConfig envConfig = new EnvironmentConfig();
         envConfig.setErrorStream(System.err);
         envConfig.setErrorPrefix(RepConfig.progname);
+
+        /* Disable SSL for repmgr */
+        envConfig.setReplicationManagerSSLdisabled(true);
+
+        /*
+         * If repmgr has been built with ssl support, then we can use 
+         * $BDB_ROOT/test/utils/ssl_cert_gen_script.sh to generate ssl
+         * certificates in directory say "certs". Then following command
+         * can be used to run RepQuoteExample with SSL support for
+         * Replication Manager. 
+         * We will remove the above command in that case.
+         * 
+         * envConfig.setReplicationManagerSSLconfiguration(
+         *      new String("certs/rootCA.crt"),
+         *      null,
+         *      new String("certs/repNode.crt"),
+         *      new String("certs/repNode.key"),
+         *      new String("someRandomPass"),
+         *      6);
+         */        
 
         envConfig.addReplicationManagerSite(appConfig.getThisHost());
         for (RepRemoteHost host = appConfig.getFirstOtherHost();
@@ -300,7 +318,7 @@ public class RepQuoteExample
         envConfig.setInitializeLogging(true);
         envConfig.setInitializeCache(true);
         envConfig.setTransactional(true);
-        envConfig.setVerboseReplication(appConfig.verbose);
+        envConfig.setVerbose(VerboseConfig.REPLICATION, appConfig.verbose);
         try {
             dbenv = new RepQuoteEnvironment(appConfig.getHome(), envConfig);
         } catch(FileNotFoundException e) {
@@ -535,11 +553,13 @@ public class RepQuoteExample
      */
     private /* internal */
     class RepQuoteEventHandler extends EventHandlerAdapter {
+        @Override
         public void handleRepClientEvent()
         {
             dbenv.setIsMaster(false);
             dbenv.setInClientSync(true);
         }
+        @Override
         public void handleRepMasterEvent()
         {
             dbenv.setIsMaster(true);
@@ -549,6 +569,7 @@ public class RepQuoteExample
         {
             dbenv.setInClientSync(true);
         }
+        @Override
         public void handleRepPermFailedEvent()
         {
             /*
@@ -560,6 +581,7 @@ public class RepQuoteExample
             System.err.println(
     "Insufficient acknowledgements to guarantee transaction durability.");
         }
+        @Override
         public void handleRepStartupDoneEvent()
         {
             dbenv.setInClientSync(false);
@@ -580,6 +602,7 @@ class CheckpointThread extends Thread {
         myEnv = env;
     }
 
+    @Override
     public void run() {
         for (;;) {
             /*
@@ -633,6 +656,7 @@ class LogArchiveThread extends Thread {
         myEnvConfig = envConfig;
     }
 
+    @Override
     public void run() {
         java.io.File[] logFileList;
         int logs_to_keep = 3;

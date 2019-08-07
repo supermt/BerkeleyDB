@@ -8,20 +8,23 @@
     <meta name="generator" content="DocBook XSL Stylesheets V1.73.2" />
     <link rel="start" href="index.html" title="Berkeley DB C API Reference" />
     <link rel="up" href="env.html" title="Chapter 5.  The DB_ENV Handle" />
-    <link rel="prev" href="envset_data_dir.html" title="DB_ENV-&gt;set_data_dir()" />
+    <link rel="prev" href="envset_data_len.html" title="DB_ENV-&gt;set_data_len()" />
     <link rel="next" href="envset_encrypt.html" title="DB_ENV-&gt;set_encrypt()" />
   </head>
   <body>
     <div xmlns="" class="navheader">
       <div class="libver">
-        <p>Library Version 12.1.6.0</p>
+        <p>Library Version 18.1.32</p>
       </div>
       <table width="100%" summary="Navigation header">
         <tr>
-          <th colspan="3" align="center">DB_ENV-&gt;set_create_dir()</th>
+          <th colspan="3" align="center">
+        <span xmlns="http://www.w3.org/1999/xhtml">DB_ENV-&gt;set_create_dir()</span>
+        
+    </th>
         </tr>
         <tr>
-          <td width="20%" align="left"><a accesskey="p" href="envset_data_dir.html">Prev</a> </td>
+          <td width="20%" align="left"><a accesskey="p" href="envset_data_len.html">Prev</a> </td>
           <th width="60%" align="center">Chapter 5. 
                 The DB_ENV Handle
         </th>
@@ -34,7 +37,10 @@
       <div class="titlepage">
         <div>
           <div>
-            <h2 class="title" style="clear: both"><a id="envset_create_dir"></a>DB_ENV-&gt;set_create_dir()</h2>
+            <h2 class="title" style="clear: both"><a id="envset_create_dir"></a>
+        <span>DB_ENV-&gt;set_create_dir()</span>
+        
+    </h2>
           </div>
         </div>
       </div>
@@ -45,7 +51,10 @@ DB_ENV-&gt;set_create_dir(DB_ENV *dbenv, const char *dir);  </pre>
       <p>
          Sets the path of a directory to be used as the location to create the access
          method database files.  When the
-         <a class="xref" href="dbopen.html" title="DB-&gt;open()">DB-&gt;open()</a>  function is used to
+         <a class="xref" href="dbopen.html" title="DB-&gt;open()">
+        <span>DB-&gt;open()</span>
+        
+    </a>  function is used to
 	     create a file it will be created relative to this path.  
     </p>
       <p>
@@ -82,7 +91,7 @@ DB_ENV-&gt;set_create_dir(DB_ENV *dbenv, const char *dir);  </pre>
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp1567520"></a>Parameters</h3>
+              <h3 class="title"><a id="idm140113485845056"></a>Parameters</h3>
             </div>
           </div>
         </div>
@@ -90,7 +99,7 @@ DB_ENV-&gt;set_create_dir(DB_ENV *dbenv, const char *dir);  </pre>
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp1607192"></a>dir</h4>
+                <h4 class="title"><a id="idm140113485845568"></a>dir</h4>
               </div>
             </div>
           </div>
@@ -98,7 +107,10 @@ DB_ENV-&gt;set_create_dir(DB_ENV *dbenv, const char *dir);  </pre>
                           The <span class="bold"><strong>dir</strong></span> parameter is a directory to
                           be used to create database files.
 			  This directory must be one of the directories specified via a call to
-			  <a class="xref" href="envadd_data_dir.html" title="DB_ENV-&gt;add_data_dir()">DB_ENV-&gt;add_data_dir()</a>
+			  <a class="xref" href="envadd_data_dir.html" title="DB_ENV-&gt;add_data_dir()">
+        <span>DB_ENV-&gt;add_data_dir()</span>
+        
+    </a>
                      </p>
           <p>
                              When using a Unicode build on Windows (the default), this argument will be interpreted
@@ -110,7 +122,7 @@ DB_ENV-&gt;set_create_dir(DB_ENV *dbenv, const char *dir);  </pre>
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp1559336"></a>Errors</h3>
+              <h3 class="title"><a id="idm140113485885376"></a>Errors</h3>
             </div>
           </div>
         </div>
@@ -126,12 +138,15 @@ DB_ENV-&gt;set_create_dir(DB_ENV *dbenv, const char *dir);  </pre>
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp1613408"></a>EINVAL</h4>
+                <h4 class="title"><a id="idm140113485832080"></a>EINVAL</h4>
               </div>
             </div>
           </div>
           <p>
-                If the method was called after <a class="xref" href="envopen.html" title="DB_ENV-&gt;open()">DB_ENV-&gt;open()</a> 
+                If the method was called after <a class="xref" href="envopen.html" title="DB_ENV-&gt;open()">
+        <span>DB_ENV-&gt;open()</span>
+        
+    </a> 
                 was called; or if an invalid flag value or parameter was specified.
             </p>
         </div>
@@ -140,7 +155,7 @@ DB_ENV-&gt;set_create_dir(DB_ENV *dbenv, const char *dir);  </pre>
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp1612328"></a>Class</h3>
+              <h3 class="title"><a id="idm140113485842320"></a>Class</h3>
             </div>
           </div>
         </div>
@@ -152,7 +167,7 @@ DB_ENV-&gt;set_create_dir(DB_ENV *dbenv, const char *dir);  </pre>
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp1615536"></a>See Also</h3>
+              <h3 class="title"><a id="idm140113485827984"></a>See Also</h3>
             </div>
           </div>
         </div>
@@ -165,18 +180,24 @@ DB_ENV-&gt;set_create_dir(DB_ENV *dbenv, const char *dir);  </pre>
       <hr />
       <table width="100%" summary="Navigation footer">
         <tr>
-          <td width="40%" align="left"><a accesskey="p" href="envset_data_dir.html">Prev</a> </td>
+          <td width="40%" align="left"><a accesskey="p" href="envset_data_len.html">Prev</a> </td>
           <td width="20%" align="center">
             <a accesskey="u" href="env.html">Up</a>
           </td>
           <td width="40%" align="right"> <a accesskey="n" href="envset_encrypt.html">Next</a></td>
         </tr>
         <tr>
-          <td width="40%" align="left" valign="top">DB_ENV-&gt;set_data_dir() </td>
+          <td width="40%" align="left" valign="top">
+        <span>DB_ENV-&gt;set_data_len()</span>
+        
+     </td>
           <td width="20%" align="center">
             <a accesskey="h" href="index.html">Home</a>
           </td>
-          <td width="40%" align="right" valign="top"> DB_ENV-&gt;set_encrypt()</td>
+          <td width="40%" align="right" valign="top"> 
+        <span>DB_ENV-&gt;set_encrypt()</span>
+        
+    </td>
         </tr>
       </table>
     </div>

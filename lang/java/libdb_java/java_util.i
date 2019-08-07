@@ -87,15 +87,15 @@ static jclass seq_stat_class, txn_stat_class;
 static jclass txn_active_class;
 static jclass lock_class, lockreq_class;
 static jclass dbex_class, deadex_class, heapfullex_class, lockex_class, memex_class;
-static jclass repdupmasterex_class, rephandledeadex_class;
+static jclass metachkfailex_class, repdupmasterex_class, rephandledeadex_class;
 static jclass repholdelectionex_class, repjoinfailex_class;
 static jclass repleaseexpiredex_class;
 static jclass replockoutex_class, repunavailex_class;
-static jclass runrecex_class, versionex_class;
+static jclass runrecex_class, sliceex_class, versionex_class;
 static jclass filenotfoundex_class, illegalargex_class, outofmemerr_class;
 static jclass bytearray_class, string_class, outputstream_class;
 
-static jfieldID dbc_cptr_fid;
+static jfieldID db_cptr_fid, dbc_cptr_fid, dbenv_cptr_fid;
 static jfieldID dblsn_file_fid, dblsn_offset_fid;
 static jfieldID dbt_data_fid, dbt_data_nio_fid, dbt_size_fid, dbt_ulen_fid;
 static jfieldID dbt_dlen_fid, dbt_doff_fid, dbt_flags_fid, dbt_offset_fid;
@@ -116,6 +116,7 @@ static jfieldID bt_stat_bt_ndata_fid;
 static jfieldID bt_stat_bt_pagecnt_fid;
 static jfieldID bt_stat_bt_pagesize_fid;
 static jfieldID bt_stat_bt_minkey_fid;
+static jfieldID bt_stat_bt_ext_files_fid;
 static jfieldID bt_stat_bt_nblobs_fid;
 static jfieldID bt_stat_bt_re_len_fid;
 static jfieldID bt_stat_bt_re_pad_fid;
@@ -145,6 +146,7 @@ static jfieldID h_stat_hash_version_fid;
 static jfieldID h_stat_hash_metaflags_fid;
 static jfieldID h_stat_hash_nkeys_fid;
 static jfieldID h_stat_hash_ndata_fid;
+static jfieldID h_stat_hash_ext_files_fid;
 static jfieldID h_stat_hash_nblobs_fid;
 static jfieldID h_stat_hash_pagecnt_fid;
 static jfieldID h_stat_hash_pagesize_fid;
@@ -161,6 +163,7 @@ static jfieldID h_stat_hash_dup_free_fid;
 static jfieldID heap_stat_heap_magic_fid;
 static jfieldID heap_stat_heap_version_fid;
 static jfieldID heap_stat_heap_metaflags_fid;
+static jfieldID heap_stat_heap_ext_files_fid;
 static jfieldID heap_stat_heap_nblobs_fid;
 static jfieldID heap_stat_heap_nrecs_fid;
 static jfieldID heap_stat_heap_pagecnt_fid;
@@ -337,6 +340,10 @@ static jfieldID rep_stat_st_waiting_pg_fid;
 static jfieldID rep_stat_st_dupmasters_fid;
 static jfieldID rep_stat_st_env_id_fid;
 static jfieldID rep_stat_st_env_priority_fid;
+static jfieldID rep_stat_st_ext_duplicated_fid;
+static jfieldID rep_stat_st_ext_records_fid;
+static jfieldID rep_stat_st_ext_rereq_fid;
+static jfieldID rep_stat_st_ext_update_rereq_fid;
 static jfieldID rep_stat_st_bulk_fills_fid;
 static jfieldID rep_stat_st_bulk_overflows_fid;
 static jfieldID rep_stat_st_bulk_records_fid;
@@ -390,15 +397,21 @@ static jfieldID rep_stat_st_max_lease_usec_fid;
 static jfieldID repmgr_stat_st_perm_failed_fid;
 static jfieldID repmgr_stat_st_msgs_queued_fid;
 static jfieldID repmgr_stat_st_msgs_dropped_fid;
+static jfieldID repmgr_stat_st_incoming_queue_gbytes_fid;
+static jfieldID repmgr_stat_st_incoming_queue_bytes_fid;
+static jfieldID repmgr_stat_st_incoming_msgs_dropped_fid;
 static jfieldID repmgr_stat_st_connection_drop_fid;
 static jfieldID repmgr_stat_st_connect_fail_fid;
 static jfieldID repmgr_stat_st_elect_threads_fid;
+static jfieldID repmgr_stat_st_group_stable_log_file_fid;
 static jfieldID repmgr_stat_st_max_elect_threads_fid;
 static jfieldID repmgr_stat_st_site_participants_fid;
 static jfieldID repmgr_stat_st_site_total_fid;
 static jfieldID repmgr_stat_st_site_views_fid;
+static jfieldID repmgr_stat_st_polling_method_fid;
 static jfieldID repmgr_stat_st_takeovers_fid;
-static jfieldID repmgr_stat_st_incoming_queue_size_fid;
+static jfieldID repmgr_stat_st_write_ops_forwarded_fid;
+static jfieldID repmgr_stat_st_write_ops_received_fid;
 static jfieldID seq_stat_st_wait_fid;
 static jfieldID seq_stat_st_nowait_fid;
 static jfieldID seq_stat_st_current_fid;
@@ -434,9 +447,10 @@ static jfieldID txn_active_mvcc_ref_fid;
 static jfieldID txn_active_priority_fid;
 static jfieldID txn_active_gid_fid;
 static jfieldID txn_active_name_fid;
+static jfieldID txn_active_slice_txns_fid;
 /* END-STAT-FIELD-DECLS */
 
-static jmethodID dbenv_construct, dbt_construct, dblsn_construct;
+static jmethodID db_construct, dbenv_construct, dbt_construct, dblsn_construct;
 static jmethodID dbpreplist_construct, dbtxn_construct;
 static jmethodID bt_stat_construct, get_err_msg_method, h_stat_construct;
 static jmethodID heap_stat_construct, lock_stat_construct, log_stat_construct;
@@ -446,12 +460,13 @@ static jmethodID rep_stat_construct, repmgr_stat_construct, seq_stat_construct;
 static jmethodID txn_stat_construct, txn_active_construct;
 static jmethodID dbex_construct, deadex_construct, lockex_construct;
 static jmethodID heapfullex_construct, memex_construct, memex_update_method;
-static jmethodID repdupmasterex_construct, rephandledeadex_construct;
+static jmethodID metachkfailex_construct, repdupmasterex_construct;
+static jmethodID rephandledeadex_construct;
 static jmethodID repholdelectionex_construct, repjoinfailex_construct;
 static jmethodID repmgr_siteinfo_construct, rephost_construct, repleaseexpiredex_construct;
 static jmethodID replockoutex_construct;
 static jmethodID repunavailex_construct;
-static jmethodID runrecex_construct, versionex_construct;
+static jmethodID runrecex_construct, sliceex_construct, versionex_construct;
 static jmethodID filenotfoundex_construct, illegalargex_construct;
 static jmethodID outofmemerr_construct;
 static jmethodID lock_construct;
@@ -459,6 +474,7 @@ static jmethodID lock_construct;
 static jmethodID app_dispatch_method, errcall_method, env_feedback_method;
 static jmethodID msgcall_method, paniccall_method, rep_transport_method;
 static jmethodID panic_event_notify_method;
+static jmethodID rep_autotakeover_event_notify_method;
 static jmethodID rep_autotakeover_failed_event_notify_method;
 static jmethodID rep_client_event_notify_method;
 static jmethodID rep_connect_broken_event_notify_method;
@@ -468,6 +484,7 @@ static jmethodID rep_dupmaster_event_notify_method;
 static jmethodID rep_elected_event_notify_method;
 static jmethodID rep_election_failed_event_notify_method;
 static jmethodID rep_init_done_event_notify_method;
+static jmethodID rep_inqueue_full_event_notify_method;
 static jmethodID rep_join_failure_event_notify_method;
 static jmethodID rep_local_site_removed_notify_method;
 static jmethodID rep_master_event_notify_method;
@@ -486,6 +503,7 @@ static jmethodID bt_decompress_method, bt_prefix_method;
 static jmethodID db_feedback_method, dup_compare_method;
 static jmethodID foreignkey_nullify_method, h_compare_method, h_hash_method;
 static jmethodID rep_view_method, partition_method, seckey_create_method;
+static jmethodID slice_method;
 
 static jmethodID outputstream_write_method;
 
@@ -527,6 +545,7 @@ const struct {
 	{ &heapfullex_class, DB_PKG "HeapFullException" },
 	{ &lockex_class, DB_PKG "LockNotGrantedException" },
 	{ &memex_class, DB_PKG "MemoryException" },
+	{ &metachkfailex_class, DB_PKG "MetaCheckSumFailException" },
 	{ &repdupmasterex_class, DB_PKG "ReplicationDuplicateMasterException" },
 	{ &rephandledeadex_class, DB_PKG "ReplicationHandleDeadException" },
 	{ &repholdelectionex_class, DB_PKG "ReplicationHoldElectionException" },
@@ -537,6 +556,7 @@ const struct {
 	{ &replockoutex_class, DB_PKG "ReplicationLockoutException" },
 	{ &repunavailex_class, DB_PKG "ReplicationSiteUnavailableException" },
 	{ &runrecex_class, DB_PKG "RunRecoveryException" },
+	{ &sliceex_class, DB_PKG "SliceCorruptException" },
 	{ &versionex_class, DB_PKG "VersionMismatchException" },
 	{ &filenotfoundex_class, "java/io/FileNotFoundException" },
 	{ &illegalargex_class, "java/lang/IllegalArgumentException" },
@@ -553,7 +573,9 @@ const struct {
 	const char *name;
 	const char *sig;
 } all_fields[] = {
+ 	{ &db_cptr_fid, &db_class, "swigCPtr", "J" },
 	{ &dbc_cptr_fid, &dbc_class, "swigCPtr", "J" },
+ 	{ &dbenv_cptr_fid, &dbenv_class, "swigCPtr", "J" },
 
 	{ &dblsn_file_fid, &dblsn_class, "file", "I" },
 	{ &dblsn_offset_fid, &dblsn_class, "offset", "I" },
@@ -593,6 +615,7 @@ const struct {
 	{ &bt_stat_bt_pagecnt_fid, &bt_stat_class, "bt_pagecnt", "I" },
 	{ &bt_stat_bt_pagesize_fid, &bt_stat_class, "bt_pagesize", "I" },
 	{ &bt_stat_bt_minkey_fid, &bt_stat_class, "bt_minkey", "I" },
+	{ &bt_stat_bt_ext_files_fid, &bt_stat_class, "bt_ext_files", "I" },
 	{ &bt_stat_bt_nblobs_fid, &bt_stat_class, "bt_nblobs", "I" },
 	{ &bt_stat_bt_re_len_fid, &bt_stat_class, "bt_re_len", "I" },
 	{ &bt_stat_bt_re_pad_fid, &bt_stat_class, "bt_re_pad", "I" },
@@ -622,6 +645,7 @@ const struct {
 	{ &h_stat_hash_metaflags_fid, &h_stat_class, "hash_metaflags", "I" },
 	{ &h_stat_hash_nkeys_fid, &h_stat_class, "hash_nkeys", "I" },
 	{ &h_stat_hash_ndata_fid, &h_stat_class, "hash_ndata", "I" },
+	{ &h_stat_hash_ext_files_fid, &h_stat_class, "hash_ext_files", "I" },
 	{ &h_stat_hash_nblobs_fid, &h_stat_class, "hash_nblobs", "I" },
 	{ &h_stat_hash_pagecnt_fid, &h_stat_class, "hash_pagecnt", "I" },
 	{ &h_stat_hash_pagesize_fid, &h_stat_class, "hash_pagesize", "I" },
@@ -638,6 +662,7 @@ const struct {
 	{ &heap_stat_heap_magic_fid, &heap_stat_class, "heap_magic", "I" },
 	{ &heap_stat_heap_version_fid, &heap_stat_class, "heap_version", "I" },
 	{ &heap_stat_heap_metaflags_fid, &heap_stat_class, "heap_metaflags", "I" },
+	{ &heap_stat_heap_ext_files_fid, &heap_stat_class, "heap_ext_files", "I" },
 	{ &heap_stat_heap_nblobs_fid, &heap_stat_class, "heap_nblobs", "I" },
 	{ &heap_stat_heap_nrecs_fid, &heap_stat_class, "heap_nrecs", "I" },
 	{ &heap_stat_heap_pagecnt_fid, &heap_stat_class, "heap_pagecnt", "I" },
@@ -814,6 +839,10 @@ const struct {
 	{ &rep_stat_st_dupmasters_fid, &rep_stat_class, "st_dupmasters", "I" },
 	{ &rep_stat_st_env_id_fid, &rep_stat_class, "st_env_id", "J" },
 	{ &rep_stat_st_env_priority_fid, &rep_stat_class, "st_env_priority", "I" },
+	{ &rep_stat_st_ext_duplicated_fid, &rep_stat_class, "st_ext_duplicated", "J" },
+	{ &rep_stat_st_ext_records_fid, &rep_stat_class, "st_ext_records", "J" },
+	{ &rep_stat_st_ext_rereq_fid, &rep_stat_class, "st_ext_rereq", "J" },
+	{ &rep_stat_st_ext_update_rereq_fid, &rep_stat_class, "st_ext_update_rereq", "J" },
 	{ &rep_stat_st_bulk_fills_fid, &rep_stat_class, "st_bulk_fills", "J" },
 	{ &rep_stat_st_bulk_overflows_fid, &rep_stat_class, "st_bulk_overflows", "J" },
 	{ &rep_stat_st_bulk_records_fid, &rep_stat_class, "st_bulk_records", "J" },
@@ -867,15 +896,21 @@ const struct {
 	{ &repmgr_stat_st_perm_failed_fid, &repmgr_stat_class, "st_perm_failed", "J" },
 	{ &repmgr_stat_st_msgs_queued_fid, &repmgr_stat_class, "st_msgs_queued", "J" },
 	{ &repmgr_stat_st_msgs_dropped_fid, &repmgr_stat_class, "st_msgs_dropped", "J" },
+	{ &repmgr_stat_st_incoming_queue_gbytes_fid, &repmgr_stat_class, "st_incoming_queue_gbytes", "I" },
+	{ &repmgr_stat_st_incoming_queue_bytes_fid, &repmgr_stat_class, "st_incoming_queue_bytes", "I" },
+	{ &repmgr_stat_st_incoming_msgs_dropped_fid, &repmgr_stat_class, "st_incoming_msgs_dropped", "J" },
 	{ &repmgr_stat_st_connection_drop_fid, &repmgr_stat_class, "st_connection_drop", "J" },
 	{ &repmgr_stat_st_connect_fail_fid, &repmgr_stat_class, "st_connect_fail", "J" },
 	{ &repmgr_stat_st_elect_threads_fid, &repmgr_stat_class, "st_elect_threads", "I" },
+	{ &repmgr_stat_st_group_stable_log_file_fid, &repmgr_stat_class, "st_group_stable_log_file", "I" },
 	{ &repmgr_stat_st_max_elect_threads_fid, &repmgr_stat_class, "st_max_elect_threads", "I" },
 	{ &repmgr_stat_st_site_participants_fid, &repmgr_stat_class, "st_site_participants", "I" },
 	{ &repmgr_stat_st_site_total_fid, &repmgr_stat_class, "st_site_total", "I" },
 	{ &repmgr_stat_st_site_views_fid, &repmgr_stat_class, "st_site_views", "I" },
+	{ &repmgr_stat_st_polling_method_fid, &repmgr_stat_class, "st_polling_method", "I" },
 	{ &repmgr_stat_st_takeovers_fid, &repmgr_stat_class, "st_takeovers", "J" },
-	{ &repmgr_stat_st_incoming_queue_size_fid, &repmgr_stat_class, "st_incoming_queue_size", "I" },
+	{ &repmgr_stat_st_write_ops_forwarded_fid, &repmgr_stat_class, "st_write_ops_forwarded", "J" },
+	{ &repmgr_stat_st_write_ops_received_fid, &repmgr_stat_class, "st_write_ops_received", "J" },
 	{ &seq_stat_st_wait_fid, &seq_stat_class, "st_wait", "J" },
 	{ &seq_stat_st_nowait_fid, &seq_stat_class, "st_nowait", "J" },
 	{ &seq_stat_st_current_fid, &seq_stat_class, "st_current", "J" },
@@ -911,6 +946,7 @@ const struct {
 	{ &txn_active_priority_fid, &txn_active_class, "priority", "I" },
 	{ &txn_active_gid_fid, &txn_active_class, "gid", "[B" },
 	{ &txn_active_name_fid, &txn_active_class, "name", "Ljava/lang/String;" },
+	{ &txn_active_slice_txns_fid, &txn_active_class, "slice_txns", "[I" },
 /* END-STAT-FIELDS */
 
 	{ &repmgr_siteinfo_flags_fid, &repmgr_siteinfo_class, "flags", "I" },
@@ -923,6 +959,7 @@ const struct {
 	const char *name;
 	const char *sig;
 } all_methods[] = {
+	{ &db_construct, &db_class, "<init>", "(JZ)V" },
 	{ &dbenv_construct, &dbenv_class, "<init>", "(JZ)V" },
 	{ &dbt_construct, &dbt_class, "<init>", "()V" },
 	{ &dblsn_construct, &dblsn_class, "<init>", "(II)V" },
@@ -948,7 +985,7 @@ const struct {
 	{ &txn_active_construct, &txn_active_class, "<init>", "()V" },
 	{ &rephost_construct, &rephost_class, "<init>", "(Ljava/lang/String;I)V" },
         { &repmgr_siteinfo_construct, &repmgr_siteinfo_class, "<init>", 
-	    "(L" DB_PKG "ReplicationHostAddress;I)V" },
+	    "(L" DB_PKG "ReplicationHostAddress;L" DB_PKG "LogSequenceNumber;I)V" },
 
 	{ &dbex_construct, &dbex_class, "<init>",
 	    "(Ljava/lang/String;IL" DB_PKG "internal/DbEnv;)V" },
@@ -964,6 +1001,8 @@ const struct {
 	    DB_PKG "internal/DbEnv;)V" },
 	{ &memex_update_method, &memex_class, "updateDatabaseEntry",
 	    "(L" DB_PKG "DatabaseEntry;)V" },
+	{ &metachkfailex_construct, &metachkfailex_class, "<init>",
+	    "(Ljava/lang/String;IL" DB_PKG "internal/DbEnv;)V" },
 	{ &repdupmasterex_construct, &repdupmasterex_class, "<init>",
 	    "(Ljava/lang/String;IL" DB_PKG "internal/DbEnv;)V" },
 	{ &rephandledeadex_construct, &rephandledeadex_class, "<init>",
@@ -979,6 +1018,8 @@ const struct {
 	{ &repunavailex_construct, &repunavailex_class, "<init>",
 	    "(Ljava/lang/String;IL" DB_PKG "internal/DbEnv;)V" },
 	{ &runrecex_construct, &runrecex_class, "<init>",
+	    "(Ljava/lang/String;IL" DB_PKG "internal/DbEnv;)V" },
+	{ &sliceex_construct, &sliceex_class, "<init>",
 	    "(Ljava/lang/String;IL" DB_PKG "internal/DbEnv;)V" },
 	{ &versionex_construct, &versionex_class, "<init>",
 	    "(Ljava/lang/String;IL" DB_PKG "internal/DbEnv;)V" },
@@ -1001,6 +1042,8 @@ const struct {
 	    "(III[B)I" },
 	{ &panic_event_notify_method, &dbenv_class, "handle_panic_event_notify",
 	    "()V" },
+	{ &rep_autotakeover_event_notify_method, &dbenv_class, 
+	    "handle_rep_autotakeover_event_notify", "()V" },
 	{ &rep_autotakeover_failed_event_notify_method, &dbenv_class,
 	    "handle_rep_autotakeover_failed_event_notify", "()V" },
 	{ &rep_connect_broken_event_notify_method, &dbenv_class, 
@@ -1019,6 +1062,8 @@ const struct {
 	    "handle_rep_election_failed_event_notify" ,"()V" },
 	{ &rep_init_done_event_notify_method, &dbenv_class,
 	    "handle_rep_init_done_event_notify" , "()V" },
+	{ &rep_inqueue_full_event_notify_method, &dbenv_class,
+	    "handle_rep_inqueue_full_event_notify" , "()V" },
 	{ &rep_join_failure_event_notify_method, &dbenv_class, 
 	    "handle_rep_join_failure_event_notify" ,"()V" },
 	{ &rep_master_event_notify_method, &dbenv_class, 
@@ -1081,6 +1126,8 @@ const struct {
 	{ &seckey_create_method, &db_class, "handle_seckey_create",
 	    "(L" DB_PKG "DatabaseEntry;L" DB_PKG "DatabaseEntry;)[L"
 	    DB_PKG "DatabaseEntry;" },
+	{ &slice_method, &db_class, "handle_slice",
+	    "(L" DB_PKG "DatabaseEntry;L" DB_PKG "DatabaseEntry;)I" },
 	{&rep_view_method, &dbenv_class, "handle_rep_view",
 	    "(Ljava/lang/String;I)Z" },
 
@@ -1123,6 +1170,7 @@ SWIGEXPORT void JNICALL Java_com_sleepycat_db_internal_db_1javaJNI_initialize(
 			    all_classes[i].name);
 			return;
 		}
+		(*jenv)->DeleteLocalRef(jenv, cl);
 	}
 
 	/* Get field IDs */

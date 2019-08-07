@@ -1,7 +1,7 @@
 #
-# See the file LICENSE for redistribution information.
+# Copyright (c) 2010, 2019 Oracle and/or its affiliates.  All rights reserved.
 #
-# Copyright (c) 2010, 2013 Oracle and/or its affiliates.  All rights reserved.
+# See the file LICENSE for license information.
 #
 # $Id$
 #
@@ -43,6 +43,7 @@ proc basic_repmgr_election_test { niter inmemdb \
 	global overflowword1
 	global overflowword2
 	global databases_in_memory
+	global ipversion
 	set overflowword1 "0"
 	set overflowword2 "0"
 	set nsites 3
@@ -65,8 +66,11 @@ proc basic_repmgr_election_test { niter inmemdb \
 		set verbargs " -verbose {$verbose_type on} "
 	}
 
+	set sslargs [setup_repmgr_sslargs]
+
 	env_cleanup $testdir
 	set ports [available_ports $nsites]
+	set hoststr [get_hoststr $ipversion]
 
 	set clientdir $testdir/CLIENTDIR
 	set clientdir2 $testdir/CLIENTDIR2
@@ -111,26 +115,26 @@ proc basic_repmgr_election_test { niter inmemdb \
 
 	# Open first client
 	set cl_envcmd "berkdb_env_noerr -create \
-	    $txnargs $verbargs $logargs $private \
+	    $txnargs $verbargs $sslargs $logargs $private \
 	    -errpfx CLIENT -home $clientdir -rep -thread $repmemarg"
 	set clientenv [eval $cl_envcmd]
 	set cl1_repmgr_conf "-ack all -pri 100 \
-	    -local { 127.0.0.1 [lindex $ports 0] \
+	    -local { $hoststr [lindex $ports 0] \
 		$creator_flag $legacy_flag } \
-	    -remote { 127.0.0.1 [lindex $ports 1] $legacy_flag } \
-	    -remote { 127.0.0.1 [lindex $ports 2] $legacy_flag } \
+	    -remote { $hoststr [lindex $ports 1] $legacy_flag } \
+	    -remote { $hoststr [lindex $ports 2] $legacy_flag } \
 	    -start elect"
 	eval $clientenv repmgr $cl1_repmgr_conf
 
 	# Open second client
 	set cl2_envcmd "berkdb_env_noerr -create \
-	    $txnargs $verbargs $logargs $private \
+	    $txnargs $verbargs $sslargs $logargs $private \
 	    -errpfx CLIENT2 -home $clientdir2 -rep -thread $repmemarg"
 	set clientenv2 [eval $cl2_envcmd]
 	set cl2_repmgr_conf "-ack all -pri 30 \
-	    -local { 127.0.0.1 [lindex $ports 1] $legacy_flag } \
-	    -remote { 127.0.0.1 [lindex $ports 0] $legacy_flag } \
-	    -remote { 127.0.0.1 [lindex $ports 2] $legacy_flag } \
+	    -local { $hoststr [lindex $ports 1] $legacy_flag } \
+	    -remote { $hoststr [lindex $ports 0] $legacy_flag } \
+	    -remote { $hoststr [lindex $ports 2] $legacy_flag } \
 	    -start elect"
 	eval $clientenv2 repmgr $cl2_repmgr_conf
 
@@ -142,13 +146,13 @@ proc basic_repmgr_election_test { niter inmemdb \
 
 	# Open third client
 	set cl3_envcmd "berkdb_env_noerr -create \
-	    $txnargs $verbargs $logargs $private \
+	    $txnargs $verbargs $sslargs $logargs $private \
 	    -errpfx CLIENT3 -home $clientdir3 -rep -thread $repmemarg"
 	set clientenv3 [eval $cl3_envcmd]
 	set cl3_repmgr_conf "-ack all -pri 20 \
-	    -local { 127.0.0.1 [lindex $ports 2] $legacy_flag } \
-	    -remote { 127.0.0.1 [lindex $ports 0] $legacy_flag } \
-	    -remote { 127.0.0.1 [lindex $ports 1] $legacy_flag } \
+	    -local { $hoststr [lindex $ports 2] $legacy_flag } \
+	    -remote { $hoststr [lindex $ports 0] $legacy_flag } \
+	    -remote { $hoststr [lindex $ports 1] $legacy_flag } \
 	    -start elect"
 	eval $clientenv3 repmgr $cl3_repmgr_conf
 	await_startup_done $clientenv3

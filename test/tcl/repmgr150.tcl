@@ -1,6 +1,6 @@
-# See the file LICENSE for redistribution information.
+# Copyright (c) 2012, 2019 Oracle and/or its affiliates.  All rights reserved.
 #
-# Copyright (c) 2012, 2013 Oracle and/or its affiliates.  All rights reserved.
+# See the file LICENSE for license information.
 #
 # $Id$
 #
@@ -22,7 +22,8 @@
 
 proc repmgr150 { } {
 	source ./include.tcl
-	source $tcl_utils/multi_proc_utils.tcl
+	source $tcl_utils/common_test_utils.tcl
+	global ipversion
 
 	set tnum "150"
 	puts "Repmgr$tnum: Repmgr, DB_REGISTER, DB_RECOVER, and FAILCHK"
@@ -45,6 +46,10 @@ proc repmgr150 { } {
 	file mkdir $masterdir
 	file mkdir $clientdir
 
+	setup_repmgr_ssl $masterdir
+	setup_repmgr_ssl $clientdir
+
+	set hoststr [get_hoststr $ipversion]
 	set ports [available_ports 2]
 	set master_port [lindex $ports 0]
 	set client_port [lindex $ports 1]
@@ -64,15 +69,15 @@ proc repmgr150 { } {
 	set masterenv [berkdb_env_noerr -create -thread -txn -home $masterdir \
 	    -errpfx MASTER -rep -recover -register]
 	error_check_good master_open [is_valid_env $masterenv] TRUE
-	$masterenv repmgr -ack all -local [list 127.0.0.1 $master_port] \
+	$masterenv repmgr -ack all -local [list $hoststr $master_port] \
 	    -start master
 
 	# Start the client with recovery and register.
 	set clientenv [berkdb_env_noerr -create -thread -txn -home $clientdir \
 	    -errpfx CLIENT -rep -recover -register]
 	error_check_good client_open [is_valid_env $clientenv] TRUE
-	$clientenv repmgr -ack all -local [list 127.0.0.1 $client_port] \
-	    -remote [list 127.0.0.1 $master_port] -start client
+	$clientenv repmgr -ack all -local [list $hoststr $client_port] \
+	    -remote [list $hoststr $master_port] -start client
 	await_startup_done $clientenv
 
 	puts "\tRepmgr$tnum.b: Rep-unaware proc joins master env with recovery \
@@ -113,14 +118,14 @@ proc repmgr150 { } {
 	set masterenv [berkdb_env_noerr -create -thread -txn -home $masterdir \
 	    -errpfx MASTER -rep -recover -register]
 	error_check_good master_open [is_valid_env $masterenv] TRUE
-	$masterenv repmgr -ack all -local [list 127.0.0.1 $master_port] -start master
+	$masterenv repmgr -ack all -local [list $hoststr $master_port] -start master
 
 	# Start the client.
 	set clientenv [berkdb_env_noerr -create -thread -txn -home $clientdir \
 	    -errpfx CLIENT -rep -recover -register]
 	error_check_good client_open [is_valid_env $clientenv] TRUE
-	$clientenv repmgr -ack all -local [list 127.0.0.1 $client_port] \
-	    -remote [list 127.0.0.1 $master_port] -start client
+	$clientenv repmgr -ack all -local [list $hoststr $client_port] \
+	    -remote [list $hoststr $master_port] -start client
 	await_startup_done $clientenv
 
 	# Check that the value inserted by the script before it died
@@ -141,21 +146,24 @@ proc repmgr150 { } {
 	file mkdir $masterdir
 	file mkdir $clientdir
 
+	setup_repmgr_ssl $masterdir
+	setup_repmgr_ssl $clientdir
+
 	puts "\tRepmgr$tnum.d: RepMgr can be started with -failchk and -isalive."
 	# Start the master with failchk, isalive, recovery, and register.
 	set env_args "-create -register -recover -failchk -isalive my_isalive"
 	set masterenv [eval {berkdb_env -thread -rep -txn} -home $masterdir \
 	    -errpfx MASTER  $env_args]
 	error_check_good master_open [is_valid_env $masterenv] TRUE
-	$masterenv repmgr -ack all -local [list 127.0.0.1 $master_port]\
+	$masterenv repmgr -ack all -local [list $hoststr $master_port]\
 	    -start master
 
 	# Start the client with failchk, isalive, recovery, and register.
 	set clientenv [eval {berkdb_env -thread -rep -txn -home} $clientdir \
 	    -errpfx CLIENT $env_args]
 	error_check_good client_open [is_valid_env $clientenv] TRUE
-	$clientenv repmgr -ack all -local [list 127.0.0.1 $client_port] \
-	    -remote [list 127.0.0.1 $master_port] -start client
+	$clientenv repmgr -ack all -local [list $hoststr $client_port] \
+	    -remote [list $hoststr $master_port] -start client
 	await_startup_done $clientenv
 
 	puts "\tRepmgr$tnum.e: A rep unaware process can join the master \
@@ -191,7 +199,7 @@ proc repmgr150_script {} {
 	source ./include.tcl
 	source $test_path/test.tcl
 	source $test_path/testutils.tcl
-	source $tcl_utils/multi_proc_utils.tcl
+	source $tcl_utils/common_test_utils.tcl
 
 	# Verify usage.
 	set usage "script env_args write value corrupt homedir filename db_name."

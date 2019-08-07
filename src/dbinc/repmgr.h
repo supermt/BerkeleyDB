@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2006, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2006, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -50,22 +50,32 @@ extern "C" {
  * we introduced a few more new message types, the largest of which had value 8.
  * Protocol version 5 did not introduce any new message types, but changed
  * the format of site info and membership data to support views.
+ *
+ * Protocol version 6 introduced preferred master mode, which added several
+ * new REPMGR_OWN messages.
+ *
+ * Protocol version 7 did not introduce any new message types, but changed the
+ * format of permlsn to improve group-aware log archiving and added new struct
+ * names for heartbeat and readonly_response payloads.
  */
 #define	REPMGR_MAX_V1_MSG_TYPE	3
 #define	REPMGR_MAX_V2_MSG_TYPE	4
 #define	REPMGR_MAX_V3_MSG_TYPE	4
 #define	REPMGR_MAX_V4_MSG_TYPE	8
 #define	REPMGR_MAX_V5_MSG_TYPE	8
+#define	REPMGR_MAX_V6_MSG_TYPE	8
+#define	REPMGR_MAX_V7_MSG_TYPE	8
 #define	HEARTBEAT_MIN_VERSION	2
 #define	CHANNEL_MIN_VERSION	4
 #define	CONN_COLLISION_VERSION	4
 #define	GM_MIN_VERSION		4
 #define	OWN_MIN_VERSION		4
 #define	VIEW_MIN_VERSION	5
+#define	PREFMAS_MIN_VERSION	6
 
 /* The range of protocol versions we're willing to support. */
-#define	DB_REPMGR_VERSION	5
-#define	DB_REPMGR_MIN_VERSION	1
+#define	DB_REPMGR_VERSION	7
+#define	DB_REPMGR_MIN_VERSION	2
 
 /*
  * For messages with the "REPMGR_OWN_MSG" format code, a message type (see
@@ -77,22 +87,81 @@ extern "C" {
  * Like the message format types, these message type values should be
  * permanently frozen.
  */
-#define	REPMGR_CONNECT_REJECT	1
-#define	REPMGR_GM_FAILURE	2
-#define	REPMGR_GM_FORWARD	3
-#define	REPMGR_JOIN_REQUEST	4
-#define	REPMGR_JOIN_SUCCESS	5
-#define	REPMGR_PARM_REFRESH	6
-#define	REPMGR_REJOIN		7
-#define	REPMGR_REMOVE_REQUEST	8
-#define	REPMGR_REMOVE_SUCCESS	9
-#define	REPMGR_RESOLVE_LIMBO	10
-#define	REPMGR_SHARING		11
+#define	REPMGR_CONNECT_REJECT		1
+#define	REPMGR_GM_FAILURE		2
+#define	REPMGR_GM_FORWARD		3
+#define	REPMGR_JOIN_REQUEST		4
+#define	REPMGR_JOIN_SUCCESS		5
+#define	REPMGR_PARM_REFRESH		6
+#define	REPMGR_REJOIN			7
+#define	REPMGR_REMOVE_REQUEST		8
+#define	REPMGR_REMOVE_SUCCESS		9
+#define	REPMGR_RESOLVE_LIMBO		10
+#define	REPMGR_SHARING			11
+#define	REPMGR_LSNHIST_REQUEST		12
+#define	REPMGR_LSNHIST_RESPONSE		13
+#define	REPMGR_PREFMAS_FAILURE		14
+#define	REPMGR_PREFMAS_SUCCESS		15
+#define	REPMGR_READONLY_MASTER		16
+#define	REPMGR_READONLY_RESPONSE	17
+#define	REPMGR_RESTART_CLIENT		18
+
+/*
+ * Write forwarding definitions.
+ *
+ * This is always the first value in a repmgr write forwarding message.
+ * Testing this helps ensure that repmgr write forwarding code only
+ * attempts to process a write forwarding message and not some other
+ * type of repmgr application-defined message or random noise.
+ */
+#define	REPMGR_WF_IDENTIFIER 64424
+
+/*
+ * Values for write forwarded operations.  These values should remain
+ * constant across BDB versions for backward compatibility.  Add values
+ * for any new write forwarded operations to the end of this list.
+ */
+#define	REPMGR_WF_SINGLE_DEL 1
+#define	REPMGR_WF_SINGLE_PUT 2
+
+/* Current protocol version and a fast way to test for a supported message. */
+#define	REPMGR_WF_VERSION 1
+#define	REPMGR_WF_MAX_V1_MSG_TYPE 2
+
+/* These masks enable two small integers to share the space of a large one. */
+#define	REPMGR_WF_LOWER_MASK 0x0000ffff
+#define	REPMGR_WF_UPPER_MASK 0xffff0000
+
+/* The minimum and maximum number of DBTs in a write forwarding message. */
+#define	REPMGR_WF_MIN_DBTS 5
+#define	REPMGR_WF_MAX_DBTS 6
+
+/* Length of a string to which to dump a hex fileid value in verbose output. */
+#define	REPMGR_WF_FILEID_STRLEN 80
+
+#define	IS_USING_WRITE_FORWARDING(env)					\
+	(FLD_ISSET(((env)->rep_handle->region)->config, REP_C_FORWARD_WRITES))
+
+#define	REPMGR_WF_DUMP_FILEID(fileid, i, str)				\
+	memset(str, 0, REPMGR_WF_FILEID_STRLEN);			\
+	for (i = 0; i < DB_FILE_ID_LEN; i++)				\
+		(void)sprintf(str, "%s%x ", str, fileid[i]);
+
+/*
+ * Enable two u_int32_t numbers to share the space of a single u_int64_t.
+ * This helps the write forwarding protocol to use fewer iovec segments
+ * and stay within the bounds on systems where IOV_MAX is a small number
+ * (e.g. 16 on Solaris).
+ */
+typedef union {
+	u_int64_t unum64;
+	u_int32_t unum32[2];
+} wf_uint32_pair;
 
 /* Detect inconsistencies between view callback and site's gmdb. */
-#define PARTICIPANT_TO_VIEW(db_rep, site)      				\
+#define	PARTICIPANT_TO_VIEW(db_rep, site)				\
 	((db_rep)->partial && !FLD_ISSET((site)->gmdb_flags, SITE_VIEW))
-#define VIEW_TO_PARTICIPANT(db_rep, site)      				\
+#define	VIEW_TO_PARTICIPANT(db_rep, site)				\
 	(!(db_rep)->partial && FLD_ISSET((site)->gmdb_flags, SITE_VIEW))
 
 struct __repmgr_connection;
@@ -143,10 +212,9 @@ typedef struct iovec db_iovec_t;
 
 /*
  * The system value is available from sysconf(_SC_HOST_NAME_MAX).
- * Historically, the maximum host name was 256.
  */
 #ifndef MAXHOSTNAMELEN
-#define	MAXHOSTNAMELEN	256
+#define	MAXHOSTNAMELEN	1025
 #endif
 
 /* A buffer big enough for the string "site host.domain.com:65535". */
@@ -161,9 +229,16 @@ typedef char SITE_STRING_BUFFER[MAX_SITE_LOC_STRING+1];
 #define	DB_REPMGR_DEFAULT_ELECTION_RETRY	(10 * US_PER_SEC)
 #define	DB_REPMGR_DEFAULT_CHANNEL_TIMEOUT	(5 * US_PER_SEC)
 
+/* Default preferred master automatic configuration values. */
+#define	DB_REPMGR_PREFMAS_ELECTION_RETRY	(1 * US_PER_SEC)
+#define	DB_REPMGR_PREFMAS_HEARTBEAT_MONITOR	(2 * US_PER_SEC)
+#define	DB_REPMGR_PREFMAS_HEARTBEAT_SEND	(75 * (US_PER_SEC / 100))
+#define	DB_REPMGR_PREFMAS_PRIORITY_CLIENT	75
+#define	DB_REPMGR_PREFMAS_PRIORITY_MASTER	200
+
 /* Defaults for undocumented incoming queue maximum messages. */
-#define	DB_REPMGR_DEFAULT_INQUEUE_MSGS		5000000
-#define	DB_REPMGR_DEFAULT_INQUEUE_BULKMSGS	5000
+#define	DB_REPMGR_DEFAULT_INQUEUE_MAX		(100 * MEGABYTE)
+#define	DB_REPMGR_INQUEUE_REDZONE_PERCENT	85
 
 typedef TAILQ_HEAD(__repmgr_conn_list, __repmgr_connection) CONNECTION_LIST;
 typedef STAILQ_HEAD(__repmgr_out_q_head, __queued_output) OUT_Q_HEADER;
@@ -184,17 +259,18 @@ struct __repmgr_runnable {
 /*
  * Options governing requested behavior of election thread.
  */
-#define	ELECT_F_EVENT_NOTIFY	0x01 /* Notify application of master failure. */
-#define	ELECT_F_FAST		0x02 /* First election "fast" (n-1 trick). */
-#define	ELECT_F_IMMED		0x04 /* Start with immediate election. */
-#define	ELECT_F_INVITEE		0x08 /* Honor (remote) inviter's nsites. */
-#define	ELECT_F_STARTUP		0x10 /* Observe repmgr_start() policy. */
+#define	ELECT_F_CLIENT_RESTART	0x01 /* Do client restarts but no elections. */
+#define	ELECT_F_EVENT_NOTIFY	0x02 /* Notify application of master failure. */
+#define	ELECT_F_FAST		0x04 /* First election "fast" (n-1 trick). */
+#define	ELECT_F_IMMED		0x08 /* Start with immediate election. */
+#define	ELECT_F_INVITEE		0x10 /* Honor (remote) inviter's nsites. */
+#define	ELECT_F_STARTUP		0x20 /* Observe repmgr_start() policy. */
 		u_int32_t flags;
 
 		/* For connector thread. */
 		struct {
 			int eid;
-#define CONNECT_F_REFRESH	0x01 /* New connection to replace old one. */
+#define	CONNECT_F_REFRESH	0x01 /* New connection to replace old one. */
 			u_int32_t flags;
 		} conn_th;
 
@@ -284,6 +360,7 @@ struct __queued_output {
  */
 typedef struct __repmgr_message {
 	STAILQ_ENTRY(__repmgr_message) entries;
+	size_t size;
 	__repmgr_msg_hdr_args msg_hdr;
 	union {
 		struct {
@@ -317,6 +394,29 @@ typedef enum {
 	REP_CONNECTION,
 	UNKNOWN_CONN_TYPE
 } conn_type_t;
+
+#if defined(HAVE_REPMGR_SSL)
+typedef struct __repmgr_ssl_write_sync_info {
+	char		*rmgr_ssl_wbuf_ptr;
+	int		rmgr_ssl_wbuf_length;
+	int		rmgr_ssl_write_pending;
+	mgr_mutex_t	*rmgr_ssl_write_mutex;
+} REPMGR_SSL_WRITE_INFO;
+
+typedef struct __repmgr_ssl__conn_info {
+	/* Only one thread can be interacting with the SSL object at a time. */
+	mgr_mutex_t	*repmgr_ssl_conn_mutex; 
+	SSL *ssl;
+
+#define	REPMGR_SSL_READ_PENDING_ON_READ		0x1
+#define	REPMGR_SSL_READ_PENDING_ON_WRITE	0x2
+#define	REPMGR_SSL_WRITE_PENDING_ON_READ	0x4
+#define	REPMGR_SSL_WRITE_PENDING_ON_WRITE	0x8
+	int ssl_io_state;
+
+	REPMGR_SSL_WRITE_INFO	*rmgr_ssl_wrinfo;
+} REPMGR_SSL_CONN_INFO;
+#endif
 
 struct __repmgr_connection {
 	TAILQ_ENTRY(__repmgr_connection) entries;
@@ -435,6 +535,12 @@ struct __repmgr_connection {
 	 */
 	int eid;
 
+#if defined(HAVE_REPMGR_SSL)
+	/* For ssl connection information. */
+	REPMGR_SSL_CONN_INFO	*repmgr_ssl_info;
+#endif
+
+	ENV	*env;
 };
 
 #define	IS_READY_STATE(s)	((s) == CONN_READY || (s) == CONN_CONGESTED)
@@ -564,7 +670,9 @@ struct __repmgr_site {
 	/*
 	 * Everything below here is applicable only to remote sites.
 	 */
+	u_int32_t max_ack_gen;	/* Master generation for max_ack. */
 	DB_LSN max_ack;		/* Best ack we've heard from this site. */
+	DB_LSN max_ckp_lsn;	/* Best ckp_lsn we've heard from this site. */
 	int ack_policy;		/* Or 0 if unknown. */
 	u_int16_t alignment;	/* Requirements for app channel msgs. */
 	db_timespec last_rcvd_timestamp;
@@ -580,7 +688,7 @@ struct __repmgr_site {
 			 * connection due to the remote client system having
 			 * crashed and rebooted, in which case KEEPALIVE will
 			 * eventually clear it.
-			 */ 
+			 */
 			REPMGR_CONNECTION *in; /* incoming connection */
 			REPMGR_CONNECTION *out; /* outgoing connection */
 		} conn;
@@ -726,7 +834,7 @@ struct __channel {
 #define	REPMGR_HDR2(hdr)		((hdr).word2)
 
 /* REPMGR_APP_MESSAGE */
-#define APP_MSG_BUFFER_SIZE		REPMGR_HDR1
+#define	APP_MSG_BUFFER_SIZE		REPMGR_HDR1
 #define	APP_MSG_SEGMENT_COUNT		REPMGR_HDR2
 
 /* REPMGR_REP_MESSAGE and the other traditional repmgr message types. */
@@ -764,8 +872,10 @@ struct __channel {
 #define	REPMGR_RESPONSE_LIMIT	0x04
 
 /*
- * Legacy V1 handshake message format.  For compatibility, we send this as part
- * of version negotiation upon connection establishment.
+ * Legacy V1 handshake message format.  This is still used in the repmgr
+ * protocol for the initial handshake sent as part of version negotiation
+ * upon connection establishment.  It is no longer needed for V1
+ * compatibility because 4.6/V1 is no longer supported.
  */
 typedef struct {
 	u_int32_t version;
@@ -791,13 +901,14 @@ typedef struct {
  * also frozen across releases.  These values are bit fields and may be OR'ed
  * together.
  */
-#define	SITE_VIEW	0x01
+#define	SITE_VIEW		0x01
+#define	SITE_JOIN_ELECTABLE	0x02
 
 /*
  * Message types whose processing could take a long time.  We're careful to
  * avoid using up all our message processing threads on these message types, so
  * that we don't starve out the more important rep messages.
- */ 
+ */
 #define	IS_DEFERRABLE(t) ((t) == REPMGR_OWN_MSG || (t) == REPMGR_APP_MESSAGE)
 /*
  * When using leases there are times when a thread processing a message
@@ -821,9 +932,9 @@ typedef struct {
  * fraction of the code, it's a tiny fraction of the time: repmgr spends most of
  * its time in a call to select(), and as well a bit in calls into the Base
  * replication API.  All of those release the mutex.
- *     Access to repmgr's shared list of site addresses is protected by
- * another mutex: mtx_repmgr.  And, when changing space allocation for that site
- * list we conform to the convention of acquiring renv->mtx_regenv.  These are
+ *     Access to repmgr's shared values is protected by another mutex:
+ * mtx_repmgr.  And, when changing space allocation for that site list
+ * we conform to the convention of acquiring renv->mtx_regenv.  These are
  * less frequent of course.
  *     When it's necessary to acquire more than one of these mutexes, the
  * ordering priority (or "lock ordering protocol") is:
@@ -889,6 +1000,48 @@ typedef struct timespec threadsync_timeout_t;
 #endif
 
 #define	SELECTOR_RUNNING(db_rep)	((db_rep)->selector != NULL)
+
+#define	IS_REPMGR_SSL_ENABLED(env)					\
+	(!FLD_ISSET(((env)->rep_handle->region)->config, REP_C_DISABLE_SSL))
+
+/* Macros for SSL Diagnostic messages. */
+#if defined(HAVE_REPMGR_SSL)
+
+#define SSL_DEBUG_SHUTDOWN(env, format,...)				\
+	if (IS_REPMGR_SSL_ENABLED(env))					\
+		VPRINT(env, (env,					\
+		    DB_VERB_REPMGR_SSL_CONN|DB_VERB_REPMGR_SSL_ALL,	\
+		    format, ##__VA_ARGS__))
+#define SSL_DEBUG_CONNECT(env, format,...)				\
+	if (IS_REPMGR_SSL_ENABLED(env))					\
+		VPRINT(env, (env,					\
+		    DB_VERB_REPMGR_SSL_CONN|DB_VERB_REPMGR_SSL_ALL,	\
+		    format, ##__VA_ARGS__))
+#define SSL_DEBUG_ACCEPT(env, format,...)				\
+	if (IS_REPMGR_SSL_ENABLED(env))					\
+		VPRINT(env, (env,					\
+		    DB_VERB_REPMGR_SSL_CONN|DB_VERB_REPMGR_SSL_ALL,	\
+		    format, ##__VA_ARGS__))
+#define SSL_DEBUG_WRITE(env, format,...)				\
+	if (IS_REPMGR_SSL_ENABLED(env))					\
+		VPRINT(env, (env,					\
+		    DB_VERB_REPMGR_SSL_IO|DB_VERB_REPMGR_SSL_ALL,	\
+		    format, ##__VA_ARGS__))
+#define SSL_DEBUG_READ(env, format,...)					\
+	if (IS_REPMGR_SSL_ENABLED(env))					\
+		VPRINT(env, (env,					\
+		    DB_VERB_REPMGR_SSL_IO|DB_VERB_REPMGR_SSL_ALL,	\
+		    format, ##__VA_ARGS__))
+
+#else
+
+#define SSL_DEBUG_SHUTDOWN(env, format,...)
+#define SSL_DEBUG_CONNECT(env, format,...)
+#define SSL_DEBUG_ACCEPT(env, format,...)
+#define SSL_DEBUG_WRITE(env, format,...)
+#define SSL_DEBUG_READ(env, format,...)
+
+#endif
 
 /*
  * Generic definition of some action to be performed on each connection, in the

@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -21,11 +21,9 @@ static int   __env_print_dbenv_all __P((ENV *, u_int32_t));
 static int   __env_print_env_all __P((ENV *, u_int32_t));
 static int   __env_print_fh __P((ENV *));
 static int   __env_print_stats __P((ENV *, u_int32_t));
-static int   __env_print_thread __P((ENV *));
 static int   __env_stat_print __P((ENV *, u_int32_t));
 static char *__env_thread_state_print __P((DB_THREAD_STATE));
-static const char *
-	     __reg_type __P((reg_type_t));
+static const char * __reg_type __P((reg_type_t));
 
 /*
  * __env_stat_print_pp --
@@ -146,7 +144,6 @@ __env_stat_print(env, flags)
 /*
  * __env_print_stats --
  *	Display the default environment statistics.
- *
  */
 static int
 __env_print_stats(env, flags)
@@ -165,7 +162,7 @@ __env_print_stats(env, flags)
 		__db_msg(env, "Default database environment information:");
 	}
 	STAT_HEX("Magic number", renv->magic);
-	STAT_LONG("Panic value", renv->panic);
+	STAT_LONG("Panic value", renv->envid != env->envid);
 	__db_msg(env, "%d.%d.%d\tEnvironment version",
 	    renv->majver, renv->minver, renv->patchver);
 	STAT_LONG("Btree version", DB_BTREEVERSION);
@@ -178,6 +175,7 @@ __env_print_stats(env, flags)
 	__db_msg(env,
 	    "%.24s\tCreation time", __os_ctime(&renv->timestamp, time_buf));
 	STAT_HEX("Environment ID", renv->envid);
+	STAT_HEX("Local Environment ID", env->envid);
 	__mutex_print_debug_single(env,
 	    "Primary region allocation and reference count mutex",
 	    renv->mtx_regenv, flags);
@@ -186,6 +184,10 @@ __env_print_stats(env, flags)
 	    (u_long)0, (u_long)0, (u_long)infop->rp->size);
 	__db_dlbytes(env, "Maximum region size",
 	    (u_long)0, (u_long)0, (u_long)infop->rp->max);
+	STAT_LONG("Process failure detected", renv->failure_panic);
+	if (renv->failure_symptom[0] != '\0')
+		__db_msg(env,
+		    "%s:\tFirst failure symptom", renv->failure_symptom);
 
 	return (0);
 }
@@ -255,6 +257,10 @@ __env_print_dbenv_all(env, flags)
 		{ DB_VERB_REP_TEST,		"DB_VERB_REP_TEST" },
 		{ DB_VERB_REPMGR_CONNFAIL,	"DB_VERB_REPMGR_CONNFAIL" },
 		{ DB_VERB_REPMGR_MISC,		"DB_VERB_REPMGR_MISC" },
+		{ DB_VERB_REPMGR_SSL_ALL,	"DB_VERB_REPMGR_SSL_ALL" },
+		{ DB_VERB_REPMGR_SSL_CONN,	"DB_VERB_REPMGR_SSL_CONN" },
+		{ DB_VERB_REPMGR_SSL_IO,	"DB_VERB_REPMGR_SSL_IO" },
+		{ DB_VERB_SLICE,		"DB_VERB_SLICE" },
 		{ DB_VERB_WAITSFOR,		"DB_VERB_WAITSFOR" },
 		{ 0,				NULL }
 	};
@@ -267,8 +273,6 @@ __env_print_dbenv_all(env, flags)
 
 	__db_msg(env, "%s", DB_GLOBAL(db_line));
 	STAT_POINTER("ENV", dbenv->env);
-	__mutex_print_debug_single(
-	    env, "DB_ENV handle mutex", dbenv->mtx_db_env, flags);
 	STAT_ISSET("Errcall", dbenv->db_errcall);
 	STAT_ISSET("Errfile", dbenv->db_errfile);
 	STAT_STRING("Errpfx", dbenv->db_errpfx);
@@ -286,9 +290,10 @@ __env_print_dbenv_all(env, flags)
 	STAT_ISSET("ThreadId", dbenv->thread_id);
 	STAT_ISSET("ThreadIdString", dbenv->thread_id_string);
 
-	STAT_STRING("Blob dir", dbenv->db_blob_dir);
+	STAT_STRING("External file dir", dbenv->db_blob_dir);
 	STAT_STRING("Log dir", dbenv->db_log_dir);
 	STAT_STRING("Metadata dir", dbenv->db_md_dir);
+	STAT_STRING("Region dir", dbenv->db_reg_dir);
 	STAT_STRING("Tmp dir", dbenv->db_tmp_dir);
 	if (dbenv->db_data_dir == NULL)
 		STAT_ISSET("Data dir", dbenv->db_data_dir);
@@ -305,7 +310,7 @@ __env_print_dbenv_all(env, flags)
 
 	STAT_ISSET("Password", dbenv->passwd);
 
-	STAT_ULONG("Blob threshold", dbenv->blob_threshold);
+	STAT_ULONG("External file threshold", dbenv->blob_threshold);
 
 	STAT_ISSET("App private", dbenv->app_private);
 	STAT_ISSET("Api1 internal", dbenv->api1_internal);
@@ -317,6 +322,7 @@ __env_print_dbenv_all(env, flags)
 	STAT_ULONG("Mutex cnt", dbenv->mutex_cnt);
 	STAT_ULONG("Mutex inc", dbenv->mutex_inc);
 	STAT_ULONG("Mutex tas spins", dbenv->mutex_tas_spins);
+	STAT_LONG("Mutex failchk timeout", dbenv->mutex_failchk_timeout);
 
 	STAT_ISSET("Lock conflicts", dbenv->lk_conflicts);
 	STAT_LONG("Lock modes", dbenv->lk_modes);
@@ -359,6 +365,7 @@ __env_print_dbenv_all(env, flags)
 
 	__db_prflags(env,
 	    NULL, dbenv->flags, db_env_fn, NULL, "\tPublic environment flags");
+	COMPQUIET(flags, 0);
 
 	return (0);
 }
@@ -375,6 +382,7 @@ __env_print_env_all(env, flags)
 	static const FN env_fn[] = {
 		{ ENV_CDB,			"ENV_CDB" },
 		{ ENV_DBLOCAL,			"ENV_DBLOCAL" },
+		{ ENV_LITTLEENDIAN,		"ENV_LITTLEENDIAN"},
 		{ ENV_LOCKDOWN,			"ENV_LOCKDOWN" },
 		{ ENV_NO_OUTPUT_SET,		"ENV_NO_OUTPUT_SET" },
 		{ ENV_OPEN_CALLED,		"ENV_OPEN_CALLED" },
@@ -482,8 +490,6 @@ __env_print_env_all(env, flags)
 		__db_dlbytes(env,
 		    "Size", (u_long)0, (u_long)0, (u_long)rp->size);
 	}
-	__db_prflags(env,
-	    NULL, renv->init_flags, ofn, NULL, "\tInitialization flags");
 	STAT_ULONG("Region slots", renv->region_cnt);
 	__db_prflags(env,
 	    NULL, renv->flags, regenvfn, NULL, "\tReplication flags");
@@ -502,14 +508,24 @@ __env_thread_state_print(state)
 	DB_THREAD_STATE state;
 {
 	switch (state) {
+	case THREAD_SLOT_NOT_IN_USE:
+		return ("not is use");
+	case THREAD_OUT:
+		return ("out");
+	case THREAD_OUT_DEAD:
+		return ("out and dead");
 	case THREAD_ACTIVE:
 		return ("active");
 	case THREAD_BLOCKED:
 		return ("blocked");
 	case THREAD_BLOCKED_DEAD:
 		return ("blocked and dead");
-	case THREAD_OUT:
-		return ("out");
+	case THREAD_CTR_VERIFY:
+		return ("mutex counter verify");
+	case THREAD_FAILCHK:
+		return ("failcheck");
+	case THREAD_VERIFY:
+		return ("verify");
 	default:
 		return ("unknown");
 	}
@@ -519,8 +535,10 @@ __env_thread_state_print(state)
 /*
  * __env_print_thread --
  *	Display the thread block state.
+ *
+ * PUBLIC: int __env_print_thread __P((ENV *));
  */
-static int
+int
 __env_print_thread(env)
 	ENV *env;
 {
@@ -536,6 +554,7 @@ __env_print_thread(env)
 	THREAD_INFO *thread;
 	u_int32_t i;
 	char buf[DB_THREADID_STRLEN];
+	char time_buf[CTIME_BUFLEN];
 
 	dbenv = env->dbenv;
 
@@ -561,10 +580,15 @@ __env_print_thread(env)
 		SH_TAILQ_FOREACH(ip, &htab[i], dbth_links, __db_thread_info) {
 			if (ip->dbth_state == THREAD_SLOT_NOT_IN_USE)
 				continue;
-			__db_msg(env, "\tprocess/thread %s: %s",
+			__db_msg(env, "\tprocess/thread %s: %s %u mutexes",
 			    dbenv->thread_id_string(
 			    dbenv, ip->dbth_pid, ip->dbth_tid, buf),
-			    __env_thread_state_print(ip->dbth_state));
+			    __env_thread_state_print(ip->dbth_state),
+			    ip->mtx_ctr);
+			if (timespecisset(&ip->dbth_failtime))
+				__db_msg(env, "Crashed at %s",
+				    __db_ctimespec(&ip->dbth_failtime,
+				    time_buf));
 			list = R_ADDR(env->reginfo, ip->dbth_pinlist);
 			for (lp = list; lp < &list[ip->dbth_pinmax]; lp++) {
 				if (lp->b_ref == INVALID_ROFF)
@@ -578,11 +602,14 @@ __env_print_thread(env)
 				locker = (DB_LOCKER *)
 				    R_ADDR(&env->lk_handle->reginfo,
 				    ip->dbth_local_locker);
-				__db_msg(env, "\t\tcached locker %lu mtx %lu",
+				__db_msg(env, "\t\tcached locker %lx mtx %lu",
 					(u_long)locker->id,
 					(u_long)locker->mtx_locker);
 
 			}
+#ifdef HAVE_MUTEX_SUPPORT
+			(void)__mutex_record_print(env, ip);
+#endif
 		}
 	return (0);
 }
@@ -627,9 +654,11 @@ __db_print_fh(env, tag, fh, flags)
 	u_int32_t flags;
 {
 	static const FN fn[] = {
+		{ DB_FH_ENVLINK,"DB_BH_ENVLINK" },
 		{ DB_FH_NOSYNC,	"DB_FH_NOSYNC" },
 		{ DB_FH_OPENED,	"DB_FH_OPENED" },
 		{ DB_FH_UNLINK,	"DB_FH_UNLINK" },
+		{ DB_FH_REGION,	"DB_FH_REGION" },
 		{ 0,		NULL }
 	};
 
@@ -859,6 +888,8 @@ __reg_type(t)
 		return ("Transaction");
 	case INVALID_REGION_TYPE:
 		return ("Invalid");
+	default:
+		break;
 	}
 	return ("Unknown");
 }

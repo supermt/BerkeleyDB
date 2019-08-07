@@ -1,4 +1,10 @@
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2008 October 07
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -107,7 +113,7 @@ static int debugMutexEnd(void){ return SQLITE_OK; }
 ** that means that a mutex could not be allocated. 
 */
 static sqlite3_mutex *debugMutexAlloc(int id){
-  static sqlite3_debug_mutex aStatic[6];
+  static sqlite3_debug_mutex aStatic[SQLITE_MUTEX_STATIC_VFS3 - 1];
   sqlite3_debug_mutex *pNew = 0;
   switch( id ){
     case SQLITE_MUTEX_FAST:
@@ -120,8 +126,12 @@ static sqlite3_mutex *debugMutexAlloc(int id){
       break;
     }
     default: {
-      assert( id-2 >= 0 );
-      assert( id-2 < (int)(sizeof(aStatic)/sizeof(aStatic[0])) );
+#ifdef SQLITE_ENABLE_API_ARMOR
+      if( id-2<0 || id-2>=ArraySize(aStatic) ){
+        (void)SQLITE_MISUSE_BKPT;
+        return 0;
+      }
+#endif
       pNew = &aStatic[id-2];
       pNew->id = id;
       break;
@@ -136,8 +146,13 @@ static sqlite3_mutex *debugMutexAlloc(int id){
 static void debugMutexFree(sqlite3_mutex *pX){
   sqlite3_debug_mutex *p = (sqlite3_debug_mutex*)pX;
   assert( p->cnt==0 );
-  assert( p->id==SQLITE_MUTEX_FAST || p->id==SQLITE_MUTEX_RECURSIVE );
-  sqlite3_free(p);
+  if( p->id==SQLITE_MUTEX_RECURSIVE || p->id==SQLITE_MUTEX_FAST ){
+    sqlite3_free(p);
+  }else{
+#ifdef SQLITE_ENABLE_API_ARMOR
+    (void)SQLITE_MISUSE_BKPT;
+#endif
+  }
 }
 
 /*

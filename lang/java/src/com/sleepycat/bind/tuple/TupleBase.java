@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2000, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2000, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  */
 
@@ -142,6 +142,7 @@ public class TupleBase<E> {
      *
      * @deprecated replaced by {@link #getTupleOutput}
      */
+	@Deprecated
     public static TupleOutput newOutput() {
 
         return new TupleOutput();
@@ -151,10 +152,13 @@ public class TupleBase<E> {
      * Utility method for use by bindings to create a tuple output object
      * with a specific starting size.
      *
+     * @param buffer is the byte array to use as the buffer.
+     *
      * @return a new tuple output object.
      *
      * @deprecated replaced by {@link #getTupleOutput}
      */
+	@Deprecated
     public static TupleOutput newOutput(byte[] buffer) {
 
         return new TupleOutput(buffer);

@@ -1,4 +1,10 @@
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2009 March 3
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -184,7 +190,7 @@ int sqlite3_unlock_notify(
 
   leaveMutex();
   assert( !db->mallocFailed );
-  sqlite3Error(db, rc, (rc?"database is deadlocked":0));
+  sqlite3ErrorWithMsg(db, rc, (rc?"database is deadlocked":0));
   sqlite3_mutex_leave(db->mutex);
   return rc;
 }

@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1997, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1997, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -29,7 +29,7 @@ __os_unlink(env, path, overwrite_test)
 
 	if (dbenv != NULL &&
 	    FLD_ISSET(dbenv->verbose, DB_VERB_FILEOPS | DB_VERB_FILEOPS_ALL))
-		__db_msg(env, DB_STR_A("0160", "fileops: unlink %s",
+		__db_msg(env, DB_STR_A("0028", "fileops: unlink %s",
 		    "%s"), path);
 
 	/* Optionally overwrite the contents of the file to enhance security. */
@@ -61,7 +61,7 @@ __os_unlink(env, path, overwrite_test)
 	 * have to test for that explicitly, the RETRY_CHK macro resets "ret"
 	 * to be the errno, and so we'll just slide right on through.
 	 *
-	 * XXX
+	 * !!!
 	 * We shouldn't be testing for an errno of ENOENT here, but ENOENT
 	 * signals that a file is missing, and we attempt to unlink things
 	 * (such as v. 2.x environment regions, in ENV->remove) that we
@@ -69,7 +69,7 @@ __os_unlink(env, path, overwrite_test)
 	 * is annoying.
 	 */
 	if (ret != 0) {
-		t_ret = __os_posix_err(ret);
+		t_ret = USR_ERR(env, __os_posix_err(ret));
 		if (t_ret != ENOENT)
 			__db_syserr(env, ret, DB_STR_A("0161",
 			    "unlink: %s", "%s"), path);

@@ -14,11 +14,14 @@
   <body>
     <div xmlns="" class="navheader">
       <div class="libver">
-        <p>Library Version 12.1.6.0</p>
+        <p>Library Version 18.1.32</p>
       </div>
       <table width="100%" summary="Navigation header">
         <tr>
-          <th colspan="3" align="center">DbEnv::dbremove()</th>
+          <th colspan="3" align="center">
+        
+        <span xmlns="http://www.w3.org/1999/xhtml">DbEnv::dbremove()</span>
+    </th>
         </tr>
         <tr>
           <td width="20%" align="left"><a accesskey="p" href="envdbbackup.html">Prev</a> </td>
@@ -34,7 +37,10 @@
       <div class="titlepage">
         <div>
           <div>
-            <h2 class="title" style="clear: both"><a id="envdbremove"></a>DbEnv::dbremove()</h2>
+            <h2 class="title" style="clear: both"><a id="envdbremove"></a>
+        
+        <span>DbEnv::dbremove()</span>
+    </h2>
           </div>
         </div>
       </div>
@@ -55,6 +61,11 @@ DbEnv::dbremove(DbTxn *txnid,
          removing a file, when any database in the file has an open handle. 
     </p>
       <p>
+         The <code class="methodname">DbEnv::dbremove()</code> method is not atomic in a
+         sliced environment. If the operation fails, it is possible for
+         some, but not all, of the sliced databases to still exist.
+     </p>
+      <p>
          The <code class="methodname">DbEnv::dbremove()</code> <span>
             
             <span>
@@ -66,7 +77,10 @@ DbEnv::dbremove(DbTxn *txnid,
     </p>
       <p>
         <code class="methodname">DbEnv::dbremove()</code> is affected by any database directory specified using the
-        <a class="xref" href="envadd_data_dir.html" title="DbEnv::add_data_dir()">DbEnv::add_data_dir()</a>
+        <a class="xref" href="envadd_data_dir.html" title="DbEnv::add_data_dir()">
+        
+        <span>DbEnv::add_data_dir()</span>
+    </a>
         method, or by setting the <code class="literal">add_data_dir</code> string in the environment's
         <a href="../../programmer_reference/env_db_config.html#env_db_config.DB_CONFIG" class="olink">DB_CONFIG</a> file.
     </p>
@@ -74,7 +88,7 @@ DbEnv::dbremove(DbTxn *txnid,
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp59775840"></a>Parameters</h3>
+              <h3 class="title"><a id="idm140176770568960"></a>Parameters</h3>
             </div>
           </div>
         </div>
@@ -82,7 +96,7 @@ DbEnv::dbremove(DbTxn *txnid,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp59776032"></a>txnid</h4>
+                <h4 class="title"><a id="idm140176770568576"></a>txnid</h4>
               </div>
             </div>
           </div>
@@ -90,10 +104,16 @@ DbEnv::dbremove(DbTxn *txnid,
                           If the operation is part of an application-specified transaction, the
                           <span class="bold"><strong>txnid</strong></span> parameter is a transaction
                           handle returned from 
-                          <a class="xref" href="txnbegin.html" title="DbEnv::txn_begin()">DbEnv::txn_begin()</a>; if the
+                          <a class="xref" href="txnbegin.html" title="DbEnv::txn_begin()">
+        
+        <span>DbEnv::txn_begin()</span>
+    </a>; if the
                           operation is part of a Berkeley DB Concurrent Data Store group, the
                           <span class="bold"><strong>txnid</strong></span> parameter is a handle returned
-                          from <a class="xref" href="envcdsgroup_begin.html" title="DbEnv::cdsgroup_begin()">DbEnv::cdsgroup_begin()</a>;
+                          from <a class="xref" href="envcdsgroup_begin.html" title="DbEnv::cdsgroup_begin()">
+        
+        <span>DbEnv::cdsgroup_begin()</span>
+    </a>;
                           otherwise NULL. If no transaction handle is specified, but the
                           <code class="literal">DB_AUTO_COMMIT</code> flag is specified to either this method 
                           or the environment handle, the operation will be implicitly transaction protected.
@@ -103,7 +123,7 @@ DbEnv::dbremove(DbTxn *txnid,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp59777088"></a>file</h4>
+                <h4 class="title"><a id="idm140176770566544"></a>file</h4>
               </div>
             </div>
           </div>
@@ -116,7 +136,7 @@ DbEnv::dbremove(DbTxn *txnid,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp59741032"></a>database</h4>
+                <h4 class="title"><a id="idm140176770624752"></a>database</h4>
               </div>
             </div>
           </div>
@@ -129,7 +149,7 @@ DbEnv::dbremove(DbTxn *txnid,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp59688560"></a>flags</h4>
+                <h4 class="title"><a id="idm140176770598448"></a>flags</h4>
               </div>
             </div>
           </div>
@@ -159,7 +179,7 @@ DbEnv::dbremove(DbTxn *txnid,
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp59783120"></a>Environment Variables</h3>
+              <h3 class="title"><a id="idm140176770598256"></a>Environment Variables</h3>
             </div>
           </div>
         </div>
@@ -172,7 +192,7 @@ DbEnv::dbremove(DbTxn *txnid,
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp59776464"></a>Errors</h3>
+              <h3 class="title"><a id="idm140176770567232"></a>Errors</h3>
             </div>
           </div>
         </div>
@@ -190,7 +210,7 @@ DbEnv::dbremove(DbTxn *txnid,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp59792008"></a><span>DbDeadlockException or </span>DB_LOCK_DEADLOCK</h4>
+                <h4 class="title"><a id="idm140176770538864"></a><span>DbDeadlockException or </span>DB_LOCK_DEADLOCK</h4>
               </div>
             </div>
           </div>
@@ -208,7 +228,7 @@ DbEnv::dbremove(DbTxn *txnid,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp59778016"></a><span>DbLockNotGrantedException or </span>DB_LOCK_NOTGRANTED</h4>
+                <h4 class="title"><a id="idm140176770539456"></a><span>DbLockNotGrantedException or </span>DB_LOCK_NOTGRANTED</h4>
               </div>
             </div>
           </div>
@@ -220,7 +240,10 @@ DbEnv::dbremove(DbTxn *txnid,
                 You attempted to open a database handle that is configured
                 for no waiting exclusive locking, but the exclusive lock could not be
                 immediately obtained. See
-                <a class="xref" href="dbset_lk_exclusive.html" title="Db::set_lk_exclusive()">Db::set_lk_exclusive()</a>
+                <a class="xref" href="dbset_lk_exclusive.html" title="Db::set_lk_exclusive()">
+        
+        <span>Db::set_lk_exclusive()</span>
+    </a>
                 for more information.
             </p>
           <p>
@@ -233,12 +256,15 @@ DbEnv::dbremove(DbTxn *txnid,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp59746568"></a>EINVAL</h4>
+                <h4 class="title"><a id="idm140176770574816"></a>EINVAL</h4>
               </div>
             </div>
           </div>
           <p>
-                If the method was called before <a class="xref" href="envopen.html" title="DbEnv::open()">DbEnv::open()</a> 
+                If the method was called before <a class="xref" href="envopen.html" title="DbEnv::open()">
+        
+        <span>DbEnv::open()</span>
+    </a> 
                 was called; or if an invalid flag value or parameter was specified.
             </p>
         </div>
@@ -246,7 +272,7 @@ DbEnv::dbremove(DbTxn *txnid,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp59728576"></a>ENOENT</h4>
+                <h4 class="title"><a id="idm140176770595472"></a>ENOENT</h4>
               </div>
             </div>
           </div>
@@ -254,12 +280,26 @@ DbEnv::dbremove(DbTxn *txnid,
                 The file or directory does not exist.
             </p>
         </div>
+        <div class="sect3" lang="en" xml:lang="en">
+          <div class="titlepage">
+            <div>
+              <div>
+                <h4 class="title"><a id="idm140176770590640"></a>DB_META_CHKSUM_FAIL</h4>
+              </div>
+            </div>
+          </div>
+          <p>
+                Checksum mismatch detected on a database metadata page.
+                Either the database is corrupted or the file is not a Berkeley DB
+                database file.
+            </p>
+        </div>
       </div>
       <div class="sect2" lang="en" xml:lang="en">
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp59787560"></a>Class</h3>
+              <h3 class="title"><a id="idm140176770547024"></a>Class</h3>
             </div>
           </div>
         </div>
@@ -271,7 +311,7 @@ DbEnv::dbremove(DbTxn *txnid,
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp59728360"></a>See Also</h3>
+              <h3 class="title"><a id="idm140176770615328"></a>See Also</h3>
             </div>
           </div>
         </div>
@@ -291,11 +331,17 @@ DbEnv::dbremove(DbTxn *txnid,
           <td width="40%" align="right"> <a accesskey="n" href="envdbrename.html">Next</a></td>
         </tr>
         <tr>
-          <td width="40%" align="left" valign="top">DbEnv::dbbackup() </td>
+          <td width="40%" align="left" valign="top">
+        
+        <span>DbEnv::dbbackup()</span>
+     </td>
           <td width="20%" align="center">
             <a accesskey="h" href="index.html">Home</a>
           </td>
-          <td width="40%" align="right" valign="top"> DbEnv::dbrename()</td>
+          <td width="40%" align="right" valign="top"> 
+        
+        <span>DbEnv::dbrename()</span>
+    </td>
         </tr>
       </table>
     </div>

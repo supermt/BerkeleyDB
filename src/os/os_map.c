@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -32,7 +32,7 @@ static int __no_system_mem __P((ENV *));
 
 /*
  * __os_attach --
- *	Create/join a shared memory region.
+ *	Create/join a 'shared' region of Berkeley DB memory.
  *
  * PUBLIC: int __os_attach __P((ENV *, REGINFO *, REGION *));
  */
@@ -50,6 +50,7 @@ __os_attach(env, infop, rp)
 	 * so there must be a valid handle.
 	 */
 	DB_ASSERT(env, env != NULL && env->dbenv != NULL);
+	DB_ASSERT(env, infop->fhp == NULL);
 	dbenv = env->dbenv;
 
 	if (DB_GLOBAL(j_region_map) != NULL) {
@@ -82,7 +83,7 @@ __os_attach(env, infop, rp)
 #if defined(HAVE_MUTEX_HPPA_MSEM_INIT)
 		__db_errx(env, DB_STR("0114",
     "architecture does not support locks inside system shared memory"));
-		return (EINVAL);
+		return (USR_ERR(env, EINVAL));
 #endif
 #if defined(HAVE_SHMGET)
 		{
@@ -99,6 +100,9 @@ __os_attach(env, infop, rp)
 		 * recovery will get us straightened out.
 		 */
 		if (F_ISSET(infop, REGION_CREATE)) {
+			int oldid;
+
+			oldid = 0;
 			/*
 			 * The application must give us a base System V IPC key
 			 * value.  Adjust that value based on the region's ID,
@@ -106,9 +110,10 @@ __os_attach(env, infop, rp)
 			 * the ipcs output.
 			 */
 			if (dbenv->shm_key == INVALID_REGION_SEGID) {
+				ret = USR_ERR(env, EINVAL);
 				__db_errx(env, DB_STR("0115",
 			    "no base system shared memory ID specified"));
-				return (EINVAL);
+				return (ret);
 			}
 
 			/*
@@ -130,11 +135,13 @@ __os_attach(env, infop, rp)
 			 */
 			if ((id = shmget(segid, 0, 0)) != -1) {
 				(void)shmctl(id, IPC_RMID, NULL);
+				oldid = id;
 				if ((id = shmget(segid, 0, 0)) != -1) {
+					ret = USR_ERR(env, EAGAIN);
 					__db_errx(env, DB_STR_A("0116",
 		"shmget: key: %ld: shared system memory region already exists",
 					    "%ld"), (long)segid);
-					return (EAGAIN);
+					return (ret);
 				}
 			}
 
@@ -150,6 +157,14 @@ __os_attach(env, infop, rp)
 				    "%ld"), (long)segid);
 				return (__os_posix_err(ret));
 			}
+			/*
+			 * When the first shmem region is recreated, print old &
+			 * new ids.
+			 */
+			if (oldid != 0 && segid == dbenv->shm_key)
+				__db_errx(env,
+	"__os_attach() env region: removed id %d and created %d from key %ld",
+				    oldid, id, (long)segid);
 			rp->size = rp->max;
 			rp->segid = id;
 		} else
@@ -161,7 +176,10 @@ __os_attach(env, infop, rp)
 			__db_syserr(env, ret, DB_STR_A("0118",
 	"shmat: id %d: unable to attach to shared system memory region",
 			    "%d"), id);
-			return (__os_posix_err(ret));
+			if (ret == EINVAL)
+				return (USR_ERR(env, DB_SYSTEM_MEM_MISSING));
+			else
+				return (__os_posix_err(ret));
 		}
 
 		/* Optionally lock the memory down. */
@@ -213,6 +231,15 @@ __os_attach(env, infop, rp)
 	if (rp->max < rp->size)
 		rp->max = rp->size;
 	if (ret == 0 && F_ISSET(infop, REGION_CREATE)) {
+#ifdef HAVE_MLOCK
+		/*
+		 * When locking the region in memory extend it fully so that it
+		 * can all be mlock()'d now, and not later when paging could
+		 * interfere with the application. [#21379]
+		 */
+		if (F_ISSET(env, ENV_LOCKDOWN))
+			rp->size = rp->max;
+#endif
 		if (F_ISSET(dbenv, DB_ENV_REGION_INIT))
 			ret = __db_file_write(env, infop->fhp,
 			    rp->size / MEGABYTE, rp->size % MEGABYTE, 0x00);
@@ -255,7 +282,7 @@ __os_detach(env, infop, destroy)
 {
 	DB_ENV *dbenv;
 	REGION *rp;
-	int ret;
+	int ret, t_ret;
 
 	/*
 	 * We pass a DB_ENV handle to the user's replacement unmap function,
@@ -263,8 +290,16 @@ __os_detach(env, infop, destroy)
 	 */
 	DB_ASSERT(env, env != NULL && env->dbenv != NULL);
 	dbenv = env->dbenv;
+	ret = 0;
 
+	/*
+	 * Don't use a region which is no longer valid, e.g., after the
+	 * env has been removed.
+	 */
 	rp = infop->rp;
+	if ((rp->id != 0 && rp->id != infop->id) ||
+	    rp->type <= INVALID_REGION_TYPE || rp->type > REGION_TYPE_MAX)
+		return (USR_ERR(env, EINVAL));
 
 	/* If the user replaced the unmap call, call through their interface. */
 	if (DB_GLOBAL(j_region_unmap) != NULL)
@@ -314,20 +349,31 @@ __os_detach(env, infop, destroy)
 			return (ret);
 	}
 
+	if (F_ISSET(env, ENV_FORCESYNCENV))
+		if (msync(infop->addr, rp->max, MS_INVALIDATE | MS_SYNC) != 0) {
+			t_ret = __os_get_syserr();
+			__db_syserr(env, t_ret, DB_STR("0248",
+			    "msync failed on closing environment"));
+			if (ret == 0)
+				ret = t_ret;
+		}
+
 	if (munmap(infop->addr, rp->max) != 0) {
-		ret = __os_get_syserr();
-		__db_syserr(env, ret, DB_STR("0123", "munmap"));
-		return (__os_posix_err(ret));
+		t_ret = __os_get_syserr();
+		__db_syserr(env, t_ret, DB_STR("0123", "munmap"));
+		if (ret == 0)
+			ret = t_ret;
 	}
 
-	if (destroy && (ret = __os_unlink(env, infop->name, 1)) != 0)
-		return (ret);
+	if (destroy &&
+	    (t_ret = __os_unlink(env, infop->name, 1)) != 0 && ret == 0)
+		ret = t_ret;
 
-	return (0);
+	return (ret);
 #else
 	COMPQUIET(destroy, 0);
 	COMPQUIET(ret, 0);
-	return (EINVAL);
+	return (USR_ERR(env, EINVAL));
 #endif
 }
 
@@ -397,7 +443,7 @@ __os_unmapfile(env, addr, len)
 	dbenv = env->dbenv;
 
 	if (FLD_ISSET(dbenv->verbose, DB_VERB_FILEOPS | DB_VERB_FILEOPS_ALL))
-		__db_msg(env, DB_STR("0124", "fileops: munmap"));
+		__db_msg(env, DB_STR("0009", "fileops: munmap"));
 
 	/* If the user replaced the map call, call through their interface. */
 	if (DB_GLOBAL(j_file_unmap) != NULL)
@@ -415,10 +461,10 @@ __os_unmapfile(env, addr, len)
 	COMPQUIET(env, NULL);
 #endif
 	RETRY_CHK((munmap(addr, len)), ret);
-	ret = __os_posix_err(ret);
+	ret = USR_ERR(env, __os_posix_err(ret));
 #else
+	ret = USR_ERR(env, EINVAL);
 	COMPQUIET(env, NULL);
-	ret = EINVAL;
 #endif
 	return (ret);
 }
@@ -449,7 +495,7 @@ __os_map(env, path, fhp, len, is_region, is_rdonly, addrp)
 	dbenv = env->dbenv;
 
 	if (FLD_ISSET(dbenv->verbose, DB_VERB_FILEOPS | DB_VERB_FILEOPS_ALL))
-		__db_msg(env, DB_STR_A("0125", "fileops: mmap %s",
+		__db_msg(env, DB_STR_A("0008", "fileops: mmap %s",
 		    "%s"), path);
 
 	DB_ASSERT(env, F_ISSET(fhp, DB_FH_OPENED) && fhp->fd != -1);
@@ -499,7 +545,7 @@ __os_map(env, path, fhp, len, is_region, is_rdonly, addrp)
 	prot = PROT_READ | (is_rdonly ? 0 : PROT_WRITE);
 
 	/*
-	 * XXX
+	 * !!!
 	 * Work around a bug in the VMS V7.1 mmap() implementation.  To map
 	 * a file into memory on VMS it needs to be opened in a certain way,
 	 * originally.  To get the file opened in that certain way, the VMS
@@ -540,7 +586,7 @@ __os_map(env, path, fhp, len, is_region, is_rdonly, addrp)
 #ifdef HAVE_MLOCK
 		ret = mlock(p, len) == 0 ? 0 : __os_get_syserr();
 #else
-		ret = DB_OPNOTSUP;
+		ret = USR_ERR(env, DB_OPNOTSUP);
 #endif
 		if (ret != 0) {
 			__db_syserr(env, ret, DB_STR("0127", "mlock"));

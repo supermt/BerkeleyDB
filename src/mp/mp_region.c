@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -173,18 +173,33 @@ __memp_open(env, create_ok)
 
 	return (0);
 
-err:	env->mp_handle = NULL;
-	if (dbmp->reginfo != NULL && dbmp->reginfo[0].addr != NULL) {
-		for (i = 0; i < dbenv->mp_ncache; ++i)
+err:	(void)__mutex_free(env, &dbmp->mutex);
+	(void)__memp_region_detach(env, dbmp);
+	return (ret);
+}
+
+/* __memp_region_detach
+ *	Detach from any attached mempool regions.
+ *
+ * PUBLIC: int __memp_region_detach __P((ENV *, DB_MPOOL *));
+ */
+int
+__memp_region_detach(env, dbmp)
+	ENV *env;
+	DB_MPOOL *dbmp;
+{
+	u_int i;
+
+	if (dbmp != NULL &&
+	    dbmp->reginfo != NULL && dbmp->reginfo[0].addr != NULL) {
+		for (i = 0; i < env->dbenv->mp_ncache; ++i)
 			if (dbmp->reginfo[i].id != INVALID_REGION_ID)
 				(void)__env_region_detach(
 				    env, &dbmp->reginfo[i], 0);
 		__os_free(env, dbmp->reginfo);
 	}
-
-	(void)__mutex_free(env, &dbmp->mutex);
-	__os_free(env, dbmp);
-	return (ret);
+	env->mp_handle = NULL;
+	return (0);
 }
 
 /*
@@ -421,7 +436,6 @@ __memp_region_size(env, reg_sizep, htab_bucketsp)
 	 * chains a lot, they must be kept short.  We use 2.5 as this maintains
 	 * compatibility with previous releases.
 	 *
-	 * XXX
 	 * Cache sizes larger than 10TB would cause 32-bit wrapping in the
 	 * calculation of the number of hash buckets.  This probably isn't
 	 * something we need to worry about right now, but is checked when the
@@ -568,8 +582,11 @@ __memp_env_refresh(env)
 not_priv:
 	/* Discard DB_MPOOLFILEs. */
 	while ((dbmfp = TAILQ_FIRST(&dbmp->dbmfq)) != NULL)
-		if ((t_ret = __memp_fclose(dbmfp, DB_FLUSH)) != 0 && ret == 0)
-			ret = t_ret;
+		if ((t_ret = __memp_fclose(dbmfp, DB_FLUSH)) != 0) {
+			if (ret == 0)
+				ret = t_ret;
+			break;
+		}
 
 	/* Discard DB_MPREGs. */
 	if (dbmp->pg_inout != NULL)
@@ -652,16 +669,16 @@ __memp_region_bhfree(infop)
 				SH_TAILQ_REMOVE(&hp->hash_bucket,
 				    bhp, hq, __bh);
 			else {
-				if (F_ISSET(bhp, BH_DIRTY)) {
-					atomic_dec(env, &hp->hash_page_dirty);
-					F_CLR(bhp, BH_DIRTY | BH_DIRTY_CREATE);
-				}
-				atomic_inc(env, &bhp->ref);
+				__memp_bh_clear_dirty(env, hp, bhp);
+				(void)atomic_inc(env, &bhp->ref);
 				if ((t_ret = __memp_bhfree(dbmp, infop,
 				    R_ADDR(dbmp->reginfo, bhp->mf_offset),
 				    hp, bhp, BH_FREE_FREEMEM |
-				    BH_FREE_UNLOCKED)) != 0 && ret == 0)
-					ret = t_ret;
+				    BH_FREE_UNLOCKED)) != 0) {
+					if (ret == 0)
+						ret = t_ret;
+					break;
+				}
 			}
 	}
 	MPOOL_REGION_LOCK(env, infop);

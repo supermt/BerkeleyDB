@@ -20,7 +20,14 @@
 ** and never delete.
 */
 
-/* The author disclaims copyright to this source code.
+/* 
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+ * reserved.
+ * 
+ * This copyrighted work includes portions of SQLite received 
+ * with the following notice:
+ *
+ * The author disclaims copyright to this source code.
  *
  * This is an SQLite module implementing full-text search.
  */
@@ -205,13 +212,13 @@ static int getVarint32(const char *p, int *pi){
 */
 /* TODO(shess) Is __isascii() a portable version of (c&0x80)==0? */
 static int safe_isspace(char c){
-  return (c&0x80)==0 ? isspace(c) : 0;
+  return (c&0x80)==0 ? isspace((unsigned char)c) : 0;
 }
 static int safe_tolower(char c){
-  return (c&0x80)==0 ? tolower(c) : c;
+  return (c&0x80)==0 ? tolower((unsigned char)c) : c;
 }
 static int safe_isalnum(char c){
-  return (c&0x80)==0 ? isalnum(c) : 0;
+  return (c&0x80)==0 ? isalnum((unsigned char)c) : 0;
 }
 
 typedef enum DocListType {
@@ -3335,8 +3342,11 @@ int sqlite3Fts1Init(sqlite3 *db){
 }
 
 #if !SQLITE_CORE
-int sqlite3_extension_init(sqlite3 *db, char **pzErrMsg,
-                           const sqlite3_api_routines *pApi){
+#ifdef _WIN32
+__declspec(dllexport)
+#endif
+int sqlite3_fts1_init(sqlite3 *db, char **pzErrMsg,
+                      const sqlite3_api_routines *pApi){
   SQLITE_EXTENSION_INIT2(pApi)
   return sqlite3Fts1Init(db);
 }

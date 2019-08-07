@@ -1,8 +1,8 @@
-# See the file LICENSE for redistribution information.
+# Copyright (c) 2012, 2019 Oracle and/or its affiliates.  All rights reserved.
 #
-# Copyright (c) 2012, 2013 Oracle and/or its affiliates.  All rights reserved.
+# See the file LICENSE for license information.
 #
-# $Id$
+# $Id: test143.tcl,v fe390f089fce 2014/01/10 21:03:56 carol $
 #
 # TEST	test143
 # TEST
@@ -35,22 +35,51 @@ proc test143 { method {tnum "143"} args } {
 		set multipliers [list 1 4 10]
 	}
 
+	# When native pagesize is small, this test requires
+	# a ver large number of mutexes. In this case, increase
+	# the number of mutexes and also reduce the size of the
+	# working data set.
+	set mutexargs ""
+	set nentries 10000
+	set native_pagesize [get_native_pagesize]
+	if {$native_pagesize < 2048} {
+		set mutexargs "-mutex_set_max 100000"
+		set nentries 2000
+	}
+
 	# Test for various environment types including
 	# default, multiversion, private, and system_mem.
-	test143_body $method $tnum "" $multipliers 10000 $args
+	test143_body $method $tnum "$mutexargs" $multipliers $nentries $args
 
 	set multipliers [list 8]
-	test143_body $method $tnum -multiversion $multipliers 10000 $args
-	test143_body $method $tnum -private $multipliers 10000 $args
+	test143_body $method $tnum "-multiversion $mutexargs" \
+	    $multipliers $nentries $args
+	test143_body $method $tnum "-private $mutexargs" \
+	    $multipliers $nentries $args
 	if { $is_qnx_test } {
 		puts "\tTest$tnum: Skipping system_mem\
 		    testing for QNX."
-		return
+	} elseif { $is_osx_test } {
+		set default_pagesize [exec pagesize]
+		set shmall_needed [expr 40 * 1024 * 1024 / $default_pagesize]
+		set shmall_output [exec sysctl kern.sysv.shmall]
+		set shmall_default [string range $shmall_output \
+		    [expr [string last ":" $shmall_output] + 2] end]
+		if { $shmall_default >= $shmall_needed } {
+			set shm_key 20
+			test143_body $method $tnum \
+			    "-system_mem -shm_key $shm_key $mutexargs" \
+			    $multipliers $nentries $args
+		} else {
+			puts "\tTest$tnum: Skipping system_mem\
+			    testing for OS resource limitation."
+		}
+	} else {
+		set shm_key 20
+		test143_body $method $tnum \
+		    "-system_mem -shm_key $shm_key $mutexargs" \
+		    $multipliers $nentries $args
 	}
-
-	set shm_key 20
-	test143_body $method $tnum \
-	    "-system_mem -shm_key $shm_key" $multipliers 10000 $args
 
 	# Test that cache-related mutex configation options which exercise
 	# certain code paths not executed by the cases above.
@@ -64,7 +93,7 @@ proc test143 { method {tnum "143"} args } {
 	}
 }
 
-proc test143_body { method tnum envtype multipliers \
+proc test143_body { method tnum envargs multipliers \
     { nentries 10000 } largs } {
 
 	source ./include.tcl
@@ -105,8 +134,8 @@ proc test143_body { method tnum envtype multipliers \
 		env_cleanup $testdir
 		set csize [expr $m * 1024 * 1024]
 		puts "\tTest$tnum.a:\
-		    Create env ($envtype) with cachesize of $m megabyte(s)."
-		set env [eval {berkdb_env_noerr} $encargs $envtype \
+		    Create env ($envargs) with cachesize of $m megabyte(s)."
+		set env [eval {berkdb_env_noerr} $encargs $envargs \
 		    {-cachesize "0 $csize 1" -cache_max "0 $maxsize" \
 		    -create -txn -home $testdir}]
 		error_check_good env_open [is_valid_env $env] TRUE
@@ -114,16 +143,16 @@ proc test143_body { method tnum envtype multipliers \
 		    [stat_field $env mpool_stat "Mutexes for hash buckets"]
 		# Private, non-threaded environments should not have any
 		# mutexes for the hash table.
-		if { [ is_substr $envtype "-private" ] && \
-		   ! [ is_substr $envtype "-thread"] } {
+		if { [ is_substr $envargs "-private" ] && \
+		   ! [ is_substr $envargs "-thread"] } {
 			set mutexes_expected 0
-		} elseif { [ is_substr $envtype "mpool_mutex_count" ] } {
+		} elseif { [ is_substr $envargs "mpool_mutex_count" ] } {
 			set mutexes_expected 10
 		} else {
 			set mutexes_expected \
 			    [stat_field $env mpool_stat "Hash buckets" ]
 		}
-		error_check_good "Hash bucket $envtype mutexes " \
+		error_check_good "Hash bucket $envargs mutexes " \
 		    $mutexes_expected $htab_mutexes
 
 		# Env is open, check and report cache size.

@@ -12,6 +12,15 @@
 # of JUnit.  You can download this JAR from http://jakarta.apache.org/
 #
 # JUNIT_JAR=/Users/gburd/Unix/opt/junit/junit.jar
+#
+# Note: To run repmgr tests with SSL support set REPMGR_SSL_TEST_ENABLED
+# and BDB_ROOT. Also repmgr should have been built with ssl support.
+#
+# REPMGR_SSL_TEST_ENABLED=1
+
+if [ "$REPMGR_SSL_TEST_ENABLED" != "" ]; then
+	$BDB_ROOT/test/utils/ssl_cert_gen_script.sh > /dev/null 2>&1
+fi
 
 [ "x$JUNIT_JAR" = "x" ] && {
 	echo 'FAIL: unset environment variable JUNIT_JAR for junit.jar.'
@@ -23,8 +32,8 @@
 	exit 1
 }
 
-case `uname` in
-	*CYGWIN*WOW64*)
+case `uname -ms` in
+	*CYGWIN*WOW* | *CYGWIN*64)
 	  CP_SEP=";"
 	  d="../../../build_windows/x64/Debug"
 	  DB_LIB_DIR="$d"
@@ -51,16 +60,19 @@ case `uname -ms` in
 	  MMAP_OPTION="" ;;
 esac
 
-REQUIRED_JARS=$JUNIT_JAR
+JUNIT_DIR="`dirname $JUNIT_JAR`"
+REQUIRED_JARS=$JUNIT_JAR$CP_SEP$JUNIT_DIR/hamcrest-core.jar
 DB_JAR=$d/db.jar
 export DB_JAR
 export REQUIRED_JARS
 export CP_SEP
 export DB_LIB_DIR
 
-# Build the tests.
+# Build the tests.  Ignore failures in make clean -- they 
+# arise from trying to delete the ./classes directory in 
+# cases where it's not there.
 
-make clean
+make clean >/dev/null 2>&1
 
 [ -f ./dbtest.jar ] || (make dbtest.jar) || {
 	echo 'FAIL: unable to find or build dbtest.jar'

@@ -1,4 +1,10 @@
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2001 September 15
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -14,46 +20,24 @@
 ** testing of the SQLite library.
 */
 #include "sqliteInt.h"
-#include "tcl.h"
+#if defined(INCLUDE_SQLITE_TCL_H)
+#  include "sqlite_tcl.h"
+#else
+#  include "tcl.h"
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 
+extern const char *sqlite3ErrName(int);
+
 #ifndef SQLITE_OMIT_DISKIO
-/*
-** Interpret an SQLite error number
-*/
-static char *errorName(int rc){
-  char *zName;
-  switch( rc ){
-    case SQLITE_OK:         zName = "SQLITE_OK";          break;
-    case SQLITE_ERROR:      zName = "SQLITE_ERROR";       break;
-    case SQLITE_PERM:       zName = "SQLITE_PERM";        break;
-    case SQLITE_ABORT:      zName = "SQLITE_ABORT";       break;
-    case SQLITE_BUSY:       zName = "SQLITE_BUSY";        break;
-    case SQLITE_NOMEM:      zName = "SQLITE_NOMEM";       break;
-    case SQLITE_READONLY:   zName = "SQLITE_READONLY";    break;
-    case SQLITE_INTERRUPT:  zName = "SQLITE_INTERRUPT";   break;
-    case SQLITE_IOERR:      zName = "SQLITE_IOERR";       break;
-    case SQLITE_CORRUPT:    zName = "SQLITE_CORRUPT";     break;
-    case SQLITE_FULL:       zName = "SQLITE_FULL";        break;
-    case SQLITE_CANTOPEN:   zName = "SQLITE_CANTOPEN";    break;
-    case SQLITE_PROTOCOL:   zName = "SQLITE_PROTOCOL";    break;
-    case SQLITE_EMPTY:      zName = "SQLITE_EMPTY";       break;
-    case SQLITE_SCHEMA:     zName = "SQLITE_SCHEMA";      break;
-    case SQLITE_CONSTRAINT: zName = "SQLITE_CONSTRAINT";  break;
-    case SQLITE_MISMATCH:   zName = "SQLITE_MISMATCH";    break;
-    case SQLITE_MISUSE:     zName = "SQLITE_MISUSE";      break;
-    case SQLITE_NOLFS:      zName = "SQLITE_NOLFS";       break;
-    default:                zName = "SQLITE_Unknown";     break;
-  }
-  return zName;
-}
 
 /*
 ** Page size and reserved size used for testing.
 */
 static int test_pagesize = 1024;
+
 /*
 ** Usage:   fake_big_file  N  FILENAME
 **
@@ -63,7 +47,7 @@ static int test_pagesize = 1024;
 ** new pages after N.  If N is 2096 or bigger, this will test the
 ** ability of SQLite to write to large files.
 */
-static int fake_big_file(
+static int SQLITE_TCLAPI fake_big_file(
   void *NotUsed,
   Tcl_Interp *interp,    /* The TCL interpreter that invoked this command */
   int argc,              /* Number of arguments */
@@ -83,12 +67,6 @@ static int fake_big_file(
   }
   if( Tcl_GetInt(interp, argv[1], &n) ) return TCL_ERROR;
 
-  /*
-   * This does not work with Berkeley DB. Making a large file does not cause
-   * DB to skip the existing pages.
-   */
-  return TCL_ERROR;
-
   pVfs = sqlite3_vfs_find(0);
   nFile = (int)strlen(argv[2]);
   zFile = sqlite3_malloc( nFile+2 );
@@ -99,7 +77,7 @@ static int fake_big_file(
       (SQLITE_OPEN_CREATE|SQLITE_OPEN_READWRITE|SQLITE_OPEN_MAIN_DB), 0
   );
   if( rc ){
-    Tcl_AppendResult(interp, "open failed: ", errorName(rc), 0);
+    Tcl_AppendResult(interp, "open failed: ", sqlite3ErrName(rc), 0);
     sqlite3_free(zFile);
     return TCL_ERROR;
   }
@@ -109,12 +87,120 @@ static int fake_big_file(
   sqlite3OsCloseFree(fd);
   sqlite3_free(zFile);
   if( rc ){
-    Tcl_AppendResult(interp, "write failed: ", errorName(rc), 0);
+    Tcl_AppendResult(interp, "write failed: ", sqlite3ErrName(rc), 0);
     return TCL_ERROR;
   }
   return TCL_OK;
 }
 #endif
+
+
+/*
+** test_control_pending_byte  PENDING_BYTE
+**
+** Set the PENDING_BYTE using the sqlite3_test_control() interface.
+*/
+static int SQLITE_TCLAPI testPendingByte(
+  void *NotUsed,
+  Tcl_Interp *interp,    /* The TCL interpreter that invoked this command */
+  int argc,              /* Number of arguments */
+  const char **argv      /* Text of each argument */
+){
+  int pbyte;
+  int rc;
+  if( argc!=2 ){
+    Tcl_AppendResult(interp, "wrong # args: should be \"", argv[0],
+                     " PENDING-BYTE\"", (void*)0);
+    return TCL_ERROR;
+  }
+  if( Tcl_GetInt(interp, argv[1], &pbyte) ) return TCL_ERROR;
+  rc = sqlite3_test_control(SQLITE_TESTCTRL_PENDING_BYTE, pbyte);
+  Tcl_SetObjResult(interp, Tcl_NewIntObj(rc));
+  return TCL_OK;
+}
+
+/*
+** The sqlite3FaultSim() callback:
+*/
+static Tcl_Interp *faultSimInterp = 0;
+static int faultSimScriptSize = 0;
+static char *faultSimScript;
+static int faultSimCallback(int x){
+  char zInt[30];
+  int i;
+  int isNeg;
+  int rc;
+  if( x==0 ){
+    memcpy(faultSimScript+faultSimScriptSize, "0", 2);
+  }else{
+    /* Convert x to text without using any sqlite3 routines */
+    if( x<0 ){
+      isNeg = 1;
+      x = -x;
+    }else{
+      isNeg = 0;
+    }
+    zInt[sizeof(zInt)-1] = 0;
+    for(i=sizeof(zInt)-2; i>0 && x>0; i--, x /= 10){
+      zInt[i] = (x%10) + '0';
+    }
+    if( isNeg ) zInt[i--] = '-';
+    memcpy(faultSimScript+faultSimScriptSize, zInt+i+1, sizeof(zInt)-i);
+  }
+  rc = Tcl_Eval(faultSimInterp, faultSimScript);
+  if( rc ){
+    fprintf(stderr, "fault simulator script failed: [%s]", faultSimScript);
+    rc = SQLITE_ERROR;
+  }else{
+    rc = atoi(Tcl_GetStringResult(faultSimInterp));
+  }
+  Tcl_ResetResult(faultSimInterp);
+  return rc;
+}
+
+/*
+** sqlite3_test_control_fault_install SCRIPT
+**
+** Arrange to invoke SCRIPT with the integer argument to sqlite3FaultSim()
+** appended, whenever sqlite3FaultSim() is called.  Or, if SCRIPT is the
+** empty string, cancel the sqlite3FaultSim() callback.
+*/
+static int SQLITE_TCLAPI faultInstallCmd(
+  void *NotUsed,
+  Tcl_Interp *interp,    /* The TCL interpreter that invoked this command */
+  int argc,              /* Number of arguments */
+  const char **argv      /* Text of each argument */
+){
+  const char *zScript;
+  int nScript;
+  int rc;
+  if( argc!=1 && argc!=2 ){
+    Tcl_AppendResult(interp, "wrong # args: should be \"", argv[0],
+                     " SCRIPT\"", (void*)0);
+  }
+  zScript = argc==2 ? argv[1] : "";
+  nScript = (int)strlen(zScript);
+  if( faultSimScript ){
+    free(faultSimScript);
+    faultSimScript = 0;
+  }
+  if( nScript==0 ){
+    rc = sqlite3_test_control(SQLITE_TESTCTRL_FAULT_INSTALL, 0);
+  }else{
+    faultSimScript = malloc( nScript+100 );
+    if( faultSimScript==0 ){
+      Tcl_AppendResult(interp, "out of memory", (void*)0);
+      return SQLITE_ERROR;
+    }
+    memcpy(faultSimScript, zScript, nScript);
+    faultSimScript[nScript] = ' ';
+    faultSimScriptSize = nScript+1;
+    faultSimInterp = interp;
+    rc = sqlite3_test_control(SQLITE_TESTCTRL_FAULT_INSTALL, faultSimCallback);
+  }
+  Tcl_SetObjResult(interp, Tcl_NewIntObj(rc));
+  return SQLITE_OK;
+}
 
 /*
 ** sqlite3BitvecBuiltinTest SIZE PROGRAM
@@ -122,7 +208,7 @@ static int fake_big_file(
 ** Invoke the SQLITE_TESTCTRL_BITVEC_TEST operator on test_control.
 ** See comments on sqlite3BitvecBuiltinTest() for additional information.
 */
-static int testBitvecBuiltinTest(
+static int SQLITE_TCLAPI testBitvecBuiltinTest(
   void *NotUsed,
   Tcl_Interp *interp,    /* The TCL interpreter that invoked this command */
   int argc,              /* Number of arguments */
@@ -148,7 +234,7 @@ static int testBitvecBuiltinTest(
   rc = sqlite3_test_control(SQLITE_TESTCTRL_BITVEC_TEST, sz, aProg);
   Tcl_SetObjResult(interp, Tcl_NewIntObj(rc));
   return TCL_OK;
-}  
+}
 
 static int t2_tcl_function_stub(
   void *NotUsed,
@@ -187,7 +273,8 @@ int Sqlitetest2_Init(Tcl_Interp *interp){
     { "fake_big_file",           (Tcl_CmdProc*)fake_big_file       },
 #endif
     { "sqlite3BitvecBuiltinTest",(Tcl_CmdProc*)testBitvecBuiltinTest     },
-    { "sqlite3_test_control_pending_byte", (Tcl_CmdProc*)t2_tcl_function_stub },
+    { "sqlite3_test_control_pending_byte",  (Tcl_CmdProc*)t2_tcl_function_stub },
+    { "sqlite3_test_control_fault_install", (Tcl_CmdProc*)faultInstallCmd },
   };
   int i;
   for(i=0; i<sizeof(aCmd)/sizeof(aCmd[0]); i++){

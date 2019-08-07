@@ -14,7 +14,7 @@
   <body>
     <div xmlns="" class="navheader">
       <div class="libver">
-        <p>Library Version 12.1.6.0</p>
+        <p>Library Version 18.1.32</p>
       </div>
       <table width="100%" summary="Navigation header">
         <tr>
@@ -38,8 +38,9 @@
           </div>
         </div>
       </div>
-      <pre class="programlisting">db_load [-nTV] [-c name=value] [-f file]
-    [-h home] [-P password] [-t btree | hash | queue | recno] file
+      <pre class="programlisting">db_load [-nTV] [-b ext_file_dir] [-c name=value]
+    [-f file] [-h home] [-P password] [-o ext_file_threshold] 
+    [-t btree | hash | queue | recno] file
 
 db_load [-r lsn | fileid] [-h home] [-P password] file  </pre>
       <p>
@@ -59,6 +60,17 @@ db_load [-r lsn | fileid] [-h home] [-P password] file  </pre>
     </p>
       <div class="itemizedlist">
         <ul type="disc">
+          <li>
+            <p>
+              <span class="bold"><strong>-b</strong></span>
+            </p>
+            <p>
+                Identifies the directory where external file data is stored.
+                If this option is not specified, then external file data is
+                placed in a subdirectory within the DB's environment. See also
+                the <span class="bold"><strong>-o</strong></span> option.
+            </p>
+          </li>
           <li>
             <p>
               <span class="bold"><strong>-c</strong></span>
@@ -93,10 +105,16 @@ db_load [-r lsn | fileid] [-h home] [-P password] file  </pre>
                  <a class="link" href="envopen.html#envopen_DB_INIT_MPOOL">DB_INIT_MPOOL</a>,
                  <a class="link" href="envopen.html#envopen_DB_INIT_TXN">DB_INIT_TXN</a>, and
                  <a class="link" href="envopen.html#envopen_DB_USE_ENVIRON">DB_USE_ENVIRON</a>
-                 flags to <a class="xref" href="envopen.html" title="DbEnv::open()">DbEnv::open()</a>
+                 flags to <a class="xref" href="envopen.html" title="DbEnv::open()">
+        
+        <span>DbEnv::open()</span>
+    </a>
                  (This means that <span class="command"><strong>db_load</strong></span> can be used to load data into databases while
                  they are in use by other processes.) If the 
-                 <a class="xref" href="envopen.html" title="DbEnv::open()">DbEnv::open()</a> call fails, or if
+                 <a class="xref" href="envopen.html" title="DbEnv::open()">
+        
+        <span>DbEnv::open()</span>
+    </a> call fails, or if
                  no home directory is specified, the database is still updated, but the
                  environment is ignored; for example, no locking is done.
             </p>
@@ -110,6 +128,20 @@ db_load [-r lsn | fileid] [-h home] [-P password] file  </pre>
                  already existing database.  If a key/data pair cannot be loaded into
                  the database for this reason, a warning message is displayed on the
                  standard error output, and the key/data pair are skipped.
+            </p>
+          </li>
+          <li>
+            <p>
+              <span class="bold"><strong>-o</strong></span>
+            </p>
+            <p>
+                Identifies the external file threshold in bytes. This threshold
+                determines when a data item will be stored as an external file.
+                Data items sized less than this threshold are stored as normal
+                data within the database. Data items larger than this size are
+                stored on-disk in a subdirectory set aside for the purpose.
+                Use the <span class="bold"><strong>-b</strong></span> command line
+                option to identify where external file data is stored.
             </p>
           </li>
           <li>
@@ -242,7 +274,7 @@ db_load [-r lsn | fileid] [-h home] [-P password] file  </pre>
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp63996192"></a>Examples</h3>
+              <h3 class="title"><a id="idm140176762547216"></a>Examples</h3>
             </div>
           </div>
         </div>
@@ -264,7 +296,7 @@ db_load [-r lsn | fileid] [-h home] [-P password] file  </pre>
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp63988272"></a>Environment Variables</h3>
+              <h3 class="title"><a id="idm140176762621744"></a>Environment Variables</h3>
             </div>
           </div>
         </div>
@@ -272,7 +304,7 @@ db_load [-r lsn | fileid] [-h home] [-P password] file  </pre>
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp64020664"></a>DB_HOME</h4>
+                <h4 class="title"><a id="idm140176762429856"></a>DB_HOME</h4>
               </div>
             </div>
           </div>
@@ -280,7 +312,10 @@ db_load [-r lsn | fileid] [-h home] [-P password] file  </pre>
                           If the <span class="bold"><strong>-h</strong></span> option is not specified and
                           the environment variable DB_HOME is set, it is used as the path of the
                           database home, as described in the
-                          <a class="xref" href="envopen.html" title="DbEnv::open()">DbEnv::open()</a> method.
+                          <a class="xref" href="envopen.html" title="DbEnv::open()">
+        
+        <span>DbEnv::open()</span>
+    </a> method.
                      </p>
         </div>
       </div>
@@ -288,14 +323,17 @@ db_load [-r lsn | fileid] [-h home] [-P password] file  </pre>
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp63982032"></a>Supported Keywords</h3>
+              <h3 class="title"><a id="idm140176762485440"></a>Supported Keywords</h3>
             </div>
           </div>
         </div>
         <p>
             The following keywords are supported for the <span class="bold"><strong>-c</strong></span> command-line 
             option to the <span class="command"><strong>db_load</strong></span> utility. See the
-            <a class="xref" href="envopen.html" title="DbEnv::open()">DbEnv::open()</a> method
+            <a class="xref" href="envopen.html" title="DbEnv::open()">
+        
+        <span>DbEnv::open()</span>
+    </a> method
             for further discussion of these keywords and what values should be
             specified.
         </p>
@@ -409,7 +447,10 @@ db_load [-r lsn | fileid] [-h home] [-P password] file  </pre>
                     Specify the length for fixed-length records. This
                     number represents different things, depending on the
                     access method the database is using. See the
-                    <a class="xref" href="dbset_re_len.html" title="Db::set_re_len()">Db::set_re_len()</a>
+                    <a class="xref" href="dbset_re_len.html" title="Db::set_re_len()">
+        
+        <span>Db::set_re_len()</span>
+    </a>
                     method for details on what this number represents.
                 </p>
             </li>

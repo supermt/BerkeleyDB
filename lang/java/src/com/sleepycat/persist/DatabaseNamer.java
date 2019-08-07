@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2002, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2002, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  */
 
@@ -73,6 +73,8 @@ public interface DatabaseNamer {
      *
      * @param keyName the key name identifying a secondary index, or null for
      * a primary index.
+     *
+     * @return the file name.
      */
     public String getFileName(String storeName,
                               String entityClassName,
@@ -83,7 +85,7 @@ public interface DatabaseNamer {
      *
      * <p>The {@link #getFileName getFileName} method of this namer returns the
      * {@code storeName}, {@code entityClassName} and {@code keyName}
-     * parameters as follows:<p>
+     * parameters as follows:</p>
      *
      * <pre class="code">
      * if (keyName != null) {

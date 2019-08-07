@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2005, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2005, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file EXAMPLES-LICENSE for license information.
  *
  * $Id$ 
  */
@@ -54,6 +54,12 @@ typedef pthread_mutex_t mutex_t;
 
 // Run 5 writers threads at a time.
 #define NUMWRITERS 5
+
+// Suppress unused variable warnings.
+#define COMPQUIET(n, v) do {    \
+    (n) = (v);                  \
+    (n) = (n);                  \
+} while (0)
 
 // Printing of thread_t is implementation-specific, so we
 // create our own thread IDs for reporting purposes.
@@ -123,7 +129,7 @@ main(int argc, char *argv[])
 
     try {
         // Create and open the environment
-        envp = new DbEnv(0);
+        envp = new DbEnv((u_int32_t)0);
 
         // Indicate that we want db to internally perform deadlock
         // detection.  Also indicate that the transaction with
@@ -367,6 +373,8 @@ openDb(Db **dbpp, const char *progname, const char *fileName,
     int ret;
     u_int32_t openFlags;
 
+    COMPQUIET(ret, 0);
+    
     try {
         Db *dbp = new Db(envp, 0);
 

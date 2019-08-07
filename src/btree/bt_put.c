@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  */
 /*
  * Copyright (c) 1990, 1993, 1994, 1995, 1996
@@ -44,7 +44,6 @@
 #include "db_config.h"
 
 #include "db_int.h"
-#include "dbinc/blob.h"
 #include "dbinc/db_page.h"
 #include "dbinc/btree.h"
 #include "dbinc/lock.h"
@@ -84,7 +83,7 @@ __bam_iitem(dbc, key, data, op, flags)
 	PAGE *h;
 	db_indx_t cnt, indx;
 	off_t blob_size;
-	uintmax_t blob_id, new_blob_id;
+	db_seq_t blob_id, new_blob_id;
 	u_int32_t data_size, have_bytes, need_bytes, needed, pages, pagespace;
 	char tmp_ch;
 	int cmp, bigkey, bigdata, blobdata, del, dupadjust;
@@ -227,9 +226,10 @@ dup_cmp:if (op == DB_CURRENT && dbp->dup_compare != NULL) {
 		    dbp->dup_compare, &cmp, NULL)) != 0)
 			return (ret);
 		if (cmp != 0) {
+			ret = USR_ERR(env, EINVAL);
 			__db_errx(env, DB_STR("1004",
 			    "Existing data sorts differently from put data"));
-			return (EINVAL);
+			return (ret);
 		}
 	}
 
@@ -509,10 +509,7 @@ dup_cmp:if (op == DB_CURRENT && dbp->dup_compare != NULL) {
 					 */
 					blob_dbt.data = BBLOB_DATA(data->data);
 				} else {
-					GET_BLOB_ID(
-					    dbp->env, bl, blob_id, ret);
-					if (ret != 0)
-						goto err;
+					blob_id = (db_seq_t)bl.id;
 					GET_BLOB_SIZE(
 					    dbp->env, bl, blob_size, ret);
 					if (ret != 0)
@@ -543,12 +540,10 @@ dup_cmp:if (op == DB_CURRENT && dbp->dup_compare != NULL) {
 				tdbt.size = BBLOB_SIZE;
 				SET_BLOB_ID(&blob_buf, new_blob_id, BBLOB);
 				SET_BLOB_SIZE(&blob_buf, blob_size, BBLOB);
-				SET_LO_HI(&blob_buf,
-				    dbp->blob_file_id,
-				    BBLOB, file_id_lo, file_id_hi);
-				SET_LO_HI(&blob_buf,
-				    dbp->blob_sdb_id,
-				    BBLOB, sdb_id_lo, sdb_id_hi);
+				SET_BLOB_FILE_ID(
+				    &blob_buf, dbp->blob_file_id, BBLOB);
+				SET_BLOB_SDB_ID(
+				    &blob_buf, dbp->blob_sdb_id, BBLOB);
 				ret = __db_pitem(dbc, h,
 				    indx, BBLOB_SIZE, &tdbt, NULL);
 			} else

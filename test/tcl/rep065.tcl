@@ -1,6 +1,6 @@
-# See the file LICENSE for redistribution information.
+# Copyright (c) 2006, 2019 Oracle and/or its affiliates.  All rights reserved.
 #
-# Copyright (c) 2006, 2013 Oracle and/or its affiliates.  All rights reserved.
+# See the file LICENSE for license information.
 #
 # $Id$
 #
@@ -9,7 +9,7 @@
 # TEST	This capability is introduced with 4.5.
 # TEST
 # TEST	Start a replication group of 1 master and N sites, all
-# TEST	running some historical version greater than or equal to 4.4.
+# TEST	running some historical version greater than or equal to 4.7.
 # TEST	Take down a client and bring it up again running current.
 # TEST	Run some upgrades, make sure everything works.
 # TEST
@@ -129,7 +129,6 @@ proc rep065_sub { iter mv nsites slist } {
 		file mkdir $upgdir($sid)/DATADIR
 	}
 
-	# Open master env running 4.4.
 	#
 	# We know that slist has all sites starting in the histdir.
 	# So if we encounter an upgrade value, we upgrade that client
@@ -282,18 +281,59 @@ proc rep065_sub { iter mv nsites slist } {
 		# to the current version and start everyone up again.
 		incr count
 	}
+	replclose_noenv $controldir/$testdir/MSGQUEUEDIR
 }
 
+
+# Create the method/version pairs to used for a run.
+# For coverage runs, provide a canned list that exercises
+# the historical recovery functions.  This also ensures that
+# the lines covered are consistent.  For non-coverage runs, 
+# the list is randomized.
 proc method_version { } {
 
+	global valid_releases
+	
+	# As of 2014, coverage is run on slc01bjy. 
+	set coverage_host "slc01bjy"
+	set hostname [info hostname]
+	set coverage 0
+	if { [is_substr $hostname $coverage_host] == 1 } {
+		set coverage 1
+	}
+
 	set mv {}
+
+	if { $coverage == 1 } {
+		lappend mv "btree $valid_releases(47)"
+		lappend mv "hash $valid_releases(48)"
+		lappend mv "btree $valid_releases(48)"
+		lappend mv "heap $valid_releases(60)"
+		lappend mv "queue $valid_releases(51)"
+		lappend mv "recno $valid_releases(52)"
+		lappend mv "rbtree $valid_releases(47)"
+		lappend mv "queueext $valid_releases(50)"
+		lappend mv "frecno $valid_releases(51)"
+		lappend mv "btree $valid_releases(53)"
+		lappend mv "rrecno $valid_releases(60)"
+		lappend mv "btree $valid_releases(61)"
+		lappend mv "heap $valid_releases(52)"
+		lappend mv "btree $valid_releases(62)"
+		lappend mv "queue $valid_releases(62)"
+		lappend mv "btree $valid_releases(181)"
+		return $mv
+	} 
 
 	# As of the 5.2 release we added the method 'heap'.
 	# For 5.2 and later versions select a method at random
 	# from the list of all methods except heap.  Always
-	# set up one pair using heap with 5.2 or 5.3.
-	set post52_versions {db-5.2.42 db-5.3.21}
-	set heap_version [lindex $post52_versions [berkdb random_int 0 1]] 
+	# set up one pair using heap with a 5.2 or later version.
+	set post52_versions "$valid_releases(52) $valid_releases(53)\
+	   $valid_releases(60) $valid_releases(61)\
+	   $valid_releases(62) $valid_releases(181)"
+	set post52_len [expr [llength $post52_versions] - 1]
+	set heap_version [lindex $post52_versions \
+	    [berkdb random_int 0 $post52_len]]
 	lappend mv [list heap $heap_version]
 	set methods\
 	    {btree rbtree recno frecno rrecno queue queueext hash}
@@ -309,9 +349,9 @@ proc method_version { } {
 		lappend mv [list $method $version]
 	}
 
-	# Now take care of versions 4.4 though 5.1. 
-	set pre52_versions {db-5.1.29 db-5.0.32 \
-	    db-4.8.30 db-4.7.25 db-4.6.21 db-4.5.20 db-4.4.20}
+	# Now take care of versions 4.7 though 5.1. 
+	set pre52_versions "$valid_releases(51) $valid_releases(50)\
+	    $valid_releases(48) $valid_releases(47)"
 	set remaining_versions $pre52_versions
 	set versions_len [expr [llength $remaining_versions] - 1]
 

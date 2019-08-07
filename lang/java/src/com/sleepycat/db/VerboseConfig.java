@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2002, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2002, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -64,6 +64,21 @@ public final class VerboseConfig {
     public static final VerboseConfig REPMGR_MISC =
         new VerboseConfig("REPLICATIONMGR_MISC", DbConstants.DB_VERB_REPMGR_MISC);
     /**
+    Display all information about Replication Manager SSL support.
+    */
+    public static final VerboseConfig REPMGR_SSL_ALL =
+    new VerboseConfig("REPLICATIONMGR_SSL_ALL", DbConstants.DB_VERB_REPMGR_SSL_ALL);
+    /**
+    Display detailed information about Replication Manager SSL connections.
+    */
+    public static final VerboseConfig REPMGR_SSL_CONN =
+        new VerboseConfig("REPLICATIONMGR_SSL_CONN", DbConstants.DB_VERB_REPMGR_SSL_CONN);
+    /**
+    Display detailed information about Replication Manager SSL IO.
+    */
+    public static final VerboseConfig REPMGR_SSL_IO =
+    new VerboseConfig("REPLICATIONMGR_SSL_IO", DbConstants.DB_VERB_REPMGR_SSL_IO);
+    /**
     Display detailed information about replication elections.
     */
     public static final VerboseConfig REPLICATION_ELECTION =
@@ -99,6 +114,11 @@ public final class VerboseConfig {
     */
     public static final VerboseConfig REPLICATION_TEST =
         new VerboseConfig("REPLICATION_TEST", DbConstants.DB_VERB_REP_TEST);
+    /**
+    Display detailed information about slice databases.
+    */
+    public static final VerboseConfig SLICE =
+        new VerboseConfig("SLICE", DbConstants.DB_VERB_SLICE);
     /**
     Display the waits-for table when doing deadlock detection.
     */

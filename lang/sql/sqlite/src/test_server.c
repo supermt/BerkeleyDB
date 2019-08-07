@@ -1,4 +1,10 @@
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2006 January 07
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -467,6 +473,32 @@ void sqlite3_server_start(void){
   int rc;
   g.serverHalt = 0;
   rc = pthread_create(&x, 0, sqlite3_server, 0);
+  if( rc==0 ){
+    pthread_detach(x);
+  }
+}
+
+/*
+** A wrapper around sqlite3_server() that decrements the int variable
+** pointed to by the first argument after the sqlite3_server() call
+** returns.
+*/
+static void *serverWrapper(void *pnDecr){
+  void *p = sqlite3_server(0);
+  (*(int*)pnDecr)--;
+  return p;
+}
+
+/*
+** This function is the similar to sqlite3_server_start(), except that
+** the integer pointed to by the first argument is decremented when
+** the server thread exits. 
+*/
+void sqlite3_server_start2(int *pnDecr){
+  pthread_t x;
+  int rc;
+  g.serverHalt = 0;
+  rc = pthread_create(&x, 0, serverWrapper, (void*)pnDecr);
   if( rc==0 ){
     pthread_detach(x);
   }

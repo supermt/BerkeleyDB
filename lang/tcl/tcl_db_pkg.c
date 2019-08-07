@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1999, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1999, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -40,6 +40,24 @@ static int	bdb_SeqOpen __P((Tcl_Interp *, int, Tcl_Obj * CONST*,
 static int	heap_callback __P((DB *dbp, const DBT *, const DBT *, DBT *));
 
 #ifdef CONFIG_TEST
+static DB_ENV *thread_env;
+static DB *thread_db;
+static DBC *thread_dbc;
+static DB_TXN *thread_txn;
+
+static int	bdb_ThreadEnvInit __P((Tcl_Interp *, int, Tcl_Obj * CONST*));
+static int	bdb_ThreadCreateDbc __P((Tcl_Interp *, int, Tcl_Obj * CONST*));
+static int	bdb_ThreadDbcGet __P((Tcl_Interp *, int, Tcl_Obj * CONST*));
+static int	bdb_ThreadDbcPut __P((Tcl_Interp *, int, Tcl_Obj * CONST*));
+static int	bdb_ThreadDbcClose __P((Tcl_Interp *, int, Tcl_Obj * CONST*));
+static int	bdb_ThreadTxnBegin __P((Tcl_Interp *, int, Tcl_Obj * CONST*));
+static int	bdb_ThreadTxnCommit __P((Tcl_Interp *, int, Tcl_Obj * CONST*));
+static int	bdb_ThreadTxnAbort __P((Tcl_Interp *, int, Tcl_Obj * CONST*));
+static int	bdb_ThreadEnvDispose __P((Tcl_Interp *, int,
+    Tcl_Obj * CONST*));
+
+static int	bdb_DbConvert __P((Tcl_Interp *, int, Tcl_Obj * CONST*,
+    DBTCL_INFO *));
 static int	bdb_DbUpgrade __P((Tcl_Interp *, int, Tcl_Obj * CONST*));
 static int	bdb_DbVerify __P((Tcl_Interp *, int, Tcl_Obj * CONST*,
     DBTCL_INFO *));
@@ -62,6 +80,7 @@ static int	 tcl_set_partition_dirs
 			__P((Tcl_Interp *, DB *, Tcl_Obj *));
 static int	 tcl_set_partition_keys
 			__P((Tcl_Interp *, DB *, Tcl_Obj *, DBT **));
+static int	tcl_slice_callback __P((const DB *, const DBT *, DBT *));
 #endif
 
 int Db_tcl_Init __P((Tcl_Interp *));
@@ -139,11 +158,22 @@ berkdb_Cmd(notused, interp, objc, objv)
 {
 	static const char *berkdbcmds[] = {
 #ifdef CONFIG_TEST
+		"convert",
 		"dbverify",
 		"getconfig",
 		"handles",
 		"msgtype",
+		"slice_enabled",
 		"upgrade",
+		"thread_env_init",
+		"thread_dbc_create",
+		"thread_dbc_get",
+		"thread_dbc_put",
+		"thread_dbc_close",
+		"thread_txn_begin",
+		"thread_txn_commit",
+		"thread_txn_abort",
+		"thread_env_dispose",
 #endif
 		"dbremove",
 		"dbrename",
@@ -171,11 +201,22 @@ berkdb_Cmd(notused, interp, objc, objv)
 	 */
 	enum berkdbcmds {
 #ifdef CONFIG_TEST
+		BDB_CONVERT,
 		BDB_DBVERIFY,
 		BDB_GETCONFIG,
 		BDB_HANDLES,
 		BDB_MSGTYPE,
+		BDB_SLICEENABLED,
 		BDB_UPGRADE,
+		BDB_THREAD_ENV_INIT,
+		BDB_THREAD_DBC_CREATE,
+		BDB_THREAD_DBC_GET,
+		BDB_THREAD_DBC_PUT,
+		BDB_THREAD_DBC_CLOSE,
+		BDB_THREAD_TXN_BEGIN,
+		BDB_THREAD_TXN_COMMIT,
+		BDB_THREAD_TXN_ABORT,
+		BDB_THREAD_ENV_DISPOSE,
 #endif
 		BDB_DBREMOVE,
 		BDB_DBRENAME,
@@ -213,6 +254,7 @@ berkdb_Cmd(notused, interp, objc, objv)
 	DB_ENV *dbenv;
 	Tcl_Obj *res;
 	int cmdindex, result;
+	u_int32_t slices;
 	char newname[MSG_SIZE];
 
 	COMPQUIET(notused, NULL);
@@ -240,6 +282,18 @@ berkdb_Cmd(notused, interp, objc, objv)
 	res = NULL;
 	switch ((enum berkdbcmds)cmdindex) {
 #ifdef CONFIG_TEST
+	case BDB_CONVERT:
+		snprintf(newname, sizeof(newname), "db%d", db_id);
+		ip = _NewInfo(interp, NULL, newname, I_DB);
+		if (ip != NULL) {
+			result = bdb_DbConvert(interp, objc, objv, ip);
+			_DeleteInfo(ip);
+		} else {
+			Tcl_SetResult(interp, "Could not set up info",
+			    TCL_STATIC);
+			result = TCL_ERROR;
+		}
+		break;
 	case BDB_DBVERIFY:
 		snprintf(newname, sizeof(newname), "db%d", db_id);
 		ip = _NewInfo(interp, NULL, newname, I_DB);
@@ -261,8 +315,54 @@ berkdb_Cmd(notused, interp, objc, objv)
 	case BDB_MSGTYPE:
 		result = bdb_MsgType(interp, objc, objv);
 		break;
+	case BDB_SLICEENABLED:
+		if (db_env_create(&dbenv, 0) == 0) {
+			/* Hide any error messages. */
+			dbenv->set_errcall(dbenv, NULL);
+			dbenv->set_errfile(dbenv, NULL);
+			/* Will return DB_OPNOTSUP if not enabled.*/
+			result = dbenv->get_slice_count(dbenv, &slices);
+			if (result == DB_OPNOTSUP)
+				res = Tcl_NewIntObj(0);
+			else
+				res = Tcl_NewIntObj(1);
+			result = TCL_OK;
+			(void)dbenv->close(dbenv, 0);
+		} else {
+			Tcl_SetResult(interp, "Could not create env.",
+			    TCL_STATIC);
+			result = TCL_ERROR;
+		}
+		break;
 	case BDB_UPGRADE:
 		result = bdb_DbUpgrade(interp, objc, objv);
+		break;
+	case BDB_THREAD_ENV_INIT:
+		result = bdb_ThreadEnvInit(interp, objc, objv);
+		break;
+	case BDB_THREAD_DBC_CREATE:
+		result = bdb_ThreadCreateDbc(interp, objc, objv);
+		break;
+	case BDB_THREAD_DBC_PUT:
+		result = bdb_ThreadDbcPut(interp, objc, objv);
+		break;
+	case BDB_THREAD_DBC_GET:
+		result = bdb_ThreadDbcGet(interp, objc, objv);
+		break;
+	case BDB_THREAD_DBC_CLOSE:
+		result = bdb_ThreadDbcClose(interp, objc, objv);
+		break;
+	case BDB_THREAD_TXN_BEGIN:
+		result = bdb_ThreadTxnBegin(interp, objc, objv);
+		break;
+	case BDB_THREAD_TXN_COMMIT:
+		result = bdb_ThreadTxnCommit(interp, objc, objv);
+		break;
+	case BDB_THREAD_TXN_ABORT:
+		result = bdb_ThreadTxnAbort(interp, objc, objv);
+		break;
+	case BDB_THREAD_ENV_DISPOSE:
+		result = bdb_ThreadEnvDispose(interp, objc, objv);
 		break;
 #endif
 	case BDB_VERSION:
@@ -504,6 +604,7 @@ bdb_EnvOpen(interp, objc, objv, ip, dbenvp)
 		"-mpool_mutex_count",
 		"-mpool_nommap",
 		"-multiversion",
+		"-mutex_failchk_timeout",
 		"-mutex_set_align",
 		"-mutex_set_incr",
 		"-mutex_set_init",
@@ -549,18 +650,25 @@ bdb_EnvOpen(interp, objc, objv, ip, dbenvp)
 		"-create",
 		"-create_dir",
 		"-data_dir",
+		"-database",
+		"-database_len",
 		"-encryptaes",
 		"-encryptany",
 		"-errfile",
 		"-errpfx",
+		"-extfile_db",
 		"-home",
 		"-log_dir",
 		"-metadata_dir",
 		"-mode",
 		"-msgfile",
+		"-msgpfx",
 		"-private",
 		"-recover",
 		"-recover_fatal",
+		"-region_dir",
+		"-rep_site",
+		"-repmgr_ssl_config",
 		"-shm_key",
 		"-system_mem",
 		"-tmp_dir",
@@ -614,6 +722,7 @@ bdb_EnvOpen(interp, objc, objv, ip, dbenvp)
 		TCL_ENV_MUTEXCOUNT,
 		TCL_ENV_MPOOL_NOMMAP,
 		TCL_ENV_MULTIVERSION,
+		TCL_ENV_MUT_FAILCHK_TIMEOUT,
 		TCL_ENV_MUTSETALIGN,
 		TCL_ENV_MUTSETINCR,
 		TCL_ENV_MUTSETINIT,
@@ -659,18 +768,25 @@ bdb_EnvOpen(interp, objc, objv, ip, dbenvp)
 		TCL_ENV_CREATE,
 		TCL_ENV_CREATE_DIR,
 		TCL_ENV_DATA_DIR,
+		TCL_ENV_DATABASE,
+		TCL_ENV_DATABASE_LEN,
 		TCL_ENV_ENCRYPT_AES,
 		TCL_ENV_ENCRYPT_ANY,
 		TCL_ENV_ERRFILE,
 		TCL_ENV_ERRPFX,
+		TCL_ENV_EXTFILE_DB,
 		TCL_ENV_HOME,
 		TCL_ENV_LOG_DIR,
 		TCL_ENV_METADATA_DIR,
 		TCL_ENV_MODE,
 		TCL_ENV_MSGFILE,
+		TCL_ENV_MSGPFX,
 		TCL_ENV_PRIVATE,
 		TCL_ENV_RECOVER,
 		TCL_ENV_RECOVER_FATAL,
+		TCL_ENV_REGION_DIR,
+		TCL_ENV_REP_SITE,
+		TCL_ENV_REPMGR_SSL_CONFIG,
 		TCL_ENV_SHM_KEY,
 		TCL_ENV_SYSTEM_MEM,
 		TCL_ENV_TMP_DIR,
@@ -1007,6 +1123,7 @@ bdb_EnvOpen(interp, objc, objv, ip, dbenvp)
 		case TCL_ENV_TXN_TIME:
 		case TCL_ENV_TXN_TIMEOUT:
 		case TCL_ENV_LOCK_TIMEOUT:
+		case TCL_ENV_MUT_FAILCHK_TIMEOUT:
 		case TCL_ENV_REG_TIMEOUT:
 			if (i >= objc) {
 				Tcl_WrongNumArgs(interp, 2, objv,
@@ -1031,6 +1148,10 @@ bdb_EnvOpen(interp, objc, objv, ip, dbenvp)
 				else if ((enum envopen)optindex ==
 				    TCL_ENV_REG_TIMEOUT)
 					time_flag = DB_SET_REG_TIMEOUT;
+				else if ((enum envopen)optindex ==
+				    TCL_ENV_MUT_FAILCHK_TIMEOUT)
+					time_flag = 
+					    DB_SET_MUTEX_FAILCHK_TIMEOUT;
 				else
 					time_flag = DB_SET_TXN_TIMEOUT;
 
@@ -1045,7 +1166,7 @@ bdb_EnvOpen(interp, objc, objv, ip, dbenvp)
 			break;
 		case TCL_ENV_LOG_BLOB:
 			ret =
-			    dbenv->log_set_config(dbenv, DB_LOG_BLOB, 1);
+			    dbenv->log_set_config(dbenv, DB_LOG_EXT_FILE, 1);
 			result = _ReturnSetup(interp, ret,
 			    DB_RETOK_STD(ret), "log_blob");
 			break;
@@ -1493,6 +1614,19 @@ bdb_EnvOpen(interp, objc, objv, ip, dbenvp)
 			if (result == TCL_OK)
 				FLD_SET(open_flags, DB_INIT_REP);
 			break;
+		case TCL_ENV_REPMGR_SSL_CONFIG:
+			if (i >= objc) {
+				Tcl_WrongNumArgs(interp, 2, objv,
+				    "-repmgr_ssl_config {which value}");
+				result = TCL_ERROR;
+				break;
+			}
+			result = tcl_RepMgrSSLConfig(interp, dbenv, objv[i]);
+			if (result == TCL_OK) {
+				i++;
+				FLD_SET(open_flags, DB_INIT_REP);
+			}
+			break;	
 		case TCL_ENV_SNAPSHOT:
 			FLD_SET(set_flags, DB_TXN_SNAPSHOT);
 			break;
@@ -1647,7 +1781,7 @@ bdb_EnvOpen(interp, objc, objv, ip, dbenvp)
 			result = _GetUInt32(interp, objv[i++], &bytes);
 			if (result == TCL_OK) {
 				_debug_check();
-				ret = dbenv->set_blob_threshold(dbenv,
+				ret = dbenv->set_ext_file_threshold(dbenv,
 				    bytes, 0);
 				result = _ReturnSetup(interp, ret,
 				    DB_RETOK_STD(ret), "set_blob_threshold");
@@ -1710,6 +1844,70 @@ bdb_EnvOpen(interp, objc, objv, ip, dbenvp)
 			ret = dbenv->set_cache_max(dbenv, gbytes, bytes);
 			result = _ReturnSetup(interp, ret, DB_RETOK_STD(ret),
 			    "set_cache_max");
+			break;
+		case TCL_ENV_DATABASE:
+			if (i >= objc) {
+				Tcl_WrongNumArgs(interp, 2, objv,
+				    "?-database numdbs?");
+				result = TCL_ERROR;
+				break;
+			}
+			result = _GetUInt32(interp, objv[i++], &uintarg);
+			if (result == TCL_OK) {
+				_debug_check();
+				ret = dbenv->set_memory_init(dbenv,
+				    DB_MEM_DATABASE, uintarg);
+				result = _ReturnSetup(interp, ret,
+				    DB_RETOK_STD(ret), "database");
+			}
+			break;
+		case TCL_ENV_DATABASE_LEN:
+			if (i >= objc) {
+				Tcl_WrongNumArgs(interp, 2, objv,
+				    "?-database_len namelen?");
+				result = TCL_ERROR;
+				break;
+			}
+			result = _GetUInt32(interp, objv[i++], &uintarg);
+			if (result == TCL_OK) {
+				_debug_check();
+				ret = dbenv->set_memory_init(dbenv,
+				    DB_MEM_DATABASE_LENGTH, uintarg);
+				result = _ReturnSetup(interp, ret,
+				    DB_RETOK_STD(ret), "database_len");
+			}
+			break;
+		case TCL_ENV_EXTFILE_DB:
+			if (i >= objc) {
+				Tcl_WrongNumArgs(interp, 2, objv,
+				    "?-extfile_db numdbs?");
+				result = TCL_ERROR;
+				break;
+			}
+			result = _GetUInt32(interp, objv[i++], &uintarg);
+			if (result == TCL_OK) {
+				_debug_check();
+				ret = dbenv->set_memory_init(dbenv,
+				    DB_MEM_EXTFILE_DATABASE, uintarg);
+				result = _ReturnSetup(interp, ret,
+				    DB_RETOK_STD(ret), "extfile_db");
+			}
+			break;
+		case TCL_ENV_REP_SITE:
+			if (i >= objc) {
+				Tcl_WrongNumArgs(interp, 2, objv,
+				    "?-rep_site numsites?");
+				result = TCL_ERROR;
+				break;
+			}
+			result = _GetUInt32(interp, objv[i++], &uintarg);
+			if (result == TCL_OK) {
+				_debug_check();
+				ret = dbenv->set_memory_init(dbenv,
+				    DB_MEM_REP_SITE, uintarg);
+				result = _ReturnSetup(interp, ret,
+				    DB_RETOK_STD(ret), "rep_site");
+			}
 			break;
 		case TCL_ENV_SHM_KEY:
 			if (i >= objc) {
@@ -1775,8 +1973,8 @@ bdb_EnvOpen(interp, objc, objv, ip, dbenvp)
 				break;
 			}
 			arg = Tcl_GetStringFromObj(objv[i++], NULL);
-			tcl_EnvSetMsgfile(interp, dbenv, ip, arg);
-			break;			
+			result = tcl_EnvSetMsgfile(interp, dbenv, ip, arg);
+			break;
 		case TCL_ENV_ERRPFX:
 			if (i >= objc) {
 				Tcl_WrongNumArgs(interp, 2, objv,
@@ -1787,6 +1985,17 @@ bdb_EnvOpen(interp, objc, objv, ip, dbenvp)
 			arg = Tcl_GetStringFromObj(objv[i++], NULL);
 			_debug_check();
 			result = tcl_EnvSetErrpfx(interp, dbenv, ip, arg);
+			break;
+		case TCL_ENV_MSGPFX:
+			if (i >= objc) {
+				Tcl_WrongNumArgs(interp, 2, objv,
+				    "-msgpfx prefix");
+				result = TCL_ERROR;
+				break;
+			}
+			arg = Tcl_GetStringFromObj(objv[i++], NULL);
+			_debug_check();
+			result = tcl_EnvSetMsgpfx(interp, dbenv, ip, arg);
 			break;
 		case TCL_ENV_ADD_DIR:
 		case TCL_ENV_BLOB_DIR:
@@ -1805,7 +2014,7 @@ bdb_EnvOpen(interp, objc, objv, ip, dbenvp)
 				ret = dbenv->add_data_dir(dbenv, arg);
 				break;
 			case TCL_ENV_BLOB_DIR:
-				ret = dbenv->set_blob_dir(dbenv, arg);
+				ret = dbenv->set_ext_file_dir(dbenv, arg);
 				break;
 			case TCL_ENV_CREATE_DIR:
 				ret = dbenv->set_create_dir(dbenv, arg);
@@ -1844,6 +2053,19 @@ bdb_EnvOpen(interp, objc, objv, ip, dbenvp)
 			ret = dbenv->set_metadata_dir(dbenv, arg);
 			result = _ReturnSetup(interp, ret, DB_RETOK_STD(ret),
 			    "set_metadata_dir");
+			break;
+		case TCL_ENV_REGION_DIR:
+			if (i >= objc) {
+				Tcl_WrongNumArgs(interp, 2, objv,
+					"-region_dir dir");
+				result = TCL_ERROR;
+				break;
+			}
+			arg = Tcl_GetStringFromObj(objv[i++], NULL);
+			_debug_check();
+			ret = dbenv->set_region_dir(dbenv, arg);
+			result = _ReturnSetup(interp, ret, DB_RETOK_STD(ret),
+				"set_region_dir");
 			break;
 		case TCL_ENV_TMP_DIR:
 			if (i >= objc) {
@@ -1980,6 +2202,7 @@ bdb_DbOpen(interp, objc, objv, ip, dbp)
 		"-partition_callback",
 		"-read_uncommitted",
 		"-revsplitoff",
+		"-slice_callback",
 		"-test",
 		"-thread",
 #endif
@@ -2014,6 +2237,7 @@ bdb_DbOpen(interp, objc, objv, ip, dbp)
 		"-maxsize",
 		"-mode",
 		"-msgfile",
+		"-msgpfx",
 		"-multiversion",
 		"-nelem",
 		"-pad",
@@ -2023,6 +2247,7 @@ bdb_DbOpen(interp, objc, objv, ip, dbp)
 		"-recno",
 		"-recnum",
 		"-renumber",
+		"-sliced",
 		"-snapshot",
 		"-source",
 		"-truncate",
@@ -2046,6 +2271,7 @@ bdb_DbOpen(interp, objc, objv, ip, dbp)
 		TCL_DB_PART_CALLBACK,
 		TCL_DB_READ_UNCOMMITTED,
 		TCL_DB_REVSPLIT,
+		TCL_DB_SLICE_CALLBACK,
 		TCL_DB_TEST,
 		TCL_DB_THREAD,
 #endif
@@ -2080,6 +2306,7 @@ bdb_DbOpen(interp, objc, objv, ip, dbp)
 		TCL_DB_MAXSIZE,
 		TCL_DB_MODE,
 		TCL_DB_MSGFILE,
+		TCL_DB_MSGPFX,
 		TCL_DB_MULTIVERSION,
 		TCL_DB_NELEM,
 		TCL_DB_PAD,
@@ -2089,6 +2316,7 @@ bdb_DbOpen(interp, objc, objv, ip, dbp)
 		TCL_DB_RECNO,
 		TCL_DB_RECNUM,
 		TCL_DB_RENUMBER,
+		TCL_DB_SLICED,
 		TCL_DB_SNAPSHOT,
 		TCL_DB_SOURCE,
 		TCL_DB_TRUNCATE,
@@ -2107,7 +2335,7 @@ bdb_DbOpen(interp, objc, objv, ip, dbp)
 	Tcl_Obj **myobjv;
 	u_int32_t gbytes, bytes, open_flags, set_flags, uintarg;
 	int endarg, encenble, i, intarg, mode, myobjc, ncaches, excl, nowait;
-	int optindex, result, ret, set_err, set_msg, set_pfx, subdblen;
+	int optindex, result, ret, set_err, set_msg, set_errpfx, set_msgpfx, subdblen;
 	u_char *subdbtmp;
 	char *arg, *db, *dbr, *passwd, *subdb, *subdbr, msg[MSG_SIZE];
 	size_t nlen;
@@ -2115,7 +2343,7 @@ bdb_DbOpen(interp, objc, objv, ip, dbp)
 	type = DB_UNKNOWN;
 	endarg = encenble = mode = set_err = set_msg = set_flags = 0;
 	nlen = 0;
-	set_pfx = 0;
+	set_errpfx = set_msgpfx = 0;
 	result = TCL_OK;
 	subdbtmp = NULL;
 	keys = NULL;
@@ -2445,6 +2673,22 @@ bdb_DbOpen(interp, objc, objv, ip, dbp)
 		case TCL_DB_REVSPLIT:
 			set_flags |= DB_REVSPLITOFF;
 			break;
+		case TCL_DB_SLICE_CALLBACK:
+			if (i  >= objc) {
+				Tcl_WrongNumArgs(interp, 2, objv,
+					"-slice_callback callback");
+				result = TCL_ERROR;
+				break;
+			}
+
+			ip->i_slice_callback = objv[i++];
+			Tcl_IncrRefCount(ip->i_slice_callback);
+			_debug_check();
+			ret = (*dbp)->set_slice_callback(
+			    *dbp, tcl_slice_callback);
+			result = _ReturnSetup(interp, ret, DB_RETOK_STD(ret),
+			    "set_slice_callback");
+			break;
 		case TCL_DB_TEST:
 			ret = (*dbp)->set_h_hash(*dbp, __ham_test);
 			result = _ReturnSetup(interp, ret,
@@ -2586,6 +2830,9 @@ bdb_DbOpen(interp, objc, objv, ip, dbp)
 			break;
 		case TCL_DB_RENUMBER:
 			set_flags |= DB_RENUMBER;
+			break;
+		case TCL_DB_SLICED:
+			open_flags |= DB_SLICED;
 			break;
 		case TCL_DB_SNAPSHOT:
 			set_flags |= DB_SNAPSHOT;
@@ -2777,7 +3024,7 @@ bdb_DbOpen(interp, objc, objv, ip, dbp)
 			arg = Tcl_GetStringFromObj(objv[i++], NULL);
 			if (arg != NULL && strlen(arg) != 0) {
 				_debug_check();
-				ret = (*dbp)->set_blob_dir(*dbp, arg);
+				ret = (*dbp)->set_ext_file_dir(*dbp, arg);
 				result = _ReturnSetup(interp, ret,
 				    DB_RETOK_STD(ret), "set_blob_dir");
 			}
@@ -2792,7 +3039,7 @@ bdb_DbOpen(interp, objc, objv, ip, dbp)
 			result = _GetUInt32(interp, objv[i++], &bytes);
 			if (result == TCL_OK) {
 				_debug_check();
-				ret = (*dbp)->set_blob_threshold(*dbp,
+				ret = (*dbp)->set_ext_file_threshold(*dbp,
 				    bytes, 0);
 				result = _ReturnSetup(interp, ret,
 				    DB_RETOK_STD(ret), "set_blob_threshold");
@@ -2880,18 +3127,22 @@ bdb_DbOpen(interp, objc, objv, ip, dbp)
 			if (errip->i_msg != NULL &&
 			    errip->i_msg != stdout && errip->i_msg != stderr)
 				(void)fclose(errip->i_msg);
-			if (strcmp(arg, "/dev/stdout") == 0)
+			if (strcmp(arg, "NULL") == 0)
+				errip->i_msg = NULL;
+			else if (strcmp(arg, "/dev/stdout") == 0)
 				errip->i_msg = stdout;
 			else if (strcmp(arg, "/dev/stderr") == 0)
 				errip->i_msg = stderr;
 			else
 				errip->i_msg = fopen(arg, "a");
-			if (errip->i_msg != NULL) {
+			if (strcmp(arg, "NULL") == 0 || errip->i_msg != NULL) {
 				_debug_check();
 				(*dbp)->set_msgfile(*dbp, errip->i_msg);
 				set_msg = 1;
 			}
-			break;			
+			else
+				set_msg = 0;
+			break;
 		case TCL_DB_ERRPFX:
 			if (i >= objc) {
 				Tcl_WrongNumArgs(interp, 2, objv,
@@ -2916,7 +3167,34 @@ bdb_DbOpen(interp, objc, objv, ip, dbp)
 			if (errip->i_errpfx != NULL) {
 				_debug_check();
 				(*dbp)->set_errpfx(*dbp, errip->i_errpfx);
-				set_pfx = 1;
+				set_errpfx = 1;
+			}
+			break;
+		case TCL_DB_MSGPFX:
+			if (i >= objc) {
+				Tcl_WrongNumArgs(interp, 2, objv,
+				    "-msgpfx prefix");
+				result = TCL_ERROR;
+				break;
+			}
+			arg = Tcl_GetStringFromObj(objv[i++], NULL);
+			/*
+			 * If the user already set one, free it.
+			 */
+			if (errip->i_msgpfx != NULL) {
+				(*dbp)->set_msgpfx(*dbp, NULL);
+				__os_free(NULL, errip->i_msgpfx);
+			}
+			if ((ret = __os_strdup((*dbp)->env,
+			    arg, &errip->i_msgpfx)) != 0) {
+				result = _ReturnSetup(interp, ret,
+				    DB_RETOK_STD(ret), "__os_strdup");
+				break;
+			}
+			if (errip->i_msgpfx != NULL) {
+				_debug_check();
+				(*dbp)->set_msgpfx(*dbp, errip->i_msgpfx);
+				set_msgpfx = 1;
 			}
 			break;
 		case TCL_DB_ENDARG:
@@ -3085,7 +3363,7 @@ bdb_DbOpen(interp, objc, objv, ip, dbp)
 			subdbr[nlen] = '2';
 
 		/* Disable blobs in case they are enabled environment wide. */
-		(void)hsdbp->set_blob_threshold(hsdbp, 0, 0);
+		(void)hsdbp->set_ext_file_threshold(hsdbp, 0, 0);
 		/* 
 		 * Use same flags as heap, note: heap does not use of 
 		 * DB_AFTER/DB_BEFORE on cursor puts, but recno can.
@@ -3146,10 +3424,17 @@ error:
 	if (dbr)
 		__os_free(env, dbr);
 	if (result == TCL_ERROR) {
-		if (set_pfx && errip && errip->i_errpfx != NULL) {
-			(*dbp)->set_errpfx(*dbp, NULL);
-			__os_free(env, errip->i_errpfx);
-			errip->i_errpfx = NULL;
+		if (errip) {
+			if (set_errpfx && errip->i_errpfx != NULL) {
+				(*dbp)->set_errpfx(*dbp, NULL);
+				__os_free(env, errip->i_errpfx);
+				errip->i_errpfx = NULL;
+			}
+			if (set_msgpfx && errip->i_msgpfx != NULL) {
+				(*dbp)->set_msgpfx(*dbp, NULL);
+				__os_free(env, errip->i_msgpfx);
+				errip->i_msgpfx = NULL;
+			}
 		}
 		(void)(*dbp)->close(*dbp, 0);
 		if (type == DB_HEAP) {
@@ -3654,7 +3939,7 @@ bdb_DbRemove(interp, objc, objv)
 		}
 
 		if (bdir != NULL) {
-			ret = dbp->set_blob_dir(dbp, bdir);
+			ret = dbp->set_ext_file_dir(dbp, bdir);
 			result = _ReturnSetup(interp, ret, DB_RETOK_STD(ret),
 			    "set_blob_dir");
 			if (ret != 0)
@@ -4725,6 +5010,9 @@ bdb_GetConfig(interp, objc, objv)
 #ifdef DIAGNOSTIC
 	ADD_CONFIG_NAME("diagnostic");
 #endif
+#ifdef HAVE_FAILCHK_BROADCAST
+	ADD_CONFIG_NAME("failchk_broadcast");
+#endif
 #ifdef HAVE_PARTITION
 	ADD_CONFIG_NAME("partition");
 #endif
@@ -4742,6 +5030,9 @@ bdb_GetConfig(interp, objc, objv)
 #endif
 #ifdef HAVE_REPLICATION_THREADS
 	ADD_CONFIG_NAME("repmgr");
+#endif
+#ifdef HAVE_REPMGR_SSL
+	ADD_CONFIG_NAME("repmgr_ssl");
 #endif
 #ifdef HAVE_VERIFY
 	ADD_CONFIG_NAME("verify");
@@ -4804,8 +5095,9 @@ bdb_MsgType(interp, objc, objv)
 	 * Add "no_type" for 0 so that we directly index.
 	 */
 	static const char *msgnames[] = {
-		"no_type", "alive", "alive_req", "all_req",
-		"bulk_log", "bulk_page",
+		"no_type", "alive", "alive_req", "all_req", "blob_all_req",
+		"blob_chunk", "blob_chunk_req", "blob_update",
+		"blob_update_req", "bulk_log", "bulk_page",
 		"dupmaster", "file", "file_fail", "file_req", "lease_grant",
 		"log", "log_more", "log_req", "master_req", "newclient",
 		"newfile", "newmaster", "newsite", "page",
@@ -4845,6 +5137,233 @@ bdb_MsgType(interp, objc, objv)
 }
 
 /*
+ * bdb_DbConvert --
+ *	Implements the DB->convert command.
+ */
+static int
+bdb_DbConvert(interp, objc, objv, ip)
+	Tcl_Interp *interp;		/* Interpreter */
+	int objc;			/* How many arguments? */
+	Tcl_Obj *CONST objv[];		/* The argument objects */
+	DBTCL_INFO *ip;
+{
+	static const char *envoptions[] = {
+		"-env",	NULL
+	};
+	enum env_opt {
+		TCL_CONV_ENV
+	};
+	static const char *options[] = {
+		"-env", "-P", "-order", "-partition",
+		"-partition_callback", "--", NULL
+	};
+	enum convert_opt {
+		TCL_CONV_ENV_IGNORE,
+		TCL_CONV_PASSWORD,
+		TCL_CONV_ORDER,
+		TCL_CONV_PARTITION,
+		TCL_CONV_PART_CALLBACK,
+		TCL_CONV_ENDARG
+	};
+	DB_ENV *dbenv;
+	DB *dbp;
+	ENV *env;
+	DBT *keys;
+	u_int32_t byte_order;
+	int endarg, i, optindex, result, ret;
+	u_int32_t uintarg, nlen;
+	char *arg, *db, *dbr, *passwd;
+
+	dbenv = NULL;
+	dbp = NULL;
+	env = NULL;
+	result = TCL_OK;
+	arg = db = dbr = passwd = NULL;
+	endarg = ret = nlen = 0;
+	byte_order = __db_isbigendian() ? 4321 : 1234;
+
+	if (objc < 2) {
+		Tcl_WrongNumArgs(interp, 2, objv, "?args? filename");
+		return (TCL_ERROR);
+	}
+
+	/*
+	 * We must first parse for the environment flag, since that
+	 * is needed for db_create.  Then create the db handle.
+	 */
+	i = 2;
+	while (i < objc) {
+		if (Tcl_GetIndexFromObj(interp, objv[i++], envoptions,
+		    "option", TCL_EXACT, &optindex) != TCL_OK) {
+			/*
+			 * Reset the result so we don't get
+			 * an errant error message if there is another error.
+			 */
+			Tcl_ResetResult(interp);
+			continue;
+		}
+		switch ((enum env_opt)optindex) {
+		case TCL_CONV_ENV:
+			arg = Tcl_GetStringFromObj(objv[i], NULL);
+			dbenv = NAME_TO_ENV(arg);
+			if (dbenv == NULL) {
+				Tcl_SetResult(interp,
+				    "db open: illegal environment", TCL_STATIC);
+				return (TCL_ERROR);
+			}
+		}
+		break;
+	}
+
+	/*
+	 * Create the db handle before parsing the args
+	 * since we'll be modifying the database options as we parse.
+	 */
+	ret = db_create(&dbp, dbenv, 0);
+	if (ret)
+		return (_ReturnSetup(interp, ret, DB_RETOK_STD(ret),
+		    "db_create"));
+
+	i = 2;
+	while (i < objc) {
+		if (Tcl_GetIndexFromObj(interp, objv[i], options,
+		    "option", TCL_EXACT, &optindex) != TCL_OK) {
+			arg = Tcl_GetStringFromObj(objv[i], NULL);
+			if (arg[0] == '-') {
+				result = IS_HELP(objv[i]);
+				goto error;
+			} else
+				Tcl_ResetResult(interp);
+			break;
+		}
+		i++;
+		switch ((enum convert_opt)optindex) {
+		case TCL_CONV_ENV_IGNORE:
+			/*
+			 * Already parsed this, skip it and the env pointer.
+			 */
+			i++;
+			continue;
+		case TCL_CONV_PASSWORD:
+			/* Make sure we have an arg to check against! */
+			if (i >= objc) {
+				Tcl_WrongNumArgs(interp, 2, objv,
+				    "?-P passwd?");
+				return (TCL_ERROR);
+			}
+			passwd = Tcl_GetStringFromObj(objv[i++], NULL);
+			break;
+		case TCL_CONV_ORDER:
+			result = _GetUInt32(interp, objv[i++], &byte_order);
+			break;
+		case TCL_CONV_PARTITION:
+			if (i >= objc) {
+				Tcl_WrongNumArgs(interp, 2, objv,
+				    "-partition {key list}");
+				result = TCL_ERROR;
+				break;
+			}
+			_debug_check();
+			ret = tcl_set_partition_keys(interp, dbp,
+			    objv[i++], &keys);
+			result = _ReturnSetup(interp, ret,
+			    DB_RETOK_STD(ret), "set_partition_keys");
+			break;
+		case TCL_CONV_PART_CALLBACK:
+			if (i + 1 >= objc) {
+				Tcl_WrongNumArgs(interp, 2, objv,
+				    "-partition_callback  numparts callback");
+				result = TCL_ERROR;
+				break;
+			}
+
+			/*
+			 * Store the object containing the procedure name.
+			 * See TCL_DB_BTCOMPARE.
+			 */
+			result = _GetUInt32(interp, objv[i++], &uintarg);
+			if (result != TCL_OK)
+				break;
+			ip->i_part_callback = objv[i++];
+			Tcl_IncrRefCount(ip->i_part_callback);
+			_debug_check();
+			ret = dbp->set_partition(
+			     dbp, uintarg, NULL, tcl_part_callback);
+			result = _ReturnSetup(interp, ret, DB_RETOK_STD(ret),
+			    "set_partition_callback");
+			break;
+		case TCL_CONV_ENDARG:
+			endarg = 1;
+			break;
+		}
+		if (result != TCL_OK)
+			goto error;
+		if (endarg)
+			break;
+	}
+	if (result != TCL_OK)
+		goto error;
+	/*
+	 * The remaining arg is the db filename.
+	 */
+	if (i == (objc - 1))
+		db = Tcl_GetStringFromObj(objv[i++], NULL);
+	else {
+		Tcl_WrongNumArgs(interp, 2, objv, "?args? filename");
+		result = TCL_ERROR;
+		goto error;
+	}
+
+	/*
+	 * XXX
+	 * Remove restriction if error handling not tied to env.
+	 *
+	 * The DB->set_err* functions overwrite the environment.  So, if
+	 * we are using an env, don't overwrite it; if not using an env,
+	 * then configure error handling.
+	 */
+	if (dbenv == NULL) {
+		dbp->set_errpfx(dbp, "DbConvert");
+		dbp->set_errcall(dbp, _ErrorFunc);
+	}
+	if (passwd != NULL) {
+		if ((ret = dbp->set_encrypt(
+		    dbp, passwd, DB_ENCRYPT_AES)) != 0 ) {
+			result = _ReturnSetup(interp, ret, DB_RETOK_STD(ret),
+			    "set_encrypt");
+			goto error;
+		}
+	}
+	ret = dbp->convert(dbp, db, byte_order);
+
+	if (ret == 0 && db != NULL) {
+		nlen = strlen(db);
+		if ((ret = __os_malloc(env, nlen + 2, &dbr)) != 0) {
+			Tcl_SetResult(interp, db_strerror(ret),
+			    TCL_STATIC);
+			return (0);
+		}
+		memcpy(dbr, db, nlen);
+		dbr[nlen] = '1';
+		dbr[nlen+1] = '\0';
+		/* If the associated heap databases exist, convert them. */
+		if (__os_exists(env, dbr, NULL) == 0) {
+			if ((ret = dbp->convert(dbp, dbr, byte_order)) != 0)
+				goto end;
+			dbr[nlen] = '2';
+			ret = dbp->convert(dbp, dbr, byte_order);
+		}
+	}
+end:	result = _ReturnSetup(interp, ret, DB_RETOK_STD(ret), "db convert");
+error:
+	if (dbp != NULL)
+		(void)dbp->close(dbp, 0);
+	if (dbr != NULL)
+		__os_free(env, dbr);
+	return (result);
+}
+
+/*
  * bdb_DbUpgrade --
  *	Implements the DB->upgrade command.
  */
@@ -4855,23 +5374,27 @@ bdb_DbUpgrade(interp, objc, objv)
 	Tcl_Obj *CONST objv[];		/* The argument objects */
 {
 	static const char *bdbupg[] = {
-		"-dupsort", "-env", "--", NULL
+		"-dupsort", "-env", "-P", "--", NULL
 	};
 	enum bdbupg {
 		TCL_DBUPG_DUPSORT,
 		TCL_DBUPG_ENV,
+		TCL_DBUPG_PASSWORD,
 		TCL_DBUPG_ENDARG
 	};
 	DB_ENV *dbenv;
 	DB *dbp;
+	ENV *env;
 	u_int32_t flags;
 	int endarg, i, optindex, result, ret;
-	char *arg, *db;
+	char *arg, *db, *dbr, *passwd;
+	size_t nlen;
 
 	dbenv = NULL;
 	dbp = NULL;
+	env = NULL;
 	result = TCL_OK;
-	db = NULL;
+	db = dbr = passwd = NULL;
 	flags = endarg = 0;
 
 	if (objc < 2) {
@@ -4905,6 +5428,16 @@ bdb_DbUpgrade(interp, objc, objv)
 				    TCL_STATIC);
 				return (TCL_ERROR);
 			}
+			env = dbenv->env;
+			break;
+		case TCL_DBUPG_PASSWORD:
+			/* Make sure we have an arg to check against! */
+			if (i >= objc) {
+				Tcl_WrongNumArgs(interp, 2, objv,
+				    "?-P passwd?");
+				return (TCL_ERROR);
+			}
+			passwd = Tcl_GetStringFromObj(objv[i++], NULL);
 			break;
 		case TCL_DBUPG_ENDARG:
 			endarg = 1;
@@ -4950,11 +5483,379 @@ bdb_DbUpgrade(interp, objc, objv)
 		dbp->set_errpfx(dbp, "DbUpgrade");
 		dbp->set_errcall(dbp, _ErrorFunc);
 	}
+	if (passwd != NULL) {
+		if ((ret = dbp->set_encrypt(
+		    dbp, passwd, DB_ENCRYPT_AES)) != 0 ) {
+			result = _ReturnSetup(interp, ret, DB_RETOK_STD(ret),
+			    "set_encrypt");
+			goto error;
+		}
+	}
 	ret = dbp->upgrade(dbp, db, flags);
-	result = _ReturnSetup(interp, ret, DB_RETOK_STD(ret), "db upgrade");
+
+	if (ret == 0 && db != NULL) {
+		nlen = strlen(db);
+		if ((ret = __os_malloc(env, nlen + 2, &dbr)) != 0) {
+			Tcl_SetResult(interp, db_strerror(ret),
+			    TCL_STATIC);
+			return (0);
+		}
+		memcpy(dbr, db, nlen);
+		dbr[nlen] = '1';
+		dbr[nlen+1] = '\0';
+		/* If the associated heap databases exist, upgrade them. */
+		if (__os_exists(env, dbr, NULL) == 0) {
+			if ((ret = dbp->upgrade(dbp, dbr, flags)) != 0)
+				goto end;
+			dbr[nlen] = '2';
+			ret = dbp->upgrade(dbp, dbr, flags);
+		}
+	}
+end:	result = _ReturnSetup(interp, ret, DB_RETOK_STD(ret), "db upgrade");
 error:
 	if (dbp)
 		(void)dbp->close(dbp, 0);
+	if (dbr)
+		__os_free(env, dbr);
+	return (result);
+}
+
+/*
+ * bdb_ThreadEnvInit --
+ *	Initialize the static pointers thread_env and thread_db.
+ */
+static int
+bdb_ThreadEnvInit(interp, objc, objv)
+	Tcl_Interp *interp;		/* Interpreter */
+	int objc;			/* How many arguments? */
+	Tcl_Obj *CONST objv[];		/* The argument objects */
+{
+	int ret, result;
+	int env_flags, db_flags;
+	char *home;
+
+	home = NULL;
+	thread_env = NULL;
+	thread_db = NULL;
+	thread_dbc = NULL;
+	thread_txn = NULL;
+
+	if (objc < 3) {
+		Tcl_WrongNumArgs(interp, 2, objv, "testdir");
+		return (TCL_ERROR);
+	}
+	home = Tcl_GetStringFromObj(objv[objc-1], NULL);
+
+	if ((ret = db_env_create(&thread_env, 0)) != 0)
+		goto end;
+
+	thread_env->set_errcall(thread_env, _ErrorFunc);
+
+	env_flags = DB_CREATE | DB_INIT_LOCK | 
+	    DB_INIT_MPOOL | DB_INIT_LOG | DB_INIT_TXN | DB_THREAD;
+	if ((ret = 
+	    thread_env->open(thread_env, home, env_flags, 0644)) != 0)
+		goto end;
+
+	if ((ret = db_create(&thread_db, thread_env, 0)) != 0)
+		goto end;
+
+	db_flags = DB_CREATE | DB_AUTO_COMMIT | DB_THREAD;
+	if ((ret = thread_db->open(thread_db, 
+	    NULL, "thread.db", NULL, DB_BTREE, db_flags, 0644)) != 0)
+		goto end;
+
+end: 	result = _ReturnSetup(interp, 
+	    ret, DB_RETOK_STD(ret), "thread_env_init");
+
+	if (result != TCL_OK) {
+		if (thread_db != NULL) {
+			(void)thread_db->close(thread_db, 0);
+			thread_db = NULL;
+		}
+		if (thread_env != NULL) {
+			(void)thread_env->close(thread_env, 0);
+			thread_env = NULL;
+		}
+	}
+	return (result);
+}
+
+/*
+ * bdb_ThreadCreateDbc --
+ *	DB->cursor(DB *db, 
+ *	    DB_TXN *txnid, DBC **cursorp, u_int32_t flags)
+ */
+static int
+bdb_ThreadCreateDbc(interp, objc, objv)
+	Tcl_Interp *interp;		/* Interpreter */
+	int objc;			/* How many arguments? */
+	Tcl_Obj *CONST objv[];		/* The argument objects */
+{
+	int flag;
+	int ret, result;
+
+	flag = 0;
+
+	if (thread_txn == NULL || thread_db == NULL) {
+		ret = EINVAL;
+		goto end;
+	}
+
+	if (objc < 2) {
+		Tcl_WrongNumArgs(interp, 2, objv, "");
+		return (TCL_ERROR);
+	}
+
+	ret = thread_db->cursor(thread_db, thread_txn, &thread_dbc, flag);
+end:	result = 
+	    _ReturnSetup(interp, ret, DB_RETOK_STD(ret), "thread_dbc_create");
+	return (result);
+}
+
+/*
+ * bdb_ThreadDbcPut --
+ *	Dbcursor->put(DBC *DBcursor, 
+ *	    DBT *key, DBT *data, u_int32_t flags)
+ */
+static int
+bdb_ThreadDbcPut(interp, objc, objv)
+	Tcl_Interp *interp;		/* Interpreter */
+	int objc;			/* How many arguments? */
+	Tcl_Obj *CONST objv[];		/* The argument objects */
+{
+	int ret, result;
+	int freekey, freedata;
+	DBT key, data;
+	void *ktmp, *dtmp;
+
+	freekey = freedata = 0;
+
+	if (thread_db == NULL || thread_dbc == NULL) {
+		ret = EINVAL;
+		goto end;
+	}
+
+	if (objc < 4) {
+		Tcl_WrongNumArgs(interp, 2, objv, "key data");
+		return (TCL_ERROR);
+	}
+
+	memset(&key, 0, sizeof(key));
+	memset(&data, 0, sizeof(data));
+
+	if ((ret = _CopyObjBytes(interp, 
+	    objv[objc-2], &ktmp, &key.size, &freekey)) != 0)
+		goto end;
+	key.data = ktmp;
+
+	if ((ret = _CopyObjBytes(interp, 
+	    objv[objc-1], &dtmp, &data.size, &freedata)) != 0)
+		goto end;
+	data.data = dtmp;
+
+	ret = thread_dbc->put(thread_dbc, &key, &data, DB_KEYFIRST);
+end: 	result = 
+	    _ReturnSetup(interp, ret, DB_RETOK_DBCPUT(ret), "thread_dbc_put");
+
+	if (freedata)
+		__os_free(NULL, dtmp);
+	if (freekey)
+		__os_free(NULL, ktmp);
+	return (result);
+}
+
+/*
+ * bdb_ThreadDbcGet --
+ *	DBcursor->get(DBC *DBcursor, 
+ *	    DBT *key, DBT *data, u_int32_t flags)
+ */
+static int
+bdb_ThreadDbcGet(interp, objc, objv)
+	Tcl_Interp *interp;		/* Interpreter */
+	int objc;			/* How many arguments? */
+	Tcl_Obj *CONST objv[];		/* The argument objects */
+{
+	int ret, result;
+	int freekey;
+	DBT key, data;
+	void *ktmp;
+
+	Tcl_Obj *retlist;
+	retlist = Tcl_NewListObj(0, NULL);
+
+	freekey = 0;
+	ktmp = NULL;
+
+	if (objc < 3) {
+		Tcl_WrongNumArgs(interp, 2, objv, "key");
+		return (TCL_ERROR);
+	}
+
+	if (thread_db == NULL || thread_dbc == NULL) {
+		ret = EINVAL;
+		goto end;
+	}
+
+	memset(&key, 0, sizeof(key));
+	memset(&data, 0, sizeof(data));
+
+	if ((ret = _CopyObjBytes(interp, 
+	    objv[objc-1], &ktmp, &key.size, &freekey)) != 0)
+		goto end;
+	key.data = ktmp;
+
+	ret = thread_dbc->get(thread_dbc, &key, &data, DB_SET);
+	if (ret != 0)
+		goto end;
+
+	result = _SetListElem(interp, 
+	    retlist, key.data, key.size, data.data, data.size);
+	if (result == TCL_OK)
+		Tcl_SetObjResult(interp, retlist);
+	if (freekey)
+		__os_free(NULL, ktmp);
+	return (result);
+
+end:	result = 
+	    _ReturnSetup(interp, ret, DB_RETOK_DBCGET(ret), "thread_dbc_get");
+
+	
+	if (freekey)
+		__os_free(NULL, ktmp);
+	return (result);
+}
+
+/*
+ * bdb_ThreadDbcClose --
+ *	DBcursor->close(DBC *DBcursor)
+ */
+static int
+bdb_ThreadDbcClose (interp, objc, objv)
+	Tcl_Interp *interp;	/* Interpreter */
+	int objc;	 	/* How many arguments? */
+	Tcl_Obj *CONST objv[];	/* The argument objects */
+{
+	int ret, result;
+
+	if (thread_dbc == NULL) {
+		ret = EINVAL;
+		goto end;
+	}
+	(void)thread_dbc->close(thread_dbc);
+	thread_dbc = NULL;
+
+end:	result = 
+	    _ReturnSetup(interp, 0, DB_RETOK_STD(0), "thread_dbc_close");
+	return (result);
+}
+
+/*
+ * bdb_ThreadTxnBegin --
+ *	DB_TXN->txn_begin(DB_ENV *env, 
+ *	    DB_TXN *parent, DB_TXN **tid, u_int32_t flags)
+ */
+static int
+bdb_ThreadTxnBegin(interp, objc, objv)
+	Tcl_Interp *interp;		/* Interpreter */
+	int objc;			/* How many arguments? */
+	Tcl_Obj *CONST objv[];		/* The argument objects */
+{
+	int ret, result;
+	if (thread_env == NULL) {
+		ret = EINVAL;
+		goto end;
+	}
+	ret = thread_env->txn_begin(thread_env, NULL, &thread_txn, 0);
+
+end:	result = 
+	    _ReturnSetup(interp, ret, DB_RETOK_STD(ret), "thread_txn_begin");
+	return (result);
+}
+
+/*
+ * bdb_ThreadTxnCommit --
+ *	DB_TXN->txn_commit(DB_TXN *tid, u_int32_t flags)
+ */
+static int
+bdb_ThreadTxnCommit(interp, objc, objv)
+	Tcl_Interp *interp;		/* Interpreter */
+	int objc;			/* How many arguments? */
+	Tcl_Obj *CONST objv[];		/* The argument objects */
+{
+	int ret, result;
+	if (thread_txn == NULL) {
+		ret = EINVAL;
+		goto end;
+	}
+
+	if ((ret = thread_txn->commit(thread_txn, 0)) != 0)
+		goto end;
+	thread_txn = NULL;
+
+end:	result = 
+	    _ReturnSetup(interp, ret, DB_RETOK_STD(ret), "thread_txn_commit");
+	return (result);
+}
+
+/*
+ * bdb_ThreadTxnAbort --
+ *	DB_TXN->abort(DB_TXN *tid)
+ */
+static int
+bdb_ThreadTxnAbort(interp, objc, objv)
+	Tcl_Interp *interp;		/* Interpreter */
+	int objc;			/* How many arguments? */
+	Tcl_Obj *CONST objv[];		/* The argument objects */
+{
+	int ret, result;
+
+	if (thread_txn == NULL) {
+		ret = EINVAL;
+		goto end;
+	}
+
+	if ((ret = thread_txn->abort(thread_txn)) != 0)
+		goto end;
+	thread_txn = NULL;
+
+end:	result = 
+	    _ReturnSetup(interp, ret, DB_RETOK_STD(ret), "thread_txn_abort");
+	return (result);
+}
+
+/*
+ * bdb_ThreadEnvDispose --
+ *	Dispose all static handles including 
+ *	    thread_env, thread_db, thread_dbc and thread_txn.
+ */
+static int
+bdb_ThreadEnvDispose(interp, objc, objv)
+	Tcl_Interp *interp;		/* Interpreter */
+	int objc;			/* How many arguments? */
+	Tcl_Obj *CONST objv[];		/* The argument objects */
+{
+	int result;
+
+	if (thread_txn != NULL) {
+		(void)thread_txn->abort(thread_txn);
+		thread_txn = NULL;
+	}
+	if (thread_dbc != NULL) {
+		(void)thread_dbc->close(thread_dbc);
+		thread_dbc = NULL;
+	}
+	if (thread_db != NULL) {
+		(void)thread_db->close(thread_db, 0);
+		thread_db = NULL;
+	}
+	if (thread_env != NULL) {
+		(void)thread_env->close(thread_env, 0);
+		thread_env = NULL;
+	}
+
+	result = 
+	    _ReturnSetup(interp, 0, DB_RETOK_STD(0), "thread_env_dispose");
 	return (result);
 }
 
@@ -5351,6 +6252,50 @@ err:	env = dbenv->env;
 
 	return (1);
 }
+
+/*
+ * tcl_slice_callback --
+ *	Callback for slices.
+ */
+static int
+tcl_slice_callback(dbp, key, slice)
+	const DB *dbp;
+	const DBT *key;
+	DBT *slice;
+{
+	DBTCL_INFO *ip;
+	Tcl_Interp *interp;
+	Tcl_Obj *objv[2], *robj;
+	int len, result;
+	void *retbuf;
+
+	ip = (DBTCL_INFO *)dbp->api_internal;
+	interp = ip->i_interp;
+	objv[0] = ip->i_slice_callback;
+
+	objv[1] = Tcl_NewByteArrayObj(key->data, (int)key->size);
+	Tcl_IncrRefCount(objv[1]);
+
+	result = Tcl_EvalObjv(interp, 2, objv, 0);
+	Tcl_DecrRefCount(objv[1]);
+	if (result != TCL_OK)
+		goto err;
+
+	robj = Tcl_GetObjResult(interp);
+	retbuf = Tcl_GetByteArrayFromObj(robj, &len);
+	if (__os_umalloc(dbp->env, (size_t)len, &slice->data) != 0)
+		goto err;
+	memcpy(slice->data, retbuf, (size_t)len);
+	slice->size = (u_int32_t)len;
+	F_SET(slice, DB_DBT_APPMALLOC);
+	return (0);
+
+err:	__db_errx(dbp->env, "Tcl slice_callback callback failed");
+	(void)__env_panic(dbp->env, DB_RUNRECOVERY);
+	return (0);
+}
+
+
 #endif
 
 #ifdef CONFIG_TEST

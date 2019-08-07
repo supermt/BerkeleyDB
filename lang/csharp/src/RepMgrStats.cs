@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2009, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2009, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  */
 using System;
@@ -26,7 +26,7 @@ namespace BerkeleyDB {
         /// </summary>
         public ulong DroppedConnections { get { return st.st_connection_drop; } }
         /// <summary>
-        /// # msgs discarded due to excessive queue length.
+        /// Number of messages discarded due to excessive queue length.
         /// </summary>
         public ulong DroppedMessages { get { return st.st_msgs_dropped; } }
         /// <summary>
@@ -34,17 +34,33 @@ namespace BerkeleyDB {
         /// </summary>
         public ulong FailedConnections { get { return st.st_connect_fail; } }
         /// <summary>
-        /// # of insufficiently ack'ed msgs. 
+        /// Number of insufficiently acknowledged messages. 
         /// </summary>
         public ulong FailedMessages { get { return st.st_perm_failed; } }
         /// <summary>
-        /// # msgs queued for network delay. 
+        /// Number of messages queued for network delay. 
         /// </summary>
         public ulong QueuedMessages { get { return st.st_msgs_queued; } }
+        /// <summary>
+        /// Incoming queue size: Gigabytes.
+        /// </summary>
+        public ulong IncomingQueueGBytes { get { return st.st_incoming_queue_gbytes; } }
+        /// <summary>
+        /// Incoming queue size: Gytes.
+        /// </summary>
+        public ulong IncomingQueueBytes { get { return st.st_incoming_queue_bytes; } }
+        /// <summary>
+        /// Number of msgs discarded due to incoming queue full.
+        /// </summary>
+        public ulong IncomingDroppedMessages { get { return st.st_incoming_msgs_dropped; } }
         /// <summary>
         /// Number of currently active election threads
         /// </summary>
         public uint ElectionThreads { get { return st.st_elect_threads; } }
+        /// <summary>
+        /// Earliest log file needed by replication group sites.
+        /// </summary>
+        public uint GroupStableLogFile { get { return st.st_group_stable_log_file; } }
         /// <summary>
         /// Election threads for which space is reserved
         /// </summary>
@@ -54,6 +70,10 @@ namespace BerkeleyDB {
         /// </summary>
         public uint ParticipantSites { get { return st.st_site_participants; } }
         /// <summary>
+        /// Replication manager polling method.
+        /// </summary>
+        public uint PollingMethod { get { return st.st_polling_method; } }
+        /// <summary>
         /// Total number of replication group sites.
         /// </summary>
         public uint TotalSites { get { return st.st_site_total; } }
@@ -61,6 +81,13 @@ namespace BerkeleyDB {
         /// Number of replication group view sites.
         /// </summary>
         public uint ViewSites { get { return st.st_site_views; } }
-
+        /// <summary>
+        /// Total number of outgoing write operations forwarded by this client.
+        /// </summary>
+        public ulong WriteOpsForwarded { get { return st.st_write_ops_forwarded; } }
+        /// <summary>
+        /// Total number of incoming forwarded write operations received by this master.
+        /// </summary>
+        public ulong WriteOpsReceived { get { return st.st_write_ops_received; } }
     }
 }

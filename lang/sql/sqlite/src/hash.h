@@ -1,4 +1,10 @@
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2001 September 22
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -12,8 +18,8 @@
 ** This is the header file for the generic hash-table implementation
 ** used in SQLite.
 */
-#ifndef _SQLITE_HASH_H_
-#define _SQLITE_HASH_H_
+#ifndef SQLITE_HASH_H
+#define SQLITE_HASH_H
 
 /* Forward declarations of structures. */
 typedef struct Hash Hash;
@@ -59,15 +65,15 @@ struct Hash {
 struct HashElem {
   HashElem *next, *prev;       /* Next and previous elements in the table */
   void *data;                  /* Data associated with this element */
-  const char *pKey; int nKey;  /* Key associated with this element */
+  const char *pKey;            /* Key associated with this element */
 };
 
 /*
 ** Access routines.  To delete, insert a NULL pointer.
 */
 void sqlite3HashInit(Hash*);
-void *sqlite3HashInsert(Hash*, const char *pKey, int nKey, void *pData);
-void *sqlite3HashFind(const Hash*, const char *pKey, int nKey);
+void *sqlite3HashInsert(Hash*, const char *pKey, void *pData);
+void *sqlite3HashFind(const Hash*, const char *pKey);
 void sqlite3HashClear(Hash*);
 
 /*
@@ -93,4 +99,4 @@ void sqlite3HashClear(Hash*);
 */
 /* #define sqliteHashCount(H)  ((H)->count) // NOT USED */
 
-#endif /* _SQLITE_HASH_H_ */
+#endif /* SQLITE_HASH_H */

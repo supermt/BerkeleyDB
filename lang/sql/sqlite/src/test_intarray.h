@@ -1,4 +1,10 @@
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2009 November 10
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -75,6 +81,8 @@
 ** action to free the intarray objects.
 */
 #include "sqlite3.h"
+#ifndef SQLITE_INTARRAY_H
+#define SQLITE_INTARRAY_H
 
 /*
 ** Make sure we can call this stuff from C++.
@@ -100,7 +108,7 @@ typedef struct sqlite3_intarray sqlite3_intarray;
 ** explicitly by the application, the virtual table will be dropped implicitly
 ** by the system when the database connection is closed.
 */
-int sqlite3_intarray_create(
+SQLITE_API int sqlite3_intarray_create(
   sqlite3 *db,
   const char *zName,
   sqlite3_intarray **ppReturn
@@ -113,7 +121,7 @@ int sqlite3_intarray_create(
 ** any query against the corresponding virtual table.  If the integer
 ** array does change or is deallocated undefined behavior will result.
 */
-int sqlite3_intarray_bind(
+SQLITE_API int sqlite3_intarray_bind(
   sqlite3_intarray *pIntArray,   /* The intarray object to bind to */
   int nElements,                 /* Number of elements in the intarray */
   sqlite3_int64 *aElements,      /* Content of the intarray */
@@ -123,3 +131,4 @@ int sqlite3_intarray_bind(
 #ifdef __cplusplus
 }  /* End of the 'extern "C"' block */
 #endif
+#endif /* SQLITE_INTARRAY_H */

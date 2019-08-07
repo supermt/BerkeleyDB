@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -135,6 +135,7 @@ __memp_fget(dbmfp, pgnoaddr, ip, txn, flags, addrp)
 #ifdef DIAGNOSTIC
 	DB_LOCKTAB *lt;
 	DB_LOCKER *locker;
+	int pagelock_err;
 #endif
 
 	*(void **)addrp = NULL;
@@ -155,7 +156,7 @@ __memp_fget(dbmfp, pgnoaddr, ip, txn, flags, addrp)
 
 	if (LF_ISSET(DB_MPOOL_DIRTY)) {
 		if (F_ISSET(dbmfp, MP_READONLY)) {
-			__db_errx(env, DB_STR_A("3021",
+			__db_errx(env, DB_STR_A("3008",
 			    "%s: dirty flag set for readonly file page",
 			    "%s"), __memp_fn(dbmfp));
 			return (EINVAL);
@@ -278,7 +279,7 @@ retry:		MUTEX_LOCK(env, hp->mtx_hash);
 			 * the BTREE in a subsequent txn).
 			 */
 			if (bhp == NULL) {
-				ret = DB_PAGE_NOTFOUND;
+				ret = USR_ERR(env, DB_PAGE_NOTFOUND);
 				goto err;
 			}
 		}
@@ -297,7 +298,7 @@ retry:		MUTEX_LOCK(env, hp->mtx_hash);
 			ret = __env_panic(env, EINVAL);
 			goto err;
 		}
-		atomic_inc(env, &bhp->ref);
+		(void)atomic_inc(env, &bhp->ref);
 		b_incr = 1;
 
 		/*
@@ -320,6 +321,7 @@ xlatch:
 		} else if (LF_ISSET(DB_MPOOL_TRY)) {
 			if ((ret = MUTEX_TRY_READLOCK(env, bhp->mtx_buf)) != 0)
 				goto err;
+			DB_TEST_CRASH(env->test_abort, DB_TEST_LATCH);
 		} else
 			MUTEX_READLOCK(env, bhp->mtx_buf);
 
@@ -373,18 +375,18 @@ thawed:			need_free = (atomic_dec(env, &bhp->ref) == 0);
 		    (SH_CHAIN_NEXTP(bhp, vc, __bh)->td_off == bhp->td_off ||
 		    (!dirty && read_lsnp == NULL))) {
 			DB_ASSERT(env, b_incr && BH_REFCOUNT(bhp) != 0);
-			atomic_dec(env, &bhp->ref);
+			(void)atomic_dec(env, &bhp->ref);
 			b_incr = 0;
 			MUTEX_UNLOCK(env, bhp->mtx_buf);
 			b_lock = 0;
 			bhp = NULL;
 			goto retry;
 		} else if (dirty && SH_CHAIN_HASNEXT(bhp, vc)) {
-			ret = DB_LOCK_DEADLOCK;
+			ret = USR_ERR(env, DB_LOCK_DEADLOCK);
 			goto err;
 		} else if (F_ISSET(bhp, BH_FREED) && flags != DB_MPOOL_CREATE &&
 		    flags != DB_MPOOL_NEW && flags != DB_MPOOL_FREE) {
-			ret = DB_PAGE_NOTFOUND;
+			ret = USR_ERR(env, DB_PAGE_NOTFOUND);
 			goto err;
 		}
 
@@ -446,12 +448,7 @@ thawed:			need_free = (atomic_dec(env, &bhp->ref) == 0);
 		if (flags == DB_MPOOL_FREE) {
 freebuf:		MUTEX_LOCK(env, hp->mtx_hash);
 			h_locked = 1;
-			if (F_ISSET(bhp, BH_DIRTY)) {
-				F_CLR(bhp, BH_DIRTY | BH_DIRTY_CREATE);
-				DB_ASSERT(env,
-				   atomic_read(&hp->hash_page_dirty) > 0);
-				atomic_dec(env, &hp->hash_page_dirty);
-			}
+			__memp_bh_clear_dirty(env, hp, bhp);
 
 			/*
 			 * If the buffer we found is already freed, we're done.
@@ -540,7 +537,7 @@ reuse:			if ((makecopy || F_ISSET(bhp, BH_FROZEN)) &&
 				if (oldest_bhp != NULL) {
 					DB_ASSERT(env,
 					    !F_ISSET(oldest_bhp, BH_DIRTY));
-					atomic_inc(env, &oldest_bhp->ref);
+					(void)atomic_inc(env, &oldest_bhp->ref);
 #ifdef HAVE_STATISTICS
 					if (SH_CHAIN_HASPREV(oldest_bhp, vc))
 						c_mp->stat.st_mvcc_reused++;
@@ -617,7 +614,7 @@ newpg:		/*
 			break;
 		case DB_MPOOL_CREATE:
 			if (mfp->maxpgno != 0 && *pgnoaddr > mfp->maxpgno) {
-				__db_errx(env, DB_STR_A("3024",
+				__db_errx(env, DB_STR_A("3023",
 				    "%s: file limited to %lu pages", "%s %lu"),
 				    __memp_fn(dbmfp), (u_long)mfp->maxpgno + 1);
 				ret = ENOSPC;
@@ -653,7 +650,7 @@ alloc:		/* Allocate a new buffer header and data space. */
 
 		/* Initialize enough so we can call __memp_bhfree. */
 		alloc_bhp->flags = 0;
-		atomic_init(&alloc_bhp->ref, 1);
+		atomic_write(&alloc_bhp->ref, 1);
 #ifdef DIAGNOSTIC
 		if ((uintptr_t)alloc_bhp->buf & (sizeof(size_t) - 1)) {
 			__db_errx(env, DB_STR("3025",
@@ -765,7 +762,7 @@ alloc:		/* Allocate a new buffer header and data space. */
 		 */
 		if (flags == DB_MPOOL_NEW) {
 			DB_ASSERT(env, b_incr && BH_REFCOUNT(bhp) != 0);
-			atomic_dec(env, &bhp->ref);
+			(void)atomic_dec(env, &bhp->ref);
 			b_incr = 0;
 			if (F_ISSET(bhp, BH_EXCLUSIVE))
 				F_CLR(bhp, BH_EXCLUSIVE);
@@ -814,7 +811,7 @@ alloc:		/* Allocate a new buffer header and data space. */
 
 		/* We created a new page, it starts dirty. */
 		if (extending) {
-			atomic_inc(env, &hp->hash_page_dirty);
+			(void)atomic_inc(env, &hp->hash_page_dirty);
 			F_SET(bhp, BH_DIRTY | BH_DIRTY_CREATE);
 		}
 
@@ -968,7 +965,7 @@ alloc:		/* Allocate a new buffer header and data space. */
 			MVCC_MPROTECT(bhp->buf, mfp->pagesize,
 			    PROT_READ);
 
-		atomic_init(&alloc_bhp->ref, 1);
+		atomic_write(&alloc_bhp->ref, 1);
 		MUTEX_LOCK(env, alloc_bhp->mtx_buf);
 		alloc_bhp->priority = bhp->priority;
 		alloc_bhp->pgno = bhp->pgno;
@@ -1095,7 +1092,7 @@ alloc:		/* Allocate a new buffer header and data space. */
 			MUTEX_LOCK(env, hp->mtx_hash);
 #endif
 			DB_ASSERT(env, !SH_CHAIN_HASNEXT(bhp, vc));
-			atomic_inc(env, &hp->hash_page_dirty);
+			(void)atomic_inc(env, &hp->hash_page_dirty);
 			F_SET(bhp, BH_DIRTY);
 #ifdef DIAGNOSTIC
 			MUTEX_UNLOCK(env, hp->mtx_hash);
@@ -1111,7 +1108,7 @@ alloc:		/* Allocate a new buffer header and data space. */
 		 * switched locks, we have to go through it all again.
 		 */
 		if (SH_CHAIN_HASNEXT(bhp, vc) && read_lsnp == NULL) {
-			atomic_dec(env, &bhp->ref);
+			(void)atomic_dec(env, &bhp->ref);
 			b_incr = 0;
 			MUTEX_UNLOCK(env, bhp->mtx_buf);
 			b_lock = 0;
@@ -1186,8 +1183,15 @@ alloc:		/* Allocate a new buffer header and data space. */
 			lt = env->lk_handle;
 			locker = (DB_LOCKER *)
 			    (R_ADDR(&lt->reginfo, ip->dbth_locker));
-			DB_ASSERT(env, __db_has_pagelock(env, locker, dbmfp,
-			    (PAGE*)bhp->buf, DB_LOCK_WRITE) == 0);
+			pagelock_err = __db_has_pagelock(env, locker, dbmfp,
+			    (PAGE *)bhp->buf, DB_LOCK_WRITE);
+			if (pagelock_err != 0) {
+				if (pagelock_err == DB_RUNRECOVERY)
+					return (pagelock_err);
+				__db_syserr(env, pagelock_err,
+				    "Locker %x has no page lock for pgno %d",
+				    locker->id, ((PAGE *)bhp->buf)->pgno);
+			}
 		}
 #endif
 
@@ -1233,7 +1237,7 @@ err:	/*
 
 	if (bhp != NULL) {
 		if (b_incr)
-			atomic_dec(env, &bhp->ref);
+			(void)atomic_dec(env, &bhp->ref);
 		if (b_lock) {
 			F_CLR(bhp, BH_EXCLUSIVE);
 			MUTEX_UNLOCK(env, bhp->mtx_buf);

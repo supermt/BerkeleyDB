@@ -1,4 +1,10 @@
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2010 October 28
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -68,19 +74,6 @@
 #define MAX_PAGE_SIZE       0x10000
 #define DEFAULT_SECTOR_SIZE 0x1000
 
-/*
-** For a build without mutexes, no-op the mutex calls.
-*/
-#if defined(SQLITE_THREADSAFE) && SQLITE_THREADSAFE==0
-#define sqlite3_mutex_alloc(X)    ((sqlite3_mutex*)8)
-#define sqlite3_mutex_free(X)
-#define sqlite3_mutex_enter(X)
-#define sqlite3_mutex_try(X)      SQLITE_OK
-#define sqlite3_mutex_leave(X)
-#define sqlite3_mutex_held(X)     ((void)(X),1)
-#define sqlite3_mutex_notheld(X)  ((void)(X),1)
-#endif /* SQLITE_THREADSAFE==0 */
-
 /* Maximum chunk number */
 #define MX_CHUNK_NUMBER 299
 
@@ -139,7 +132,6 @@ struct multiplexGroup {
   unsigned int szChunk;            /* Chunk size used for this group */
   unsigned char bEnabled;          /* TRUE to use Multiplex VFS for this file */
   unsigned char bTruncate;         /* TRUE to enable truncation of databases */
-  multiplexGroup *pNext, *pPrev;   /* Doubly linked list of all group objects */
 };
 
 /*
@@ -187,25 +179,9 @@ static struct {
   /* True when this shim has been initialized.
   */
   int isInitialized;
-
-  /* For run-time access any of the other global data structures in this
-  ** shim, the following mutex must be held.
-  */
-  sqlite3_mutex *pMutex;
-
-  /* List of multiplexGroup objects.
-  */
-  multiplexGroup *pGroups;
 } gMultiplex;
 
 /************************* Utility Routines *********************************/
-/*
-** Acquire and release the mutex used to serialize access to the
-** list of multiplexGroups.
-*/
-static void multiplexEnter(void){ sqlite3_mutex_enter(gMultiplex.pMutex); }
-static void multiplexLeave(void){ sqlite3_mutex_leave(gMultiplex.pMutex); }
-
 /*
 ** Compute a string length that is limited to what can be stored in
 ** lower 30 bits of a 32-bit signed integer.
@@ -286,7 +262,7 @@ static void multiplexFilename(
 static int multiplexSubFilename(multiplexGroup *pGroup, int iChunk){
   if( iChunk>=pGroup->nReal ){
     struct multiplexReal *p;
-    p = sqlite3_realloc(pGroup->aReal, (iChunk+1)*sizeof(*p));
+    p = sqlite3_realloc64(pGroup->aReal, (iChunk+1)*sizeof(*p));
     if( p==0 ){
       return SQLITE_NOMEM;
     }
@@ -297,7 +273,7 @@ static int multiplexSubFilename(multiplexGroup *pGroup, int iChunk){
   if( pGroup->zName && pGroup->aReal[iChunk].z==0 ){
     char *z;
     int n = pGroup->nName;
-    pGroup->aReal[iChunk].z = z = sqlite3_malloc( n+5 );
+    pGroup->aReal[iChunk].z = z = sqlite3_malloc64( n+5 );
     if( z==0 ){
       return SQLITE_NOMEM;
     }
@@ -357,7 +333,7 @@ static sqlite3_file *multiplexSubOpen(
       }
       flags &= ~SQLITE_OPEN_CREATE;
     }
-    pSubOpen = sqlite3_malloc( pOrigVfs->szOsFile );
+    pSubOpen = sqlite3_malloc64( pOrigVfs->szOsFile );
     if( pSubOpen==0 ){
       *rc = SQLITE_IOERR_NOMEM;
       return 0;
@@ -406,7 +382,7 @@ static void multiplexControlFunc(
 ){
   int rc = SQLITE_OK;
   sqlite3 *db = sqlite3_context_db_handle(context);
-  int op;
+  int op = 0;
   int iVal;
 
   if( !db || argc!=2 ){ 
@@ -516,7 +492,6 @@ static int multiplexOpen(
   /* We need to create a group structure and manage
   ** access to this group of files.
   */
-  multiplexEnter();
   pMultiplexOpen = (multiplexConn*)pConn;
 
   if( rc==SQLITE_OK ){
@@ -524,7 +499,7 @@ static int multiplexOpen(
     nName = zName ? multiplexStrlen30(zName) : 0;
     sz = sizeof(multiplexGroup)                             /* multiplexGroup */
        + nName + 1;                                         /* zName */
-    pGroup = sqlite3_malloc( sz );
+    pGroup = sqlite3_malloc64( sz );
     if( pGroup==0 ){
       rc = SQLITE_NOMEM;
     }
@@ -535,8 +510,8 @@ static int multiplexOpen(
     /* assign pointers to extra space allocated */
     memset(pGroup, 0, sz);
     pMultiplexOpen->pGroup = pGroup;
-    pGroup->bEnabled = -1;
-    pGroup->bTruncate = sqlite3_uri_boolean(zUri, "truncate", 
+    pGroup->bEnabled = (unsigned char)-1;
+    pGroup->bTruncate = (unsigned char)sqlite3_uri_boolean(zUri, "truncate", 
                                    (flags & SQLITE_OPEN_MAIN_DB)==0);
     pGroup->szChunk = (int)sqlite3_uri_int64(zUri, "chunksize",
                                         SQLITE_MULTIPLEX_CHUNK_SIZE);
@@ -568,12 +543,15 @@ static int multiplexOpen(
       if( pSubOpen==0 && rc==SQLITE_OK ) rc = SQLITE_CANTOPEN;
     }
     if( rc==SQLITE_OK ){
-      sqlite3_int64 sz;
+      sqlite3_int64 sz64;
 
-      rc = pSubOpen->pMethods->xFileSize(pSubOpen, &sz);
+      rc = pSubOpen->pMethods->xFileSize(pSubOpen, &sz64);
       if( rc==SQLITE_OK && zName ){
         int bExists;
-        if( sz==0 ){
+        if( flags & SQLITE_OPEN_MASTER_JOURNAL ){
+          pGroup->bEnabled = 0;
+        }else
+        if( sz64==0 ){
           if( flags & SQLITE_OPEN_MAIN_JOURNAL ){
             /* If opening a main journal file and the first chunk is zero
             ** bytes in size, delete any subsequent chunks from the 
@@ -604,10 +582,10 @@ static int multiplexOpen(
           rc = pOrigVfs->xAccess(pOrigVfs, pGroup->aReal[1].z,
               SQLITE_ACCESS_EXISTS, &bExists);
           bExists = multiplexSubSize(pGroup, 1, &rc)>0;
-          if( rc==SQLITE_OK && bExists  && sz==(sz&0xffff0000) && sz>0
-              && sz!=pGroup->szChunk ){
-            pGroup->szChunk = (int)sz;
-          }else if( rc==SQLITE_OK && !bExists && sz>pGroup->szChunk ){
+          if( rc==SQLITE_OK && bExists && sz64==(sz64&0xffff0000) && sz64>0
+              && sz64!=pGroup->szChunk ){
+            pGroup->szChunk = (int)sz64;
+          }else if( rc==SQLITE_OK && !bExists && sz64>pGroup->szChunk ){
             pGroup->bEnabled = 0;
           }
         }
@@ -620,16 +598,11 @@ static int multiplexOpen(
       }else{
         pMultiplexOpen->base.pMethods = &gMultiplex.sIoMethodsV2;
       }
-      /* place this group at the head of our list */
-      pGroup->pNext = gMultiplex.pGroups;
-      if( gMultiplex.pGroups ) gMultiplex.pGroups->pPrev = pGroup;
-      gMultiplex.pGroups = pGroup;
     }else{
       multiplexFreeComponents(pGroup);
       sqlite3_free(pGroup);
     }
   }
-  multiplexLeave();
   sqlite3_free(zToFree);
   return rc;
 }
@@ -652,7 +625,7 @@ static int multiplexDelete(
     */
     int nName = (int)strlen(zName);
     char *z;
-    z = sqlite3_malloc(nName + 5);
+    z = sqlite3_malloc64(nName + 5);
     if( z==0 ){
       rc = SQLITE_IOERR_NOMEM;
     }else{
@@ -711,7 +684,11 @@ static int multiplexCurrentTime(sqlite3_vfs *a, double *b){
   return gMultiplex.pOrigVfs->xCurrentTime(gMultiplex.pOrigVfs, b);
 }
 static int multiplexGetLastError(sqlite3_vfs *a, int b, char *c){
-  return gMultiplex.pOrigVfs->xGetLastError(gMultiplex.pOrigVfs, b, c);
+  if( gMultiplex.pOrigVfs->xGetLastError ){
+    return gMultiplex.pOrigVfs->xGetLastError(gMultiplex.pOrigVfs, b, c);
+  }else{
+    return 0;
+  }
 }
 static int multiplexCurrentTimeInt64(sqlite3_vfs *a, sqlite3_int64 *b){
   return gMultiplex.pOrigVfs->xCurrentTimeInt64(gMultiplex.pOrigVfs, b);
@@ -728,17 +705,8 @@ static int multiplexClose(sqlite3_file *pConn){
   multiplexConn *p = (multiplexConn*)pConn;
   multiplexGroup *pGroup = p->pGroup;
   int rc = SQLITE_OK;
-  multiplexEnter();
   multiplexFreeComponents(pGroup);
-  /* remove from linked list */
-  if( pGroup->pNext ) pGroup->pNext->pPrev = pGroup->pPrev;
-  if( pGroup->pPrev ){
-    pGroup->pPrev->pNext = pGroup->pNext;
-  }else{
-    gMultiplex.pGroups = pGroup->pNext;
-  }
   sqlite3_free(pGroup);
-  multiplexLeave();
   return rc;
 }
 
@@ -755,7 +723,6 @@ static int multiplexRead(
   multiplexConn *p = (multiplexConn*)pConn;
   multiplexGroup *pGroup = p->pGroup;
   int rc = SQLITE_OK;
-  multiplexEnter();
   if( !pGroup->bEnabled ){
     sqlite3_file *pSubOpen = multiplexSubOpen(pGroup, 0, &rc, NULL, 0);
     if( pSubOpen==0 ){
@@ -766,7 +733,8 @@ static int multiplexRead(
   }else{
     while( iAmt > 0 ){
       int i = (int)(iOfst / pGroup->szChunk);
-      sqlite3_file *pSubOpen = multiplexSubOpen(pGroup, i, &rc, NULL, 1);
+      sqlite3_file *pSubOpen;
+      pSubOpen = multiplexSubOpen(pGroup, i, &rc, NULL, 1);
       if( pSubOpen ){
         int extra = ((int)(iOfst % pGroup->szChunk) + iAmt) - pGroup->szChunk;
         if( extra<0 ) extra = 0;
@@ -783,7 +751,7 @@ static int multiplexRead(
       }
     }
   }
-  multiplexLeave();
+
   return rc;
 }
 
@@ -800,7 +768,6 @@ static int multiplexWrite(
   multiplexConn *p = (multiplexConn*)pConn;
   multiplexGroup *pGroup = p->pGroup;
   int rc = SQLITE_OK;
-  multiplexEnter();
   if( !pGroup->bEnabled ){
     sqlite3_file *pSubOpen = multiplexSubOpen(pGroup, 0, &rc, NULL, 0);
     if( pSubOpen==0 ){
@@ -825,7 +792,6 @@ static int multiplexWrite(
       }
     }
   }
-  multiplexLeave();
   return rc;
 }
 
@@ -837,7 +803,6 @@ static int multiplexTruncate(sqlite3_file *pConn, sqlite3_int64 size){
   multiplexConn *p = (multiplexConn*)pConn;
   multiplexGroup *pGroup = p->pGroup;
   int rc = SQLITE_OK;
-  multiplexEnter();
   if( !pGroup->bEnabled ){
     sqlite3_file *pSubOpen = multiplexSubOpen(pGroup, 0, &rc, NULL, 0);
     if( pSubOpen==0 ){
@@ -869,7 +834,6 @@ static int multiplexTruncate(sqlite3_file *pConn, sqlite3_int64 size){
     }
     if( rc ) rc = SQLITE_IOERR_TRUNCATE;
   }
-  multiplexLeave();
   return rc;
 }
 
@@ -880,7 +844,6 @@ static int multiplexSync(sqlite3_file *pConn, int flags){
   multiplexGroup *pGroup = p->pGroup;
   int rc = SQLITE_OK;
   int i;
-  multiplexEnter();
   for(i=0; i<pGroup->nReal; i++){
     sqlite3_file *pSubOpen = pGroup->aReal[i].p;
     if( pSubOpen ){
@@ -888,7 +851,6 @@ static int multiplexSync(sqlite3_file *pConn, int flags){
       if( rc2!=SQLITE_OK ) rc = rc2;
     }
   }
-  multiplexLeave();
   return rc;
 }
 
@@ -900,7 +862,6 @@ static int multiplexFileSize(sqlite3_file *pConn, sqlite3_int64 *pSize){
   multiplexGroup *pGroup = p->pGroup;
   int rc = SQLITE_OK;
   int i;
-  multiplexEnter();
   if( !pGroup->bEnabled ){
     sqlite3_file *pSubOpen = multiplexSubOpen(pGroup, 0, &rc, NULL, 0);
     if( pSubOpen==0 ){
@@ -916,7 +877,6 @@ static int multiplexFileSize(sqlite3_file *pConn, sqlite3_int64 *pSize){
       *pSize = i*(sqlite3_int64)pGroup->szChunk + sz;
     }
   }
-  multiplexLeave();
   return rc;
 }
 
@@ -970,7 +930,7 @@ static int multiplexFileControl(sqlite3_file *pConn, int op, void *pArg){
     case MULTIPLEX_CTRL_ENABLE:
       if( pArg ) {
         int bEnabled = *(int *)pArg;
-        pGroup->bEnabled = bEnabled;
+        pGroup->bEnabled = (unsigned char)bEnabled;
         rc = SQLITE_OK;
       }
       break;
@@ -996,6 +956,39 @@ static int multiplexFileControl(sqlite3_file *pConn, int op, void *pArg){
       /* no-op these */
       rc = SQLITE_OK;
       break;
+    case SQLITE_FCNTL_PRAGMA: {
+      char **aFcntl = (char**)pArg;
+      /*
+      ** EVIDENCE-OF: R-29875-31678 The argument to the SQLITE_FCNTL_PRAGMA
+      ** file control is an array of pointers to strings (char**) in which the
+      ** second element of the array is the name of the pragma and the third
+      ** element is the argument to the pragma or NULL if the pragma has no
+      ** argument.
+      */
+      if( aFcntl[1] && sqlite3_stricmp(aFcntl[1],"multiplex_truncate")==0 ){
+        if( aFcntl[2] && aFcntl[2][0] ){
+          if( sqlite3_stricmp(aFcntl[2], "on")==0
+           || sqlite3_stricmp(aFcntl[2], "1")==0 ){
+            pGroup->bTruncate = 1;
+          }else
+          if( sqlite3_stricmp(aFcntl[2], "off")==0
+           || sqlite3_stricmp(aFcntl[2], "0")==0 ){
+            pGroup->bTruncate = 0;
+          }
+        }
+        /* EVIDENCE-OF: R-27806-26076 The handler for an SQLITE_FCNTL_PRAGMA
+        ** file control can optionally make the first element of the char**
+        ** argument point to a string obtained from sqlite3_mprintf() or the
+        ** equivalent and that string will become the result of the pragma
+        ** or the error message if the pragma fails.
+        */
+        aFcntl[0] = sqlite3_mprintf(pGroup->bTruncate ? "on" : "off");
+        rc = SQLITE_OK;
+        break;
+      }
+      /* If the multiplexor does not handle the pragma, pass it through
+      ** into the default case. */
+    }
     default:
       pSubOpen = multiplexSubOpen(pGroup, 0, &rc, NULL, 0);
       if( pSubOpen ){
@@ -1110,11 +1103,6 @@ int sqlite3_multiplex_initialize(const char *zOrigVfsName, int makeDefault){
   pOrigVfs = sqlite3_vfs_find(zOrigVfsName);
   if( pOrigVfs==0 ) return SQLITE_ERROR;
   assert( pOrigVfs!=&gMultiplex.sThisVfs );
-  gMultiplex.pMutex = sqlite3_mutex_alloc(SQLITE_MUTEX_FAST);
-  if( !gMultiplex.pMutex ){
-    return SQLITE_NOMEM;
-  }
-  gMultiplex.pGroups = NULL;
   gMultiplex.isInitialized = 1;
   gMultiplex.pOrigVfs = pOrigVfs;
   gMultiplex.sThisVfs = *pOrigVfs;
@@ -1156,7 +1144,7 @@ int sqlite3_multiplex_initialize(const char *zOrigVfsName, int makeDefault){
   gMultiplex.sIoMethodsV2.xShmUnmap = multiplexShmUnmap;
   sqlite3_vfs_register(&gMultiplex.sThisVfs, makeDefault);
 
-  sqlite3_auto_extension((void*)multiplexFuncInit);
+  sqlite3_auto_extension((void(*)(void))multiplexFuncInit);
 
   return SQLITE_OK;
 }
@@ -1170,26 +1158,32 @@ int sqlite3_multiplex_initialize(const char *zOrigVfsName, int makeDefault){
 ** THIS ROUTINE IS NOT THREADSAFE.  Call this routine exactly once while
 ** shutting down in order to free all remaining multiplex groups.
 */
-int sqlite3_multiplex_shutdown(void){
+int sqlite3_multiplex_shutdown(int eForce){
+  int rc = SQLITE_OK;
   if( gMultiplex.isInitialized==0 ) return SQLITE_MISUSE;
-  if( gMultiplex.pGroups ) return SQLITE_MISUSE;
   gMultiplex.isInitialized = 0;
-  sqlite3_mutex_free(gMultiplex.pMutex);
   sqlite3_vfs_unregister(&gMultiplex.sThisVfs);
   memset(&gMultiplex, 0, sizeof(gMultiplex));
-  return SQLITE_OK;
+  return rc;
 }
 
 /***************************** Test Code ***********************************/
 #ifdef SQLITE_TEST
-#include <tcl.h>
-extern const char *sqlite3TestErrorName(int);
+#if defined(INCLUDE_SQLITE_TCL_H)
+#  include "sqlite_tcl.h"
+#else
+#  include "tcl.h"
+#  ifndef SQLITE_TCLAPI
+#    define SQLITE_TCLAPI
+#  endif
+#endif
+extern const char *sqlite3ErrName(int);
 
 
 /*
 ** tclcmd: sqlite3_multiplex_initialize NAME MAKEDEFAULT
 */
-static int test_multiplex_initialize(
+static int SQLITE_TCLAPI test_multiplex_initialize(
   void * clientData,
   Tcl_Interp *interp,
   int objc,
@@ -1212,7 +1206,7 @@ static int test_multiplex_initialize(
 
   /* Call sqlite3_multiplex_initialize() */
   rc = sqlite3_multiplex_initialize(zName, makeDefault);
-  Tcl_SetResult(interp, (char *)sqlite3TestErrorName(rc), TCL_STATIC);
+  Tcl_SetResult(interp, (char *)sqlite3ErrName(rc), TCL_STATIC);
 
   return TCL_OK;
 }
@@ -1220,7 +1214,7 @@ static int test_multiplex_initialize(
 /*
 ** tclcmd: sqlite3_multiplex_shutdown
 */
-static int test_multiplex_shutdown(
+static int SQLITE_TCLAPI test_multiplex_shutdown(
   void * clientData,
   Tcl_Interp *interp,
   int objc,
@@ -1230,77 +1224,25 @@ static int test_multiplex_shutdown(
 
   UNUSED_PARAMETER(clientData);
 
-  if( objc!=1 ){
-    Tcl_WrongNumArgs(interp, 1, objv, "");
+  if( objc==2 && strcmp(Tcl_GetString(objv[1]),"-force")!=0 ){
+    objc = 3;
+  }
+  if( (objc!=1 && objc!=2) ){
+    Tcl_WrongNumArgs(interp, 1, objv, "?-force?");
     return TCL_ERROR;
   }
 
   /* Call sqlite3_multiplex_shutdown() */
-  rc = sqlite3_multiplex_shutdown();
-  Tcl_SetResult(interp, (char *)sqlite3TestErrorName(rc), TCL_STATIC);
+  rc = sqlite3_multiplex_shutdown(objc==2);
+  Tcl_SetResult(interp, (char *)sqlite3ErrName(rc), TCL_STATIC);
 
-  return TCL_OK;
-}
-
-/*
-** tclcmd:  sqlite3_multiplex_dump
-*/
-static int test_multiplex_dump(
-  void * clientData,
-  Tcl_Interp *interp,
-  int objc,
-  Tcl_Obj *CONST objv[]
-){
-  Tcl_Obj *pResult;
-  Tcl_Obj *pGroupTerm;
-  multiplexGroup *pGroup;
-  int i;
-  int nChunks = 0;
-
-  UNUSED_PARAMETER(clientData);
-  UNUSED_PARAMETER(objc);
-  UNUSED_PARAMETER(objv);
-
-  pResult = Tcl_NewObj();
-  multiplexEnter();
-  for(pGroup=gMultiplex.pGroups; pGroup; pGroup=pGroup->pNext){
-    pGroupTerm = Tcl_NewObj();
-
-    if( pGroup->zName ){
-      pGroup->zName[pGroup->nName] = '\0';
-      Tcl_ListObjAppendElement(interp, pGroupTerm,
-          Tcl_NewStringObj(pGroup->zName, -1));
-    }else{
-      Tcl_ListObjAppendElement(interp, pGroupTerm, Tcl_NewObj());
-    }
-    Tcl_ListObjAppendElement(interp, pGroupTerm,
-          Tcl_NewIntObj(pGroup->nName));
-    Tcl_ListObjAppendElement(interp, pGroupTerm,
-          Tcl_NewIntObj(pGroup->flags));
-
-    /* count number of chunks with open handles */
-    for(i=0; i<pGroup->nReal; i++){
-      if( pGroup->aReal[i].p!=0 ) nChunks++;
-    }
-    Tcl_ListObjAppendElement(interp, pGroupTerm,
-          Tcl_NewIntObj(nChunks));
-
-    Tcl_ListObjAppendElement(interp, pGroupTerm,
-          Tcl_NewIntObj(pGroup->szChunk));
-    Tcl_ListObjAppendElement(interp, pGroupTerm,
-          Tcl_NewIntObj(pGroup->nReal));
-
-    Tcl_ListObjAppendElement(interp, pResult, pGroupTerm);
-  }
-  multiplexLeave();
-  Tcl_SetObjResult(interp, pResult);
   return TCL_OK;
 }
 
 /*
 ** Tclcmd: test_multiplex_control HANDLE DBNAME SUB-COMMAND ?INT-VALUE?
 */
-static int test_multiplex_control(
+static int SQLITE_TCLAPI test_multiplex_control(
   ClientData cd,
   Tcl_Interp *interp,
   int objc,
@@ -1355,7 +1297,7 @@ static int test_multiplex_control(
   }
 
   rc = sqlite3_file_control(db, Tcl_GetString(objv[2]), aSub[idx].op, pArg);
-  Tcl_SetResult(interp, (char *)sqlite3TestErrorName(rc), TCL_STATIC);
+  Tcl_SetResult(interp, (char *)sqlite3ErrName(rc), TCL_STATIC);
   return (rc==SQLITE_OK) ? TCL_OK : TCL_ERROR;
 }
 
@@ -1371,7 +1313,6 @@ int Sqlitemultiplex_Init(Tcl_Interp *interp){
   } aCmd[] = {
     { "sqlite3_multiplex_initialize", test_multiplex_initialize },
     { "sqlite3_multiplex_shutdown", test_multiplex_shutdown },
-    { "sqlite3_multiplex_dump", test_multiplex_dump },
     { "sqlite3_multiplex_control", test_multiplex_control },
   };
   int i;

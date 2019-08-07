@@ -14,7 +14,7 @@
   <body>
     <div xmlns="" class="navheader">
       <div class="libver">
-        <p>Library Version 12.1.6.0</p>
+        <p>Library Version 18.1.32</p>
       </div>
       <table width="100%" summary="Navigation header">
         <tr>
@@ -38,7 +38,8 @@
           </div>
         </div>
       </div>
-      <pre class="programlisting">db_printlog [-NrV] [-b start-LSN] [-e stop-LSN] [-h home] [-P password]  </pre>
+      <pre class="programlisting">db_printlog [-NrV] [-b start-LSN] [-e stop-LSN] [-h home] [-P password] 
+    [-D bytes] </pre>
       <p>
          The <span class="command"><strong>db_printlog</strong></span> utility is a debugging utility that dumps Berkeley DB
          log files in a human-readable format.
@@ -47,7 +48,10 @@
         <h3 class="title">Note</h3>
         <p>
                 If the application(s) that use the environment make use of
-                the <a class="xref" href="envset_lg_dir.html" title="DbEnv::set_lg_dir()">DbEnv::set_lg_dir()</a>
+                the <a class="xref" href="envset_lg_dir.html" title="DbEnv::set_lg_dir()">
+        
+        <span>DbEnv::set_lg_dir()</span>
+    </a>
                 method, then in order for this utility to run correctly,
                 you need a
                 <a href="../../programmer_reference/env_db_config.html#env_db_config.DB_CONFIG" class="olink">DB_CONFIG</a>
@@ -69,6 +73,17 @@
                  Display log records starting at log sequence number (LSN) <span class="bold"><strong>start-LSN</strong></span>; <span class="bold"><strong>start-LSN</strong></span> is specified as a file number,
                  followed by a slash (/) character, followed by an offset number, with
                  no intervening whitespace.
+            </p>
+          </li>
+          <li>
+            <p>
+                 <span class="bold"><strong>-D</strong></span>
+            </p>
+            <p>
+                Specifies the maximum number of bytes to display for each
+                key/data item found in the log. This option overrides the 
+                "set_data_len" parameter found in your DB_CONFIG file, if
+                any.
             </p>
           </li>
           <li>
@@ -155,7 +170,7 @@
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp64091568"></a>Environment Variables</h3>
+              <h3 class="title"><a id="idm140176762340240"></a>Environment Variables</h3>
             </div>
           </div>
         </div>
@@ -163,7 +178,7 @@
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp64091760"></a>DB_HOME</h4>
+                <h4 class="title"><a id="idm140176762344480"></a>DB_HOME</h4>
               </div>
             </div>
           </div>
@@ -171,7 +186,10 @@
                           If the <span class="bold"><strong>-h</strong></span> option is not specified and
                           the environment variable DB_HOME is set, it is used as the path of the
                           database home, as described in the
-                          <a class="xref" href="envopen.html" title="DbEnv::open()">DbEnv::open()</a>
+                          <a class="xref" href="envopen.html" title="DbEnv::open()">
+        
+        <span>DbEnv::open()</span>
+    </a>
                           method.
                      </p>
         </div>

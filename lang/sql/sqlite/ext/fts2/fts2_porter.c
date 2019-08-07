@@ -1,4 +1,10 @@
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2006 September 30
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -30,6 +36,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "sqlite3.h"
+#include "sqlite3ext.h"
+SQLITE_EXTENSION_INIT3
 #include "fts2_tokenizer.h"
 
 /*

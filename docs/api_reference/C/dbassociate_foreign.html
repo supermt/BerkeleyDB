@@ -14,11 +14,14 @@
   <body>
     <div xmlns="" class="navheader">
       <div class="libver">
-        <p>Library Version 12.1.6.0</p>
+        <p>Library Version 18.1.32</p>
       </div>
       <table width="100%" summary="Navigation header">
         <tr>
-          <th colspan="3" align="center">DB-&gt;associate_foreign()</th>
+          <th colspan="3" align="center">
+        <span xmlns="http://www.w3.org/1999/xhtml">DB-&gt;associate_foreign()</span>
+        
+    </th>
         </tr>
         <tr>
           <td width="20%" align="left"><a accesskey="p" href="dbassociate.html">Prev</a> </td>
@@ -34,7 +37,10 @@
       <div class="titlepage">
         <div>
           <div>
-            <h2 class="title" style="clear: both"><a id="dbassociate_foreign"></a>DB-&gt;associate_foreign()</h2>
+            <h2 class="title" style="clear: both"><a id="dbassociate_foreign"></a>
+        <span>DB-&gt;associate_foreign()</span>
+        
+    </h2>
           </div>
         </div>
       </div>
@@ -66,6 +72,10 @@ DB-&gt;associate_foreign(DB *foreign, DB *secondary,,
         in the <em class="citetitle">Berkeley DB Programmer's Reference Guide</em> for more information.
    </p>
       <p>
+        The <code class="methodname">DB-&gt;associate_foreign()</code> method can
+        not be used with a sliced database.
+    </p>
+      <p>
         The <code class="methodname">DB-&gt;associate_foreign()</code> <span>
             <span>
                   method returns a non-zero error value on failure and 0 on success.
@@ -77,7 +87,7 @@ DB-&gt;associate_foreign(DB *foreign, DB *secondary,,
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idm5296384"></a>Parameters</h3>
+              <h3 class="title"><a id="idm140113490934240"></a>Parameters</h3>
             </div>
           </div>
         </div>
@@ -85,7 +95,7 @@ DB-&gt;associate_foreign(DB *foreign, DB *secondary,,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idm1926840"></a>foreign</h4>
+                <h4 class="title"><a id="idm140113490819008"></a>foreign</h4>
               </div>
             </div>
           </div>
@@ -98,7 +108,7 @@ DB-&gt;associate_foreign(DB *foreign, DB *secondary,,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idm5332296"></a>secondary</h4>
+                <h4 class="title"><a id="idm140113490781696"></a>secondary</h4>
               </div>
             </div>
           </div>
@@ -112,7 +122,7 @@ DB-&gt;associate_foreign(DB *foreign, DB *secondary,,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idm5021312"></a>callback</h4>
+                <h4 class="title"><a id="idm140113490783376"></a>callback</h4>
               </div>
             </div>
           </div>
@@ -192,7 +202,7 @@ DB-&gt;associate_foreign(DB *foreign, DB *secondary,,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idm6860272"></a>flags</h4>
+                <h4 class="title"><a id="idm140113490833536"></a>flags</h4>
               </div>
             </div>
           </div>
@@ -238,7 +248,7 @@ DB-&gt;associate_foreign(DB *foreign, DB *secondary,,
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idm4508744"></a>Errors</h3>
+              <h3 class="title"><a id="idm140113490784336"></a>Errors</h3>
             </div>
           </div>
         </div>
@@ -254,7 +264,7 @@ DB-&gt;associate_foreign(DB *foreign, DB *secondary,,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idm7822496"></a>  DB_REP_HANDLE_DEAD</h4>
+                <h4 class="title"><a id="idm140113490691248"></a>  DB_REP_HANDLE_DEAD</h4>
               </div>
             </div>
           </div>
@@ -273,7 +283,7 @@ DB-&gt;associate_foreign(DB *foreign, DB *secondary,,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idm7917848"></a>DB_REP_LOCKOUT</h4>
+                <h4 class="title"><a id="idm140113490812944"></a>DB_REP_LOCKOUT</h4>
               </div>
             </div>
           </div>
@@ -285,7 +295,7 @@ DB-&gt;associate_foreign(DB *foreign, DB *secondary,,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idm1026400"></a>EINVAL</h4>
+                <h4 class="title"><a id="idm140113490714992"></a>EINVAL</h4>
               </div>
             </div>
           </div>
@@ -294,7 +304,8 @@ DB-&gt;associate_foreign(DB *foreign, DB *secondary,,
                          database handle has been configured to allow duplicates; the foreign
                          database handle is a renumbering recno database; callback is
                          configured and DB_FOREIGN_NULLIFY is not; DB_FOREIGN_NULLIFY is
-                         configured and callback is not.
+                         configured and callback is not; if this method is
+                         called on a sliced database.
                        </p>
         </div>
       </div>
@@ -302,7 +313,7 @@ DB-&gt;associate_foreign(DB *foreign, DB *secondary,,
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idm7607928"></a>Class</h3>
+              <h3 class="title"><a id="idm140113490819984"></a>Class</h3>
             </div>
           </div>
         </div>
@@ -314,7 +325,7 @@ DB-&gt;associate_foreign(DB *foreign, DB *secondary,,
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idm7806192"></a>See Also</h3>
+              <h3 class="title"><a id="idm140113490761088"></a>See Also</h3>
             </div>
           </div>
         </div>
@@ -334,11 +345,17 @@ DB-&gt;associate_foreign(DB *foreign, DB *secondary,,
           <td width="40%" align="right"> <a accesskey="n" href="dbclose.html">Next</a></td>
         </tr>
         <tr>
-          <td width="40%" align="left" valign="top">DB-&gt;associate() </td>
+          <td width="40%" align="left" valign="top">
+        <span>DB-&gt;associate()</span>
+        
+     </td>
           <td width="20%" align="center">
             <a accesskey="h" href="index.html">Home</a>
           </td>
-          <td width="40%" align="right" valign="top"> DB-&gt;close()</td>
+          <td width="40%" align="right" valign="top"> 
+        <span>DB-&gt;close()</span>
+        
+    </td>
         </tr>
       </table>
     </div>

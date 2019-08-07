@@ -1,9 +1,8 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2001, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2001, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file EXAMPLES-LICENSE for license information.
  *
- * $Id$
  */
 
 // NOTE: This example is a simplified version of the RepQuoteExample.java
@@ -19,9 +18,6 @@ import java.io.FileNotFoundException;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.lang.Thread;
-import java.lang.InterruptedException;
 
 import com.sleepycat.db.Cursor;
 import com.sleepycat.db.Database;
@@ -38,8 +34,6 @@ import com.sleepycat.db.ReplicationHandleDeadException;
 import com.sleepycat.db.ReplicationHostAddress;
 import com.sleepycat.db.ReplicationManagerSiteConfig;
 import com.sleepycat.db.ReplicationManagerAckPolicy;
-
-import db.repquote_gsg.RepConfig;
 
 public class RepQuoteExampleGSG implements EventHandler
 {
@@ -85,39 +79,41 @@ public class RepQuoteExampleGSG implements EventHandler
                     isCreator = true;
                 // "local" should be host:port.
                 i++;
-                String[] words = argv[i].split(":");
-                if (words.length != 2) {
+                // Look for index of the last colon in the argv[i] string.
+                int sep = argv[i].lastIndexOf(':');
+                if (sep == -1 || sep == 0) {
                     System.err.println(
-                        "Invalid host specification host:port needed.");
+                        "Invalid local host specification host:port needed.");
                     usage();
                 }
                 try {
-                    tmpPort = Integer.parseInt(words[1]);
+                    tmpPort = Integer.parseInt(argv[i].substring(sep + 1));
                 } catch (NumberFormatException nfe) {
-                    System.err.println("Invalid host specification, " +
+                    System.err.println("Invalid local host specification, " +
                         "could not parse port number.");
                     usage();
                 }
-                config.setThisHost(words[0], tmpPort, isCreator);
+                config.setThisHost(argv[i].substring(0, sep), tmpPort, isCreator);
             } else if (argv[i].compareTo("-p") == 0) {
                 i++;
                 config.priority = Integer.parseInt(argv[i]);
             } else if (argv[i].compareTo("-r") == 0) {
                 i++;
-                String[] words = argv[i].split(":");
-                if (words.length != 2) {
+                // Look for index of the last colon in the argv[i] string.
+                int sep = argv[i].lastIndexOf(':');
+                if (sep == -1 || sep == 0) {
                     System.err.println(
-                        "Invalid host specification host:port needed.");
+                        "Invalid remote host specification host:port needed.");
                     usage();
                 }
                 try {
-                    tmpPort = Integer.parseInt(words[1]);
+                    tmpPort = Integer.parseInt(argv[i].substring(sep + 1));
                 } catch (NumberFormatException nfe) {
-                    System.err.println("Invalid host specification, " +
+                    System.err.println("Invalid remote host specification, " +
                         "could not parse port number.");
                     usage();
                 }
-                config.addOtherHost(words[0], tmpPort);
+                config.addOtherHost(argv[i].substring(0, sep), tmpPort);
             } else {
                 System.err.println("Unrecognized option: " + argv[i]);
                 usage();
@@ -160,6 +156,8 @@ public class RepQuoteExampleGSG implements EventHandler
         EnvironmentConfig envConfig = new EnvironmentConfig();
         envConfig.setErrorStream(System.err);
         envConfig.setErrorPrefix(RepConfig.progname);
+        /* Disable SSL for repmgr */
+        envConfig.setReplicationManagerSSLdisabled(true);
 
         envConfig.addReplicationManagerSite(repConfig.getThisHost());
         for (ReplicationHostAddress host = repConfig.getFirstOtherHost();
@@ -309,46 +307,67 @@ public class RepQuoteExampleGSG implements EventHandler
             dbenv.close();
     }
 
+    @Override
+    public void handleRepAutoTakeoverEvent()
+    {
+        // Ignored for now.
+    }
+
+    @Override
     public void handleRepAutoTakeoverFailedEvent()
     {
         // Ignored for now.
     }
 
+    @Override
     public void handleRepClientEvent()
     {
         dbenv.setIsMaster(false);
     }
 
+    @Override
     public void handleRepConnectBrokenEvent()
     {
         // Ignored for now.
     }
 
+    @Override
     public void handleRepConnectEstablishedEvent()
     {
         // Ignored for now.
     }
 
+    @Override
     public void handleRepConnectTryFailedEvent()
     {
         // Ignored for now.
     }
 
+    @Override
     public void handleRepInitDoneEvent()
     {
         // Ignored for now.
     }
 
+    @Override
+    public void handleRepInQueueFullEvent()
+    {
+        // Ignored for now.
+    }
+
+    @Override
     public void handleRepMasterEvent()
     {
         dbenv.setIsMaster(true);
     }
 
+    @Override
     public void handleRepNewMasterEvent(int envId)
     {
         // Ignored for now.
     }
 
+    @Override
     public void handleWriteFailedEvent(int errorCode)
     {
         System.err.println("Write to stable storage failed!" +
@@ -356,59 +375,70 @@ public class RepQuoteExampleGSG implements EventHandler
         System.err.println("Continuing....");
     }
 
+    @Override
     public void handleRepStartupDoneEvent()
     {
         // Ignored for now.
     }
 
+    @Override
     public void handleRepPermFailedEvent()
     {
 	// Ignored for now.
     }
 
+    @Override
     public void handleRepLocalSiteRemovedEvent()
     {
         // Ignored for now.
     }
 
+    @Override
     public void handleRepSiteAddedEvent()
     {
         // Ignored for now.
     }
 
+    @Override
     public void handleRepSiteRemovedEvent()
     {
         // Ignored for now.
     }
 
+    @Override
     public void handleRepElectedEvent()
     {
         // Safely ignored for Replication Manager applications.
     }
 
+    @Override
     public void handleRepElectionFailedEvent()
     {
         // Safely ignored for Replication Manager applications that do
         // not manage their own master selection.
     }
 	
+    @Override
     public void handleRepJoinFailureEvent()
     {
         // Safely ignored since this application did not turn off AUTOINIT.
     }
 
+    @Override
     public void handleRepMasterFailureEvent()
     {
         // Safely ignored for Replication Manager applications that do
         // not manage their own master selection.
     }
 
+    @Override
     public void handleRepDupmasterEvent()
     {
         // Safely ignored for Replication Manager applications that do
         // not manage their own master selection.
     }
 
+    @Override
     public void handlePanicEvent()
     {
         System.err.println("Panic encountered!");

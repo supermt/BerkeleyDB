@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2009, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2009, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  */
 using System;
@@ -19,7 +19,7 @@ namespace BerkeleyDB {
 
         internal MPoolStats(Internal.MempStatStruct stats) {
             st = stats.st;
-            ci = new CacheInfo(st.st_gbytes, st.st_bytes, (int)st.st_max_ncache);
+            ci = new CacheInfo(st.st_gbytes, st.st_bytes, (int)st.st_ncache);
             mempfiles = new List<MPoolFileStats>();
             foreach (Internal.MPoolFileStatStruct file in stats.files)
                 mempfiles.Add(new MPoolFileStats(file));
@@ -31,13 +31,13 @@ namespace BerkeleyDB {
         /// <summary>
         /// Maximum number of regions. 
         /// </summary>
-        public uint CacheRegions { get { return st.st_ncache; } }
+        public uint MaxCacheRegions { get { return st.st_max_ncache; } }
         /// <summary>
         /// Maximum file size for mmap. 
         /// </summary>
         public ulong MaxMMapSize { get { return (ulong)st.st_mmapsize.ToInt64(); } }
         /// <summary>
-        /// Maximum number of open fd's. 
+        /// Maximum number of open file descriptors. 
         /// </summary>
         public int MaxOpenFileDescriptors { get { return st.st_maxopenfd; } }
         /// <summary>
@@ -169,7 +169,7 @@ namespace BerkeleyDB {
         /// </summary>
         public ulong BucketsCheckedDuringAlloc { get { return st.st_alloc_buckets; } }
         /// <summary>
-        /// Max checked during allocation. 
+        /// Max buckets checked during allocation. 
         /// </summary>
         public ulong MaxBucketsCheckedDuringAlloc { get { return st.st_alloc_max_buckets; } }
         /// <summary>
@@ -177,7 +177,7 @@ namespace BerkeleyDB {
         /// </summary>
         public ulong PagesCheckedDuringAlloc { get { return st.st_alloc_pages; } }
         /// <summary>
-        /// Max checked during allocation. 
+        /// Max pages checked during allocation. 
         /// </summary>
         public ulong MaxPagesCheckedDuringAlloc { get { return st.st_alloc_max_pages; } }
         /// <summary>

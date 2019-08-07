@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2004, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2004, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -119,8 +119,15 @@ __rep_verify(env, rp, rec, eid, savetime)
 					goto out;
 			}
 		}
+		/*
+		 * Search for a matching perm record.  If none is found,
+		 * or a database or file delete is encountered before the
+		 * perm record, begin internal init.  Database and blob file
+		 * deletes cannot be undone once committed, so internal init
+		 * must be used to re-create the files.
+		 */
 		if ((ret = __rep_log_backup(env, logc, &lsn,
-		    REP_REC_PERM)) == 0) {
+		    REP_REC_PERM_DEL)) == 0) {
 			MUTEX_LOCK(env, rep->mtx_clientdb);
 			lp->verify_lsn = lsn;
 			__os_gettime(env, &lp->rcvd_ts, 1);
@@ -163,20 +170,27 @@ __rep_verify(env, rp, rec, eid, savetime)
 					ret = __rep_internal_init(env, 0);
 				goto out;
 			}
+			/* We are about to roll back to prev_ckp.  Check if we
+			 * still have the earliest log record required by
+			 * prev_ckp.
+			 */
+			LOGCOPY_32(env, &rectype, mylog.data);
+			DB_ASSERT(env, rectype == DB___txn_ckp);
+			if ((ret = __txn_ckp_read(env,
+			    mylog.data, &ckp_args)) != 0)
+				goto out;
+			lsn = ckp_args->ckp_lsn;
+			__os_free(env, ckp_args);
+			if ((ret = __logc_get(logc,
+			    &lsn, &mylog, DB_SET)) != 0) {
+				if (ret == DB_NOTFOUND)
+					ret = __rep_internal_init(env, 0);
+				goto out;
+			}
 			/*
 			 * We succeeded reading for the prev_ckp, so it's safe
 			 * to fall through to the verify_match.
 			 */
-		}
-		/*
-		 * Mixed version internal init doesn't work with 4.4, so we
-		 * can't load NIMDBs from a very old-version master.  So, fib to
-		 * ourselves that they're already loaded, so that we don't try.
-		 */
-		if (rep->version == DB_REPVERSION_44) {
-			REP_SYSTEM_LOCK(env);
-			F_SET(rep, REP_F_NIMDBS_LOADED);
-			REP_SYSTEM_UNLOCK(env);
 		}
 		if (F_ISSET(rep, REP_F_NIMDBS_LOADED))
 			ret = __rep_verify_match(env, &rp->lsn, savetime);
@@ -204,11 +218,13 @@ __rep_internal_init(env, abbrev)
 	ENV *env;
 	u_int32_t abbrev;
 {
+	DB_REP *db_rep;
 	REP *rep;
 	u_int32_t ctlflags;
 	int master, ret;
 
 	ctlflags = 0;
+	db_rep = env->rep_handle;
 	rep = env->rep_handle->region;
 	REP_SYSTEM_LOCK(env);
 #ifdef HAVE_STATISTICS
@@ -230,6 +246,15 @@ __rep_internal_init(env, abbrev)
 			 "send UPDATE_REQ, merely to check for NIMDB refresh"));
 			F_SET(rep, REP_F_ABBREVIATED);
 			FLD_SET(ctlflags, REPCTL_INMEM_ONLY);
+#ifdef HAVE_REPLICATION_THREADS
+			/*
+			 * Inform repmgr that an abbreviated internal init
+			 * is in progress.  This needs to remain set until
+			 * repmgr receives the REP_INIT_DONE event so that
+			 * it can avoid marking the gmdb dirty in this case.
+			 */
+			db_rep->abbrev_init = TRUE;
+#endif
 		} else
 			F_CLR(rep, REP_F_ABBREVIATED);
 		ZERO_LSN(rep->first_lsn);
@@ -458,7 +483,6 @@ __rep_dorecovery(env, lsnp, trunclsnp)
 	int ret, rollback, skip_rec, t_ret, update;
 	u_int32_t rectype, opcode;
 	__txn_regop_args *txnrec;
-	__txn_regop_42_args *txn42rec;
 
 	db_rep = env->rep_handle;
 	rep = db_rep->region;
@@ -510,19 +534,11 @@ __rep_dorecovery(env, lsnp, trunclsnp)
 		if (IS_PERM_RECTYPE(rectype) || rectype == DB___dbreg_register)
 			skip_rec = 0;
 		if (rectype == DB___txn_regop) {
-			if (rep->version >= DB_REPVERSION_44) {
-				if ((ret = __txn_regop_read(
-				    env, mylog.data, &txnrec)) != 0)
-					goto err;
-				opcode = txnrec->opcode;
-				__os_free(env, txnrec);
-			} else {
-				if ((ret = __txn_regop_42_read(
-				    env, mylog.data, &txn42rec)) != 0)
-					goto err;
-				opcode = txn42rec->opcode;
-				__os_free(env, txn42rec);
-			}
+			if ((ret = __txn_regop_read(
+			    env, mylog.data, &txnrec)) != 0)
+				goto err;
+			opcode = txnrec->opcode;
+			__os_free(env, txnrec);
 			if (opcode != TXN_ABORT) {
 				rollback = 1;
 				update = 1;
@@ -569,10 +585,12 @@ __rep_dorecovery(env, lsnp, trunclsnp)
 	 * close it here now, to save ourselves the trouble of worrying about it
 	 * later.
 	 */
+	MUTEX_LOCK(env, db_rep->mtx_lsnhist);
 	if (update && db_rep->lsn_db != NULL) {
 		ret = __db_close(db_rep->lsn_db, NULL, DB_NOSYNC);
 		db_rep->lsn_db = NULL;
 	}
+	MUTEX_UNLOCK(env, db_rep->mtx_lsnhist);
 
 err:	if ((t_ret = __logc_close(logc)) != 0 && ret == 0)
 		ret = t_ret;
@@ -655,8 +673,10 @@ __rep_verify_match(env, reclsnp, savetime)
 	/*
 	 * Lockout the API and wait for operations to complete.
 	 */
-	if ((ret = __rep_lockout_api(env, rep)) != 0)
+	if ((ret = __rep_lockout_api(env, rep)) != 0) {
+		FLD_CLR(rep->lockout_flags, REP_LOCKOUT_MSG);
 		goto errunlock;
+	}
 
 	/* OK, everyone is out, we can now run recovery. */
 	REP_SYSTEM_UNLOCK(env);
@@ -692,6 +712,10 @@ __rep_verify_match(env, reclsnp, savetime)
 	 */
 	if (db_rep->rep_db == NULL &&
 	    (ret = __rep_client_dbinit(env, 0, REP_DB)) != 0) {
+		REP_SYSTEM_LOCK(env);
+		FLD_CLR(rep->lockout_flags,
+		    REP_LOCKOUT_API | REP_LOCKOUT_MSG | REP_LOCKOUT_OP);
+		REP_SYSTEM_UNLOCK(env);
 		MUTEX_UNLOCK(env, rep->mtx_clientdb);
 		goto out;
 	}

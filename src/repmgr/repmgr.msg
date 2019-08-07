@@ -27,7 +27,23 @@ ARG	ack_policy	u_int32_t
 ARG	flags		u_int32_t
 END
 
+BEGIN_MSG v6permlsn
+ARG	generation	u_int32_t
+ARG	lsn		DB_LSN
+END
+
 BEGIN_MSG permlsn
+ARG	generation	u_int32_t
+ARG	lsn		DB_LSN
+ARG	last_ckp_lsn	DB_LSN
+END
+
+BEGIN_MSG heartbeat
+ARG	generation	u_int32_t
+ARG	lsn		DB_LSN
+END
+
+BEGIN_MSG readonly_response
 ARG	generation	u_int32_t
 ARG	lsn		DB_LSN
 END
@@ -80,7 +96,7 @@ END
  * DB releases.  The "version" counts group changes that the application makes
  * by adding or removing sites; thus it varies dynamically thoughout the life of
  * a group, during a single release of Berkeley DB.
- */ 
+ */
 BEGIN_MSG member_metadata
 ARG	format		u_int32_t
 ARG	version		u_int32_t
@@ -139,4 +155,15 @@ END
 BEGIN_MSG v4connect_reject
 ARG	version		u_int32_t
 ARG	gen		u_int32_t
+END
+
+/*
+ * For preferred master LSN history comparison between the sites.
+ * The next_gen_lsn is [0,0] if the next generation doesn't yet exist.
+ */
+BEGIN_MSG lsnhist_match
+ARG	lsn		DB_LSN
+ARG	hist_sec	u_int32_t
+ARG	hist_nsec	u_int32_t
+ARG	next_gen_lsn	DB_LSN
 END

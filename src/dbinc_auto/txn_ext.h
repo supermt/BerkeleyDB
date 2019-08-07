@@ -7,6 +7,7 @@ extern "C" {
 #endif
 
 int __txn_begin_pp __P((DB_ENV *, DB_TXN *, DB_TXN **, u_int32_t));
+int __txn_allocate __P((ENV *, DB_TXN **));
 int __txn_begin __P((ENV *, DB_THREAD_INFO *, DB_TXN *, DB_TXN **, u_int32_t));
 int __txn_recycle_id __P((ENV *, int));
 int __txn_continue __P((ENV *, DB_TXN *, TXN_DETAIL *, DB_THREAD_INFO *, int));
@@ -25,6 +26,9 @@ int __txn_force_abort __P((ENV *, u_int8_t *));
 int __txn_preclose __P((ENV *));
 int __txn_reset __P((ENV *));
 int __txn_applied_pp __P((DB_ENV *, DB_TXN_TOKEN *, db_timeout_t, u_int32_t));
+int __txn_init_timeout __P((DB_TXN *, DB_TXN *));
+int __txn_slice_begin __P((DB_TXN *, DB_TXN **, db_slice_t));
+int __txn_multislice __P((DB_TXN *));
 int __txn_init_recover __P((ENV *, DB_DISTAB *));
 int __txn_regop_42_print __P((ENV *, DBT *, DB_LSN *, db_recops, void *));
 int __txn_regop_print __P((ENV *, DBT *, DB_LSN *, db_recops, void *));
@@ -53,13 +57,12 @@ int __txn_ckp_recover __P((ENV *, DBT *, DB_LSN *, db_recops, void *));
 int __txn_child_recover __P((ENV *, DBT *, DB_LSN *, db_recops, void *));
 int __txn_restore_txn __P((ENV *, DB_LSN *, __txn_prepare_args *));
 int __txn_recycle_recover __P((ENV *, DBT *, DB_LSN *, db_recops, void *));
-int __txn_regop_42_recover __P((ENV *, DBT *, DB_LSN *, db_recops, void *));
-int __txn_ckp_42_recover __P((ENV *, DBT *, DB_LSN *, db_recops, void *));
 int __txn_recover_pp __P((DB_ENV *, DB_PREPLIST *, long, long *, u_int32_t));
 int __txn_recover __P((ENV *, DB_PREPLIST *, long, long *, u_int32_t));
 int __txn_get_prepared __P((ENV *, XID *, DB_PREPLIST *, long, long *, u_int32_t));
 int __txn_openfiles __P((ENV *, DB_THREAD_INFO *, DB_LSN *, int));
 int __txn_open __P((ENV *));
+int __txn_region_detach __P((ENV *, DB_TXNMGR *));
 int __txn_findlastckp __P((ENV *, DB_LSN *, DB_LSN *));
 int __txn_env_refresh __P((ENV *));
 u_int32_t __txn_region_mutex_count __P((ENV *));

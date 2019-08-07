@@ -1,4 +1,10 @@
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2006 June 10
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -35,10 +41,14 @@
 ** to be compiled into an sqlite dynamic extension.
 */
 #ifdef SQLITE_TEST
-  #include "sqliteInt.h"
-  #include "tcl.h"
+#  include "sqliteInt.h"
+#  if defined(INCLUDE_SQLITE_TCL_H)
+#    include "sqlite_tcl.h"
+#  else
+#    include "tcl.h"
+#  endif
 #else
-  #include "sqlite3ext.h"
+#  include "sqlite3ext.h"
   SQLITE_EXTENSION_INIT1
 #endif
 
@@ -189,7 +199,7 @@ static int schemaNext(sqlite3_vtab_cursor *cur){
 
       /* Set zSql to the SQL to pull the list of tables from the 
       ** sqlite_master (or sqlite_temp_master) table of the database
-      ** identfied by the row pointed to by the SQL statement pCur->pDbList
+      ** identified by the row pointed to by the SQL statement pCur->pDbList
       ** (iterating through a "PRAGMA database_list;" statement).
       */
       if( sqlite3_column_int(pCur->pDbList, 0)==1 ){
@@ -302,7 +312,7 @@ extern int getDbPointer(Tcl_Interp *interp, const char *zA, sqlite3 **ppDb);
 /*
 ** Register the schema virtual table module.
 */
-static int register_schema_module(
+static int SQLITE_TCLAPI register_schema_module(
   ClientData clientData, /* Not used */
   Tcl_Interp *interp,    /* The TCL interpreter that invoked this command */
   int objc,              /* Number of arguments */
@@ -344,7 +354,10 @@ int Sqlitetestschema_Init(Tcl_Interp *interp){
 /*
 ** Extension load function.
 */
-int sqlite3_extension_init(
+#ifdef _WIN32
+__declspec(dllexport)
+#endif
+int sqlite3_schema_init(
   sqlite3 *db, 
   char **pzErrMsg, 
   const sqlite3_api_routines *pApi

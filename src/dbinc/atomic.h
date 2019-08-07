@@ -1,7 +1,7 @@
 /*
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2009, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2009, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -10,6 +10,9 @@
 #define	_DB_ATOMIC_H_
 
 #if defined(__cplusplus)
+#if __cplusplus >= 201103L
+#include <atomic>
+#endif
 extern "C" {
 #endif
 
@@ -25,9 +28,22 @@ extern "C" {
  *	 atomic_dec(env, valueptr)
  *	    Subtracts 1 from the db_atomic_t value, returning the new value.
  *
+ *	 atomic_add(env, valueptr, delta)
+ *	    Add delta to the db_atomic_t value, returning the new value.
+ *
  *	 atomic_compare_exchange(env, valueptr, oldval, newval)
  *	    If the db_atomic_t's value is still oldval, set it to newval.
  *	    It returns 1 for success or 0 for failure.
+ *
+ *	 atomic_init(valueptr, val)
+ *	    Initializes an existing atomic object. It should be used before
+ *	    read or write operations.
+ *
+ *	 atomic_read(valueptr)
+ *	    Reads a value from an atomic object.
+ *
+ *	 atomic_write(valueptr, val)
+ *	    Stores a value in an atomic object.
  *
  * The ENV * parameter is used only when HAVE_ATOMIC_SUPPORT is undefined.
  *
@@ -39,6 +55,20 @@ extern "C" {
  * Uses where mutexes are not available (e.g. the environment has not yet
  * attached to the mutex region) must be avoided.
  */
+#ifdef HAVE_ATOMIC_SUPPORT
+
+/*
+ * If the compiler supports C11/C++11 atomic operations, use its support in
+ * preference to any other implementation.
+ */
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__)
+#include <stdatomic.h>
+typedef int32_t atomic_value_t;
+typedef volatile _Atomic(atomic_value_t) db_atomic_t;
+#elif defined(__cplusplus) && (__cplusplus >= 201103L)
+typedef int32_t atomic_value_t;
+typedef volatile std::atomic<atomic_value_t> db_atomic_t;
+#else
 #if defined(DB_WIN32)
 typedef DWORD	atomic_value_t;
 #else
@@ -62,6 +92,14 @@ typedef struct {
 	volatile atomic_value_t value;
 } db_atomic_t;
 #endif
+#endif
+
+#else
+typedef int32_t	 atomic_value_t;
+typedef struct {
+	volatile atomic_value_t value;
+} db_atomic_t;
+#endif
 
 /*
  * These macro hide the db_atomic_t structure layout and help detect
@@ -69,22 +107,87 @@ typedef struct {
  * aligned 32-bit reads to be atomic even outside of explicit 'atomic' calls.
  * These have no memory barriers; the caller must include them when necessary.
  */
+#ifdef HAVE_ATOMIC_SUPPORT
+
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__)
+static inline atomic_value_t atomic_read(db_atomic_t *p) {
+	return atomic_load(p);
+}
+static inline void atomic_write(db_atomic_t *p, atomic_value_t val) {
+	atomic_store(p, val);
+}
+#elif defined(__cplusplus) && (__cplusplus >= 201103L)
+static inline atomic_value_t atomic_read(db_atomic_t *p) {
+	return p->load();
+}
+static inline void atomic_write(db_atomic_t *p, atomic_value_t val) {
+	p->store(val);
+}
+#else
 #define	atomic_read(p)		((p)->value)
-#define	atomic_init(p, val)	((p)->value = (val))
+static inline void atomic_init(db_atomic_t *p, atomic_value_t val) {
+	p->value = val;
+}
+#define atomic_write(p, val) atomic_init(p, val)
+#endif
+
+#else
+#define	atomic_read(p)		((p)->value)
+static inline void atomic_init(db_atomic_t *p, atomic_value_t val) {
+	p->value = val;
+}
+#define atomic_write(p, val) atomic_init(p, val)
+#endif
 
 #ifdef HAVE_ATOMIC_SUPPORT
+
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__)
+#define atomic_inc(env, p) __atomic_fetch_add_int(p, 1)
+#define atomic_dec(env, p) __atomic_fetch_sub_int(p, 1)
+#define atomic_add(env, p, val) __atomic_fetch_add_int(p, val)
+#define atomic_compare_exchange(env, p, oval, nval) __atomic_compare_exchange_int(p, oval, nval)
+static inline int __atomic_fetch_add_int(db_atomic_t *p, int val)
+{
+	return (atomic_fetch_add(p, val) + val);
+}
+static inline int __atomic_fetch_sub_int(db_atomic_t *p, int val)
+{
+	return (atomic_fetch_sub(p, val) - val);
+}
+static inline int __atomic_compare_exchange_int(db_atomic_t *p, atomic_value_t oldval, atomic_value_t newval)
+{
+	atomic_value_t expected;
+	int ret;
+
+	expected = oldval;
+	ret = atomic_compare_exchange_strong(p, &expected, newval);
+	return (ret);
+}
+#elif defined(__cplusplus) && (__cplusplus >= 201103L)
+#define atomic_inc(env, p) __atomic_fetch_add_int(p, 1)
+#define atomic_dec(env, p) __atomic_fetch_sub_int(p, 1)
+#define atomic_add(env, p, val) __atomic_fetch_add_int(p, val)
+#define atomic_compare_exchange(env, p, oval, nval) (p)->compare_exchange_strong(oval, nval)
+static inline int __atomic_fetch_add_int(db_atomic_t *p, int val)
+{
+	return ((p)->fetch_add(val) + val);
+}
+static inline int __atomic_fetch_sub_int(db_atomic_t *p, int val)
+{
+	return ((p)->fetch_sub(val) - val);
+}
+#else
 
 #if defined(DB_WIN32)
 #if defined(DB_WINCE)
 #define	WINCE_ATOMIC_MAGIC(p)						\
 	/*								\
 	 * Memory mapped regions on Windows CE cause problems with	\
-	 * InterlockedXXX calls. Each page in a mapped region needs to	\
-	 * have been written to prior to an InterlockedXXX call, or the	\
-	 * InterlockedXXX call hangs. This does not seem to be		\
-	 * documented anywhere. For now, read/write a non-critical	\
-	 * piece of memory from the shared region prior to attempting	\
-	 * shared region prior to attempting an InterlockedExchange	\
+	 * InterlockedXXX calls. Each process making an InterlockedXXX	\
+	 * call must make sure that it has written to the page prior to	\
+	 * the call, or the InterlockedXXX call hangs. This does not	\
+	 * seem	to be documented anywhere. Write a non-critical piece	\
+	 * of memory from the shared region prior to attempting an	\
 	 * InterlockedXXX operation.					\
 	 */								\
 	(p)->dummy = 0
@@ -114,6 +217,9 @@ typedef LONG volatile *interlocked_val;
 #define	atomic_dec(env, p)						\
 	(WINCE_ATOMIC_MAGIC(p),						\
 	InterlockedDecrement((interlocked_val)(&(p)->value)))
+#define	atomic_add(env, p, val)						\
+	(WINCE_ATOMIC_MAGIC(p),						\
+	InterlockedExchangeAdd((interlocked_val)(&(p)->value), (val)) + (val))
 #if defined(_MSC_VER) && _MSC_VER < 1300
 #define	atomic_compare_exchange(env, p, oldval, newval)			\
 	(WINCE_ATOMIC_MAGIC(p),						\
@@ -134,37 +240,51 @@ typedef LONG volatile *interlocked_val;
 	atomic_inc_uint_nv((volatile unsigned int *) &(p)->value)
 #define	atomic_dec(env, p)	\
 	atomic_dec_uint_nv((volatile unsigned int *) &(p)->value)
+#define	atomic_add(env, p, val)	\
+	atomic_add_int_nv((volatile unsigned int *) &(p)->value, (val))
 #define	atomic_compare_exchange(env, p, oval, nval)		\
 	(atomic_cas_32((volatile unsigned int *) &(p)->value,	\
 	    (oval), (nval)) == (oval))
 #endif
 
+#if defined(HAVE_ATOMIC_GCC_BUILTIN)
+#define atomic_inc(env, p)	\
+	__atomic_add_fetch(&(p)->value, 1, __ATOMIC_SEQ_CST)
+#define atomic_dec(env, p)	\
+	__atomic_sub_fetch(&(p)->value, 1, __ATOMIC_SEQ_CST)
+#define atomic_add(env, p, val)	\
+	__atomic_add_fetch(&(p)->value, (val), __ATOMIC_SEQ_CST)
+#define atomic_compare_exchange(env, p, oval, nval)	\
+	__atomic_compare_exchange_int((p), (oval), (nval))
+static inline int __atomic_compare_exchange_int(
+	db_atomic_t *p, atomic_value_t oldval, atomic_value_t newval)
+{
+	atomic_value_t expected;
+	int ret;
+
+	expected = oldval;
+	ret = __atomic_compare_exchange_n(&p->value, &expected,
+	    newval, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+	return (ret);
+}
+#endif
+
 #if defined(HAVE_ATOMIC_X86_GCC_ASSEMBLY)
 /* x86/x86_64 gcc  */
-#define	atomic_inc(env, p)	__atomic_inc(p)
-#define	atomic_dec(env, p)	__atomic_dec(p)
+#define	atomic_inc(env, p)	__atomic_add(p, (1))
+#define	atomic_dec(env, p)	__atomic_add(p, (-1))
+#define	atomic_add(env, p, val)	__atomic_add(p, (val))
 #define	atomic_compare_exchange(env, p, o, n)	\
 	__atomic_compare_exchange_int((p), (o), (n))
-static inline int __atomic_inc(db_atomic_t *p)
+static inline int __atomic_add(db_atomic_t *p, int val)
 {
 	int	temp;
 
-	temp = 1;
+	temp = val;
 	__asm__ __volatile__("lock; xadd %0, (%1)"
 		: "+r"(temp)
 		: "r"(p));
-	return (temp + 1);
-}
-
-static inline int __atomic_dec(db_atomic_t *p)
-{
-	int	temp;
-
-	temp = -1;
-	__asm__ __volatile__("lock; xadd %0, (%1)"
-		: "+r"(temp)
-		: "r"(p));
-	return (temp - 1);
+	return (temp + val);
 }
 
 /*
@@ -190,6 +310,7 @@ static inline int __atomic_compare_exchange_int(
 	return (was == oldval);
 }
 #endif
+#endif
 
 #else
 /*
@@ -204,12 +325,16 @@ static inline int __atomic_compare_exchange_int(
  */
 #define	atomic_inc(env, p)	(++(p)->value)
 #define	atomic_dec(env, p)	(--(p)->value)
+#define	atomic_add(env, p, val)	((p)->value += (val))
 #define	atomic_compare_exchange(env, p, oldval, newval)		\
 	(DB_ASSERT(env, atomic_read(p) == (oldval)),		\
 	atomic_init(p, (newval)), 1)
 #else
-#define atomic_inc(env, p)	__atomic_inc(env, p)
-#define atomic_dec(env, p)	__atomic_dec(env, p)
+#define	atomic_inc(env, p)	__atomic_add_int(env, p, 1)
+#define	atomic_dec(env, p)	__atomic_add_int(env, p, -1)
+#define	atomic_add(env, p, val)	__atomic_add_int(env, p, (val))
+#define atomic_compare_exchange(env, p, oldval, newval)	\
+	__atomic_compare_exchange_int(env, p, oldval, newval)
 #endif
 #endif
 

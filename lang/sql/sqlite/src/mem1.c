@@ -1,4 +1,10 @@
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2007 August 14
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -49,16 +55,6 @@
 ** macros.
 */
 #ifdef SQLITE_SYSTEM_MALLOC
-
-/*
-** The MSVCRT has malloc_usable_size() but it is called _msize().
-** The use of _msize() is automatic, but can be disabled by compiling
-** with -DSQLITE_WITHOUT_MSIZE
-*/
-#if defined(_MSC_VER) && !defined(SQLITE_WITHOUT_MSIZE)
-# define SQLITE_MALLOCSIZE _msize
-#endif
-
 #if defined(__APPLE__) && !defined(SQLITE_WITHOUT_ZONEMALLOC)
 
 /*
@@ -67,7 +63,9 @@
 */
 #include <sys/sysctl.h>
 #include <malloc/malloc.h>
+#ifdef SQLITE_MIGHT_BE_SINGLE_CORE
 #include <libkern/OSAtomic.h>
+#endif /* SQLITE_MIGHT_BE_SINGLE_CORE */
 static malloc_zone_t* _sqliteZone_;
 #define SQLITE_MALLOC(x) malloc_zone_malloc(_sqliteZone_, (x))
 #define SQLITE_FREE(x) malloc_zone_free(_sqliteZone_, (x));
@@ -81,21 +79,47 @@ static malloc_zone_t* _sqliteZone_;
 ** Use standard C library malloc and free on non-Apple systems.  
 ** Also used by Apple systems if SQLITE_WITHOUT_ZONEMALLOC is defined.
 */
-#define SQLITE_MALLOC(x)    malloc(x)
-#define SQLITE_FREE(x)      free(x)
-#define SQLITE_REALLOC(x,y) realloc((x),(y))
+#define SQLITE_MALLOC(x)             malloc(x)
+#define SQLITE_FREE(x)               free(x)
+#define SQLITE_REALLOC(x,y)          realloc((x),(y))
 
-#if (defined(_MSC_VER) && !defined(SQLITE_WITHOUT_MSIZE)) \
-      || (defined(HAVE_MALLOC_H) && defined(HAVE_MALLOC_USABLE_SIZE))
-# include <malloc.h>    /* Needed for malloc_usable_size on linux */
+/*
+** The malloc.h header file is needed for malloc_usable_size() function
+** on some systems (e.g. Linux).
+*/
+#if HAVE_MALLOC_H && HAVE_MALLOC_USABLE_SIZE
+#  define SQLITE_USE_MALLOC_H 1
+#  define SQLITE_USE_MALLOC_USABLE_SIZE 1
+/*
+** The MSVCRT has malloc_usable_size(), but it is called _msize().  The
+** use of _msize() is automatic, but can be disabled by compiling with
+** -DSQLITE_WITHOUT_MSIZE.  Using the _msize() function also requires
+** the malloc.h header file.
+*/
+#elif defined(_MSC_VER) && !defined(SQLITE_WITHOUT_MSIZE)
+#  define SQLITE_USE_MALLOC_H
+#  define SQLITE_USE_MSIZE
 #endif
-#ifdef HAVE_MALLOC_USABLE_SIZE
-# ifndef SQLITE_MALLOCSIZE
-#  define SQLITE_MALLOCSIZE(x) malloc_usable_size(x)
-# endif
-#else
-# undef SQLITE_MALLOCSIZE
-#endif
+
+/*
+** Include the malloc.h header file, if necessary.  Also set define macro
+** SQLITE_MALLOCSIZE to the appropriate function name, which is _msize()
+** for MSVC and malloc_usable_size() for most other systems (e.g. Linux).
+** The memory size function can always be overridden manually by defining
+** the macro SQLITE_MALLOCSIZE to the desired function name.
+*/
+#if defined(SQLITE_USE_MALLOC_H)
+#  include <malloc.h>
+#  if defined(SQLITE_USE_MALLOC_USABLE_SIZE)
+#    if !defined(SQLITE_MALLOCSIZE)
+#      define SQLITE_MALLOCSIZE(x)   malloc_usable_size(x)
+#    endif
+#  elif defined(SQLITE_USE_MSIZE)
+#    if !defined(SQLITE_MALLOCSIZE)
+#      define SQLITE_MALLOCSIZE      _msize
+#    endif
+#  endif
+#endif /* defined(SQLITE_USE_MALLOC_H) */
 
 #endif /* __APPLE__ or not __APPLE__ */
 
@@ -109,7 +133,9 @@ static malloc_zone_t* _sqliteZone_;
 */
 static void *sqlite3MemMalloc(int nByte){
 #ifdef SQLITE_MALLOCSIZE
-  void *p = SQLITE_MALLOC( nByte );
+  void *p;
+  testcase( ROUND8(nByte)==nByte );
+  p = SQLITE_MALLOC( nByte );
   if( p==0 ){
     testcase( sqlite3GlobalConfig.xLog!=0 );
     sqlite3_log(SQLITE_NOMEM, "failed to allocate %u bytes of memory", nByte);
@@ -118,7 +144,7 @@ static void *sqlite3MemMalloc(int nByte){
 #else
   sqlite3_int64 *p;
   assert( nByte>0 );
-  nByte = ROUND8(nByte);
+  testcase( ROUND8(nByte)!=nByte );
   p = SQLITE_MALLOC( nByte+8 );
   if( p ){
     p[0] = nByte;
@@ -156,10 +182,11 @@ static void sqlite3MemFree(void *pPrior){
 */
 static int sqlite3MemSize(void *pPrior){
 #ifdef SQLITE_MALLOCSIZE
-  return pPrior ? (int)SQLITE_MALLOCSIZE(pPrior) : 0;
+  assert( pPrior!=0 );
+  return (int)SQLITE_MALLOCSIZE(pPrior);
 #else
   sqlite3_int64 *p;
-  if( pPrior==0 ) return 0;
+  assert( pPrior!=0 );
   p = (sqlite3_int64*)pPrior;
   p--;
   return (int)p[0];
@@ -172,7 +199,7 @@ static int sqlite3MemSize(void *pPrior){
 **
 ** For this low-level interface, we know that pPrior!=0.  Cases where
 ** pPrior==0 while have been intercepted by higher-level routine and
-** redirected to xMalloc.  Similarly, we know that nByte>0 becauses
+** redirected to xMalloc.  Similarly, we know that nByte>0 because
 ** cases where nByte<=0 will have been intercepted by higher-level
 ** routines and redirected to xFree.
 */
@@ -231,19 +258,10 @@ static int sqlite3MemInit(void *NotUsed){
   }else{
     /* only 1 core, use our own zone to contention over global locks, 
     ** e.g. we have our own dedicated locks */
-    bool success;
-    malloc_zone_t* newzone = malloc_create_zone(4096, 0);
-    malloc_set_zone_name(newzone, "Sqlite_Heap");
-    do{
-      success = OSAtomicCompareAndSwapPtrBarrier(NULL, newzone, 
-                                 (void * volatile *)&_sqliteZone_);
-    }while(!_sqliteZone_);
-    if( !success ){
-      /* somebody registered a zone first */
-      malloc_destroy_zone(newzone);
-    }
+    _sqliteZone_ = malloc_create_zone(4096, 0);
+    malloc_set_zone_name(_sqliteZone_, "Sqlite_Heap");
   }
-#endif
+#endif /*  defined(__APPLE__) && !defined(SQLITE_WITHOUT_ZONEMALLOC) */
   UNUSED_PARAMETER(NotUsed);
   return SQLITE_OK;
 }

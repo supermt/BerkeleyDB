@@ -7,23 +7,26 @@
     <link rel="stylesheet" href="apiReference.css" type="text/css" />
     <meta name="generator" content="DocBook XSL Stylesheets V1.73.2" />
     <link rel="start" href="index.html" title="Berkeley DB C API Reference" />
-    <link rel="up" href="blob.html" title="Chapter 13.  Binary Large Objects" />
+    <link rel="up" href="blob.html" title="Chapter 13.  External Files" />
     <link rel="prev" href="dbstream_close.html" title="DB_STREAM-&gt;close()" />
     <link rel="next" href="dbstream_size.html" title="DB_STREAM-&gt;size()" />
   </head>
   <body>
     <div xmlns="" class="navheader">
       <div class="libver">
-        <p>Library Version 12.1.6.0</p>
+        <p>Library Version 18.1.32</p>
       </div>
       <table width="100%" summary="Navigation header">
         <tr>
-          <th colspan="3" align="center">DB_STREAM-&gt;read()</th>
+          <th colspan="3" align="center">
+        <span xmlns="http://www.w3.org/1999/xhtml">DB_STREAM-&gt;read()</span>
+        
+    </th>
         </tr>
         <tr>
           <td width="20%" align="left"><a accesskey="p" href="dbstream_close.html">Prev</a> </td>
           <th width="60%" align="center">Chapter 13. 
-                Binary Large Objects
+                External Files
         </th>
           <td width="20%" align="right"> <a accesskey="n" href="dbstream_size.html">Next</a></td>
         </tr>
@@ -34,7 +37,10 @@
       <div class="titlepage">
         <div>
           <div>
-            <h2 class="title" style="clear: both"><a id="dbstream_read"></a>DB_STREAM-&gt;read()</h2>
+            <h2 class="title" style="clear: both"><a id="dbstream_read"></a>
+        <span>DB_STREAM-&gt;read()</span>
+        
+    </h2>
           </div>
         </div>
       </div>
@@ -45,12 +51,15 @@ DB_STREAM-&gt;read(DB_STREAM *dbs, DBT *data, db_off_t offset,
                 u_int32_t size, u_int32_t flags); </pre>
       <p>
         The <code class="methodname">DB_STREAM-&gt;read()</code> method reads
-        <span class="bold"><strong>size</strong></span> bytes from the BLOB, starting
-        at <span class="bold"><strong>offset</strong></span>, into the
+        <span class="bold"><strong>size</strong></span> bytes from the external file,
+	starting at <span class="bold"><strong>offset</strong></span>, into the
         DBT <span class="bold"><strong>data</strong></span>.
      </p>
       <p>
-         The stream is created using <a class="xref" href="dbstream.html" title="DBC-&gt;db_stream()">DBC-&gt;db_stream()</a>.
+         The stream is created using <a class="xref" href="dbstream.html" title="DBC-&gt;db_stream()">
+        <span>DBC-&gt;db_stream()</span>
+        
+    </a>.
      </p>
       <p>
          Unless otherwise specified, the
@@ -65,7 +74,7 @@ DB_STREAM-&gt;read(DB_STREAM *dbs, DBT *data, db_off_t offset,
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp4853480"></a>Parameters</h3>
+              <h3 class="title"><a id="idm140113479711440"></a>Parameters</h3>
             </div>
           </div>
         </div>
@@ -73,7 +82,7 @@ DB_STREAM-&gt;read(DB_STREAM *dbs, DBT *data, db_off_t offset,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp4848592"></a>data</h4>
+                <h4 class="title"><a id="idm140113479617824"></a>data</h4>
               </div>
             </div>
           </div>
@@ -95,21 +104,22 @@ DB_STREAM-&gt;read(DB_STREAM *dbs, DBT *data, db_off_t offset,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp4841800"></a>offset</h4>
+                <h4 class="title"><a id="idm140113479632000"></a>offset</h4>
               </div>
             </div>
           </div>
           <p>
                   The <span class="bold"><strong>offset</strong></span> parameter
                   indicates the starting position, in bytes, from the
-                  beginning of the BLOB where you want the read to begin.
+                  beginning of the external file where you want the read to
+                  begin.
              </p>
         </div>
         <div class="sect3" lang="en" xml:lang="en">
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp4859456"></a>size</h4>
+                <h4 class="title"><a id="idm140113479614864"></a>size</h4>
               </div>
             </div>
           </div>
@@ -122,7 +132,7 @@ DB_STREAM-&gt;read(DB_STREAM *dbs, DBT *data, db_off_t offset,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp4861888"></a>flags</h4>
+                <h4 class="title"><a id="idm140113479603520"></a>flags</h4>
               </div>
             </div>
           </div>
@@ -135,7 +145,7 @@ DB_STREAM-&gt;read(DB_STREAM *dbs, DBT *data, db_off_t offset,
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp4863432"></a>Errors</h3>
+              <h3 class="title"><a id="idm140113479601584"></a>Errors</h3>
             </div>
           </div>
         </div>
@@ -151,7 +161,7 @@ DB_STREAM-&gt;read(DB_STREAM *dbs, DBT *data, db_off_t offset,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp4868080"></a>DB_BUFFER_SMALL</h4>
+                <h4 class="title"><a id="idm140113479603712"></a>DB_BUFFER_SMALL</h4>
               </div>
             </div>
           </div>
@@ -165,7 +175,7 @@ DB_STREAM-&gt;read(DB_STREAM *dbs, DBT *data, db_off_t offset,
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp4875736"></a>EINVAL</h4>
+                <h4 class="title"><a id="idm140113479594992"></a>EINVAL</h4>
               </div>
             </div>
           </div>
@@ -180,24 +190,24 @@ DB_STREAM-&gt;read(DB_STREAM *dbs, DBT *data, db_off_t offset,
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp4868936"></a>Class</h3>
+              <h3 class="title"><a id="idm140113479604288"></a>Class</h3>
             </div>
           </div>
         </div>
         <p>
-            <a class="link" href="blob.html" title="Chapter 13.  Binary Large Objects">DB_STREAM</a>  
+            <a class="link" href="blob.html" title="Chapter 13.  External Files">DB_STREAM</a>  
         </p>
       </div>
       <div class="sect2" lang="en" xml:lang="en">
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp4852144"></a>See Also</h3>
+              <h3 class="title"><a id="idm140113479601168"></a>See Also</h3>
             </div>
           </div>
         </div>
         <p>
-             <a class="xref" href="blob.html#bloblist" title="BLOBs and Related Methods">BLOBs and Related Methods</a> 
+             <a class="xref" href="blob.html#bloblist" title="External Files and Related Methods">External Files and Related Methods</a> 
         </p>
       </div>
     </div>
@@ -212,11 +222,17 @@ DB_STREAM-&gt;read(DB_STREAM *dbs, DBT *data, db_off_t offset,
           <td width="40%" align="right"> <a accesskey="n" href="dbstream_size.html">Next</a></td>
         </tr>
         <tr>
-          <td width="40%" align="left" valign="top">DB_STREAM-&gt;close() </td>
+          <td width="40%" align="left" valign="top">
+        <span>DB_STREAM-&gt;close()</span>
+        
+     </td>
           <td width="20%" align="center">
             <a accesskey="h" href="index.html">Home</a>
           </td>
-          <td width="40%" align="right" valign="top"> DB_STREAM-&gt;size()</td>
+          <td width="40%" align="right" valign="top"> 
+        <span>DB_STREAM-&gt;size()</span>
+        
+    </td>
         </tr>
       </table>
     </div>

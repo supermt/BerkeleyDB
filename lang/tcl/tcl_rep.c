@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1999, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1999, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -31,15 +31,32 @@ static const NAMEMAP rep_ack_policies[] = {
 	{NULL,			0}
 };
 
+static const NAMEMAP repmgr_ssl_config[] = {
+	{"ca_cert",		DB_REPMGR_SSL_CA_CERT},
+	{"ca_dir",		DB_REPMGR_SSL_CA_DIR},
+	{"node_cert",		DB_REPMGR_SSL_REPNODE_CERT},
+	{"node_pkey",		DB_REPMGR_SSL_REPNODE_PRIVATE_KEY},
+	{"pkey_passwd",		DB_REPMGR_SSL_REPNODE_KEY_PASSWD},
+	{"verify_depth", 	DB_REPMGR_SSL_VERIFY_DEPTH},
+	{NULL,			0}
+};
+
 static const NAMEMAP rep_config_types[] = {
 	{"autoinit",		DB_REP_CONF_AUTOINIT},
 	{"autorollback",	DB_REP_CONF_AUTOROLLBACK},
 	{"bulk",		DB_REP_CONF_BULK},
 	{"delayclient",		DB_REP_CONF_DELAYCLIENT},
+	{"electloglength",	DB_REP_CONF_ELECT_LOGLENGTH},
 	{"inmem",		DB_REP_CONF_INMEM},
 	{"lease",		DB_REP_CONF_LEASE},
 	{"mgr2sitestrict",	DB_REPMGR_CONF_2SITE_STRICT},
+	{"mgrdisablepoll",	DB_REPMGR_CONF_DISABLE_POLL},
+	{"mgrdisablessl",	DB_REPMGR_CONF_DISABLE_SSL},
 	{"mgrelections",	DB_REPMGR_CONF_ELECTIONS},
+	{"mgrenableepoll",	DB_REPMGR_CONF_ENABLE_EPOLL},
+	{"mgrforwardwrites",	DB_REPMGR_CONF_FORWARD_WRITES},
+	{"mgrprefmasclient",	DB_REPMGR_CONF_PREFMAS_CLIENT},
+	{"mgrprefmasmaster",	DB_REPMGR_CONF_PREFMAS_MASTER},
 	{"nowait",		DB_REP_CONF_NOWAIT},
 	{NULL,			0}
 };
@@ -48,12 +65,13 @@ static const NAMEMAP rep_timeout_types[] = {
 	{"ack",			DB_REP_ACK_TIMEOUT},
 	{"checkpoint_delay",	DB_REP_CHECKPOINT_DELAY},
 	{"connection_retry",	DB_REP_CONNECTION_RETRY},
-	{"election",		DB_REP_ELECTION_TIMEOUT},
 	{"election_retry",	DB_REP_ELECTION_RETRY},
+	{"election",		DB_REP_ELECTION_TIMEOUT},
 	{"full_election",	DB_REP_FULL_ELECTION_TIMEOUT},
 	{"heartbeat_monitor",	DB_REP_HEARTBEAT_MONITOR},
 	{"heartbeat_send",	DB_REP_HEARTBEAT_SEND},
 	{"lease",		DB_REP_LEASE_TIMEOUT},
+	{"write_forward",	DB_REP_WRITE_FORWARD_TIMEOUT},
 	{NULL,			0}
 };
 
@@ -115,6 +133,56 @@ tcl_RepConfig(interp, dbenv, list)
 }
 
 /*
+ * tcl_RepMgrSSLConfig --
+ *	Call DB_ENV->repmgr_set_ssl_config().
+ *
+ * PUBLIC: int tcl_RepMgrSSLConfig
+ * PUBLIC:     __P((Tcl_Interp *, DB_ENV *, Tcl_Obj *));
+ */
+int
+tcl_RepMgrSSLConfig(interp, dbenv, list)
+	Tcl_Interp *interp;		/* Interpreter */
+	DB_ENV *dbenv;			/* Environment pointer */
+	Tcl_Obj *list;			/* {which value} */
+{
+	Tcl_Obj **myobjv, *which;
+	int myobjc, optindex, result, ret;
+	char *val;
+	u_int32_t wh;
+
+	result = Tcl_ListObjGetElements(interp, list, &myobjc, &myobjv);
+
+	if (result != TCL_OK)
+		return (result);
+
+	if (myobjc != 2) {
+		Tcl_WrongNumArgs(interp, 2, myobjv,
+		    "?-repmgr_ssl_config {config_type config_value}?");
+		result = TCL_ERROR;
+		return (result);
+	}
+
+	which = myobjv[0];
+	val = Tcl_GetStringFromObj(myobjv[1], NULL);
+
+	_debug_check();
+
+	if (Tcl_GetIndexFromObjStruct(interp, which,
+		&repmgr_ssl_config[0].name, sizeof(NAMEMAP),
+		"config type", TCL_EXACT, &optindex) != TCL_OK)
+		return (IS_HELP(which));
+
+	wh = repmgr_ssl_config[optindex].value;
+
+	_debug_check();
+
+	ret = dbenv->repmgr_set_ssl_config(dbenv, wh, val);
+
+	return (_ReturnSetup(interp, ret, DB_RETOK_STD(ret),
+	    "env repmgr_ssl_config"));
+}
+
+/*
  * tcl_RepGetTwo --
  *	Call replication getters that return 2 values.
  *
@@ -137,8 +205,12 @@ tcl_RepGetTwo(interp, dbenv, op)
 	case DBTCL_GETCLOCK:
 		ret = dbenv->rep_get_clockskew(dbenv, &val1, &val2);
 		break;
-	case DBTCL_GETINQUEUE:
+	case DBTCL_GETINQUEUE_MAX:
 		ret = dbenv->repmgr_get_incoming_queue_max(dbenv,
+		    &val1, &val2);
+		break;
+	case DBTCL_GETINQUEUE_REDZONE:
+		ret = __repmgr_get_incoming_queue_redzone(dbenv,
 		    &val1, &val2);
 		break;
 	case DBTCL_GETLIMIT:
@@ -636,10 +708,14 @@ tcl_RepNoarchiveTimeout(interp, dbenv)
 	_debug_check();
 	infop = env->reginfo;
 	renv = infop->primary;
-	REP_SYSTEM_LOCK(env);
+	/*
+	 * Since this function is only used in testing, skip the 
+	 * mutex counter.
+	 */
+	MUTEX_LOCK_NO_CTR(env, env->rep_handle->region->mtx_region);
 	F_CLR(renv, DB_REGENV_REPLOCKED);
 	renv->op_timestamp = 0;
-	REP_SYSTEM_UNLOCK(env);
+	MUTEX_UNLOCK_NO_CTR(env, env->rep_handle->region->mtx_region);
 
 	return (_ReturnSetup(interp,
 	    0, DB_RETOK_STD(0), "env test force noarchive_timeout"));
@@ -948,7 +1024,7 @@ tcl_RepStat(interp, objc, objv, dbenv)
 	result = TCL_OK;
 
 	if (objc > 3) {
-		Tcl_WrongNumArgs(interp, 2, objv, NULL);
+		Tcl_WrongNumArgs(interp, 2, objv, "?-clear?");
 		return (TCL_ERROR);
 	}
 	if (objc == 3) {
@@ -988,6 +1064,13 @@ tcl_RepStat(interp, objc, objv, dbenv)
 	MAKE_STAT_LSN("Next LSN expected", &sp->st_next_lsn);
 	MAKE_STAT_LSN("First missed LSN", &sp->st_waiting_lsn);
 	MAKE_STAT_LSN("Maximum permanent LSN", &sp->st_max_perm_lsn);
+	MAKE_WSTAT_LIST("External files duplicated", sp->st_ext_duplicated);
+	MAKE_WSTAT_LIST("External file data messages recieved",
+	    sp->st_ext_records);
+	MAKE_WSTAT_LIST("External file data messages re-requested",
+	    sp->st_ext_rereq);
+	MAKE_WSTAT_LIST("External file updates re-requested",
+	    sp->st_ext_update_rereq);
 	MAKE_WSTAT_LIST("Bulk buffer fills", sp->st_bulk_fills);
 	MAKE_WSTAT_LIST("Bulk buffer overflows", sp->st_bulk_overflows);
 	MAKE_WSTAT_LIST("Bulk records stored", sp->st_bulk_records);
@@ -1050,7 +1133,13 @@ tcl_RepStat(interp, objc, objv, dbenv)
 	    sp->st_startsync_delayed);
 	MAKE_STAT_LIST("Maximum lease seconds", sp->st_max_lease_sec);
 	MAKE_STAT_LIST("Maximum lease usecs", sp->st_max_lease_usec);
+	/* Undocumented field used by tests only. */
+	MAKE_WSTAT_LIST("External files found deleted", sp->st_ext_deleted);
+	/* Undocumented field used by tests only. */
+	MAKE_WSTAT_LIST("External files found truncated", sp->st_ext_truncated);
+	/* Undocumented field used by tests only. */
 	MAKE_STAT_LIST("File fail cleanups done", sp->st_filefail_cleanups);
+	/* Undocumented field used by tests only. */
 	MAKE_WSTAT_LIST("Future duplicated log records", sp->st_log_futuredup);
 
 	Tcl_SetObjResult(interp, res);
@@ -1160,13 +1249,13 @@ tcl_RepMgr(interp, objc, objv, dbenv)
 	long to;
 	int ack, creator, i, j, legacy, myobjc, optindex;
 	int peer, result, ret, totype, t_ret;
-	u_int32_t msgth, start_flag, uintarg, uintarg2;
+	u_int32_t call_start, msgth, start_flag, uintarg, uintarg2;
 	char *arg;
 
 	result = TCL_OK;
 	ack = ret = totype = 0;
 	msgth = 1;
-	start_flag = 0;
+	call_start = start_flag = 0;
 
 	if (objc <= 2) {
 		Tcl_WrongNumArgs(interp, 2, objv, "?args?");
@@ -1217,7 +1306,7 @@ tcl_RepMgr(interp, objc, objv, dbenv)
 				break;
 			if (myobjc != 2) {
 				Tcl_WrongNumArgs(interp, 2, objv,
-				    "?-inqueue {msgs bulkmsgs}?");
+				    "?-inqueue {gbytes bytes}?");
 				result = TCL_ERROR;
 				break;
 			}
@@ -1402,12 +1491,18 @@ tcl_RepMgr(interp, objc, objv, dbenv)
 				start_flag = DB_REP_CLIENT;
 			else if (strcmp(arg, "elect") == 0)
 				start_flag = DB_REP_ELECTION;
+			else if (strcmp(arg, "none") == 0) {
+				start_flag = 0;
+				call_start = 1;
+			}
 			else {
 				Tcl_AddErrorInfo(
 				    interp, "start: illegal state");
 				result = TCL_ERROR;
 				break;
 			}
+			if (start_flag)
+				call_start = 1;
 			/*
 			 * Some config functions need to be called
 			 * before repmgr_start.  So finish parsing all
@@ -1455,7 +1550,7 @@ tcl_RepMgr(interp, objc, objv, dbenv)
 	 * Only call repmgr_start if needed.  The user may use this
 	 * call just to reconfigure, change policy, etc.
 	 */
-	if (start_flag != 0 && result == TCL_OK) {
+	if (call_start && result == TCL_OK) {
 		_debug_check();
 		ret = dbenv->repmgr_start(dbenv, (int)msgth, start_flag);
 		result = _ReturnSetup(
@@ -1480,9 +1575,9 @@ tcl_RepMgrSiteList(interp, objc, objv, dbenv)
 	DB_ENV *dbenv;
 {
 	DB_REPMGR_SITE *sp;
-	Tcl_Obj *myobjv[6], *res, *thislist;
+	Tcl_Obj *myobjv[10], *res, *thislist;
 	u_int count, i;
-	char *pr, *st, *vw;
+	char *el, *pr, *st, *vw;
 	int myobjc, result, ret;
 
 	result = TCL_OK;
@@ -1500,7 +1595,8 @@ tcl_RepMgrSiteList(interp, objc, objv, dbenv)
 		return (result);
 
 	/*
-	 * Have our sites, now construct the {eid host port status peer}
+	 * Have our sites, now construct the
+	 * {eid host port status peer view unelect maxackfile maxackoffset}
 	 * tuples and free up the memory.
 	 */
 	res = Tcl_NewObj();
@@ -1517,7 +1613,11 @@ tcl_RepMgrSiteList(interp, objc, objv, dbenv)
 			st = "unknown";
 		pr = F_ISSET(&sp[i], DB_REPMGR_ISPEER) ? "peer" : "non-peer";
 		vw = F_ISSET(&sp[i], DB_REPMGR_ISVIEW) ? "view" : "participant";
-		MAKE_SITE_LIST(sp[i].eid, sp[i].host, sp[i].port, st, pr, vw);
+		el = F_ISSET(&sp[i],
+		    DB_REPMGR_ISELECTABLE) ? "electable" : "non-electable";
+		MAKE_SITE_LIST(sp[i].eid,
+		    sp[i].host, sp[i].port, st, pr, vw, el,
+		    sp[i].max_ack_lsn.file, sp[i].max_ack_lsn.offset);
 	}
 
 	Tcl_SetObjResult(interp, res);
@@ -1550,7 +1650,7 @@ tcl_RepMgrStat(interp, objc, objv, dbenv)
 	result = TCL_OK;
 
 	if (objc > 3) {
-		Tcl_WrongNumArgs(interp, 2, objv, NULL);
+		Tcl_WrongNumArgs(interp, 2, objv, "?-clear?");
 		return (TCL_ERROR);
 	}
 	if (objc == 3) {
@@ -1582,16 +1682,28 @@ tcl_RepMgrStat(interp, objc, objv, dbenv)
 	MAKE_WSTAT_LIST("Acknowledgement failures", sp->st_perm_failed);
 	MAKE_WSTAT_LIST("Messages delayed", sp->st_msgs_queued);
 	MAKE_WSTAT_LIST("Messages discarded", sp->st_msgs_dropped);
+	MAKE_WSTAT_LIST("Incoming messages size (gbytes)", 
+	    sp->st_incoming_queue_gbytes);
+	MAKE_WSTAT_LIST("Incoming messages size (bytes)", 
+	    sp->st_incoming_queue_bytes);
+	MAKE_WSTAT_LIST("Incoming messages discarded", 
+	    sp->st_incoming_msgs_dropped);
 	MAKE_WSTAT_LIST("Connections dropped", sp->st_connection_drop);
 	MAKE_WSTAT_LIST("Failed re-connects", sp->st_connect_fail);
 	MAKE_STAT_LIST("Election threads", sp->st_elect_threads);
+	MAKE_STAT_LIST("Group stable log file", sp->st_group_stable_log_file);
 	MAKE_STAT_LIST("Max elect threads", sp->st_max_elect_threads);
 	MAKE_STAT_LIST("Total sites", sp->st_site_total);
 	MAKE_STAT_LIST("View sites", sp->st_site_views);
 	MAKE_STAT_LIST("Participant sites", sp->st_site_participants);
 	MAKE_WSTAT_LIST("Automatic replication process takeovers",
 	    sp->st_takeovers);
-	MAKE_STAT_LIST("Incoming queue size", sp->st_incoming_queue_size);
+	MAKE_WSTAT_LIST("Write operations forwarded",
+	    sp->st_write_ops_forwarded);
+	MAKE_WSTAT_LIST("Forwarded write operations received",
+	    sp->st_write_ops_received);
+	MAKE_WSTAT_LIST("Replication Manager Polling method",
+	    sp->st_polling_method);
 
 	Tcl_SetObjResult(interp, res);
 error:

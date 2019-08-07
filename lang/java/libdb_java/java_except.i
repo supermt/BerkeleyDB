@@ -71,6 +71,11 @@ static jthrowable __dbj_get_except(JNIEnv *jenv,
 		    jdbenv, dbenv_class, get_err_msg_method, jmsg);
 	}
 
+	if ((*jenv)->ExceptionOccurred(jenv)) {
+		/* The exception will be thrown, so this could be any error. */
+		ret = EINVAL;
+	}
+
 	switch (ret) {
 	case EINVAL:
 		return (jthrowable)(*jenv)->NewObject(jenv,
@@ -91,6 +96,10 @@ static jthrowable __dbj_get_except(JNIEnv *jenv,
 	case DB_HEAP_FULL:
 		return (jthrowable)(*jenv)->NewObject(jenv, heapfullex_class,
 		    heapfullex_construct, jmsg, ret, jdbenv);
+
+	case DB_META_CHKSUM_FAIL:        
+		return (jthrowable)(*jenv)->NewObject(jenv, metachkfailex_class,
+		    metachkfailex_construct, jmsg, ret, jdbenv);      
 
 	case DB_REP_DUPMASTER:
 		return (jthrowable)(*jenv)->NewObject(jenv,
@@ -138,6 +147,10 @@ static jthrowable __dbj_get_except(JNIEnv *jenv,
 	case DB_LOCK_NOTGRANTED:
 		return (jthrowable)(*jenv)->NewObject(jenv, lockex_class,
 		    lockex_construct, jmsg, ret, 0, NULL, NULL, 0, jdbenv);
+
+	case DB_SLICE_CORRUPT:
+		return (jthrowable)(*jenv)->NewObject(jenv, sliceex_class,
+		    sliceex_construct, jmsg, ret, jdbenv);
 
 	case DB_VERSION_MISMATCH:
 		return (jthrowable)(*jenv)->NewObject(jenv, versionex_class,

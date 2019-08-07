@@ -1,17 +1,18 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2002, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2002, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  */
 
 package com.sleepycat.util.keyrange;
 
 import com.sleepycat.compat.DbCompat;
+import com.sleepycat.compat.DbCompat.OpReadOptions;
+import com.sleepycat.compat.DbCompat.OpResult;
 import com.sleepycat.db.Cursor;
 import com.sleepycat.db.DatabaseEntry;
 import com.sleepycat.db.DatabaseException;
-import com.sleepycat.db.LockMode;
 import com.sleepycat.db.OperationStatus;
 import com.sleepycat.db.SecondaryCursor;
 
@@ -188,7 +189,7 @@ public class RangeCursor implements Cloneable {
     }
 
     /**
-     * If the operation succeded, leaves the duped cursor in place and closes
+     * If the operation succeeded, leaves the duped cursor in place and closes
      * the oldCursor.  If the operation failed, moves the oldCursor back in
      * place and closes the duped cursor.  oldCursor may be null if
      * beginOperation was not called, in cases where we don't need to dup
@@ -196,13 +197,13 @@ public class RangeCursor implements Cloneable {
      * in order to set the initialized field.
      */
     private void endOperation(Cursor oldCursor,
-                              OperationStatus status,
+                              OpResult result,
                               DatabaseEntry key,
                               DatabaseEntry pKey,
                               DatabaseEntry data)
         throws DatabaseException {
 
-        if (status == OperationStatus.SUCCESS) {
+        if (result.isSuccess()) {
             if (oldCursor != null && oldCursor != cursor) {
                 closeCursor(oldCursor);
             }
@@ -254,384 +255,575 @@ public class RangeCursor implements Cloneable {
         }
     }
 
-    public OperationStatus getFirst(DatabaseEntry key,
-                                    DatabaseEntry pKey,
-                                    DatabaseEntry data,
-                                    LockMode lockMode)
+    public OpResult getFirst(DatabaseEntry key,
+                             DatabaseEntry pKey,
+                             DatabaseEntry data,
+                             OpReadOptions options)
         throws DatabaseException {
 
-        OperationStatus status;
+        OpResult result;
         if (!range.hasBound()) {
             setParams(key, pKey, data);
-            status = doGetFirst(lockMode);
-            endOperation(null, status, null, null, null);
-            return status;
+            result = doGetFirst(options);
+            endOperation(null, result, null, null, null);
+            return result;
+        }
+        if (pkRange != null && pkRange.isSingleKey()) {
+            KeyRange.copy(range.beginKey, privKey);
+            KeyRange.copy(pkRange.beginKey, privPKey);
+            result = doGetSearchBoth(options);
+            endOperation(null, result, key, pKey, data);
+            return result;
         }
         if (pkRange != null) {
             KeyRange.copy(range.beginKey, privKey);
-            if (pkRange.singleKey) {
-                KeyRange.copy(pkRange.beginKey, privPKey);
-                status = doGetSearchBoth(lockMode);
-                endOperation(null, status, key, pKey, data);
-            } else {
-                status = OperationStatus.NOTFOUND;
-                Cursor oldCursor = beginOperation();
-                try {
-                    if (pkRange.beginKey == null || !sortedDups) {
-                        status = doGetSearchKey(lockMode);
-                    } else {
-                        KeyRange.copy(pkRange.beginKey, privPKey);
-                        status = doGetSearchBothRange(lockMode);
-                        if (status == OperationStatus.SUCCESS &&
-                            !pkRange.beginInclusive &&
-                            pkRange.compare(privPKey, pkRange.beginKey) == 0) {
-                            status = doGetNextDup(lockMode);
-                        }
+            result = OpResult.FAILURE;
+            Cursor oldCursor = beginOperation();
+            try {
+                if (pkRange.beginKey == null || !sortedDups) {
+                    result = doGetSearchKey(options);
+                } else {
+                    KeyRange.copy(pkRange.beginKey, privPKey);
+                    result = doGetSearchBothRange(options);
+                    if (result.isSuccess() &&
+                        !pkRange.beginInclusive &&
+                        pkRange.compare(privPKey, pkRange.beginKey) == 0) {
+                        result = doGetNextDup(options);
                     }
-                    if (status == OperationStatus.SUCCESS &&
-                        !pkRange.check(privPKey)) {
-                        status = OperationStatus.NOTFOUND;
-                    }
-                } finally {
-                    endOperation(oldCursor, status, key, pKey, data);
                 }
+                if (result.isSuccess() &&
+                    !pkRange.check(privPKey)) {
+                    result = OpResult.FAILURE;
+                }
+            } finally {
+                endOperation(oldCursor, result, key, pKey, data);
             }
         } else if (range.singleKey) {
             KeyRange.copy(range.beginKey, privKey);
-            status = doGetSearchKey(lockMode);
-            endOperation(null, status, key, pKey, data);
+            result = doGetSearchKey(options);
+            endOperation(null, result, key, pKey, data);
         } else {
-            status = OperationStatus.NOTFOUND;
+            result = OpResult.FAILURE;
             Cursor oldCursor = beginOperation();
             try {
                 if (range.beginKey == null) {
-                    status = doGetFirst(lockMode);
+                    result = doGetFirst(options);
                 } else {
                     KeyRange.copy(range.beginKey, privKey);
-                    status = doGetSearchKeyRange(lockMode);
-                    if (status == OperationStatus.SUCCESS &&
+                    result = doGetSearchKeyRange(options);
+                    if (result.isSuccess() &&
                         !range.beginInclusive &&
                         range.compare(privKey, range.beginKey) == 0) {
-                        status = doGetNextNoDup(lockMode);
+                        result = doGetNextNoDup(options);
                     }
                 }
-                if (status == OperationStatus.SUCCESS &&
+                if (result.isSuccess() &&
                     !range.check(privKey)) {
-                    status = OperationStatus.NOTFOUND;
+                    result = OpResult.FAILURE;
                 }
             } finally {
-                endOperation(oldCursor, status, key, pKey, data);
+                endOperation(oldCursor, result, key, pKey, data);
             }
         }
-        return status;
+        return result;
     }
 
-    public OperationStatus getLast(DatabaseEntry key,
-                                   DatabaseEntry pKey,
-                                   DatabaseEntry data,
-                                   LockMode lockMode)
+    /**
+     * This method will restart the operation when a key range is used and an
+     * insertion at the end of the key range is performed in another thread.
+     * The restarts are needed because a sequence of cursor movements is
+     * performed, and serializable isolation cannot be relied on to prevent
+     * insertions in other threads. Without the restarts, getLast could return
+     * NOTFOUND when keys in the range exist. This may only be an issue for JE
+     * since it uses record locking, while DB core uses page locking.
+     */
+    public OpResult getLast(DatabaseEntry key,
+                            DatabaseEntry pKey,
+                            DatabaseEntry data,
+                            OpReadOptions options)
         throws DatabaseException {
 
-        OperationStatus status = OperationStatus.NOTFOUND;
+        OpResult result = OpResult.FAILURE;
+
         if (!range.hasBound()) {
             setParams(key, pKey, data);
-            status = doGetLast(lockMode);
-            endOperation(null, status, null, null, null);
-            return status;
+            result = doGetLast(options);
+            endOperation(null, result, null, null, null);
+            return result;
         }
+
         Cursor oldCursor = beginOperation();
         try {
             if (pkRange != null) {
-                KeyRange.copy(range.beginKey, privKey);
-                boolean doLast = false;
-                if (!sortedDups) {
-                    status = doGetSearchKey(lockMode);
-                } else if (pkRange.endKey == null) {
-                    doLast = true;
-                } else {
-                    KeyRange.copy(pkRange.endKey, privPKey);
-                    status = doGetSearchBothRange(lockMode);
-                    if (status == OperationStatus.SUCCESS) {
-                        if (!pkRange.endInclusive ||
-                            pkRange.compare(pkRange.endKey, privPKey) != 0) {
-                            status = doGetPrevDup(lockMode);
-                        }
-                    } else {
-                        KeyRange.copy(range.beginKey, privKey);
-                        doLast = true;
-                    }
+                result = getLastInPKeyRange(options);
+
+                /* Final check on candidate key and pKey value. */
+                if (result.isSuccess() &&
+                    !(range.check(privKey) && pkRange.check(privPKey))) {
+                    result = OpResult.FAILURE;
                 }
-                if (doLast) {
-                    status = doGetSearchKey(lockMode);
-                    if (status == OperationStatus.SUCCESS) {
-                        status = doGetNextNoDup(lockMode);
-                        if (status == OperationStatus.SUCCESS) {
-                            status = doGetPrev(lockMode);
-                        } else {
-                            status = doGetLast(lockMode);
-                        }
-                    }
-                }
-                if (status == OperationStatus.SUCCESS &&
-                    !pkRange.check(privPKey)) {
-                    status = OperationStatus.NOTFOUND;
-                }
-            } else if (range.endKey == null) {
-                status = doGetLast(lockMode);
             } else {
-                KeyRange.copy(range.endKey, privKey);
-                status = doGetSearchKeyRange(lockMode);
-                if (status == OperationStatus.SUCCESS) {
-                    if (range.endInclusive &&
-                        range.compare(range.endKey, privKey) == 0) {
-                        /* Skip this step if dups are not configured? */
-                        status = doGetNextNoDup(lockMode);
-                        if (status == OperationStatus.SUCCESS) {
-                            status = doGetPrev(lockMode);
-                        } else {
-                            status = doGetLast(lockMode);
-                        }
-                    } else {
-                        status = doGetPrev(lockMode);
-                    }
-                } else {
-                    status = doGetLast(lockMode);
+                result = getLastInKeyRange(options);
+
+                /* Final check on candidate key value. */
+                if (result.isSuccess() &&
+                    !range.check(privKey)) {
+                    result = OpResult.FAILURE;
                 }
             }
-            if (status == OperationStatus.SUCCESS &&
-                !range.checkBegin(privKey, true)) {
-                status = OperationStatus.NOTFOUND;
-            }
+
+            return result;
         } finally {
-            endOperation(oldCursor, status, key, pKey, data);
+            endOperation(oldCursor, result, key, pKey, data);
         }
-        return status;
     }
 
-    public OperationStatus getNext(DatabaseEntry key,
-                                   DatabaseEntry pKey,
-                                   DatabaseEntry data,
-                                   LockMode lockMode)
+    /**
+     * Performs getLast operation when a main key range is specified but
+     * pkRange is null. Does everything but the final checks for key in range,
+     * i.e., when SUCCESS is returned the caller should do the final check.
+     */
+    private OpResult getLastInKeyRange(OpReadOptions options)
         throws DatabaseException {
 
-        OperationStatus status;
+        /* Without an endKey, getLast returns the candidate record. */
+        if (range.endKey == null) {
+            return doGetLast(options);
+        }
+
+        /*
+         * K stands for the main key at the cursor position in the comments
+         * below.
+         */
+        while (true) {
+            KeyRange.copy(range.endKey, privKey);
+            OpResult result = doGetSearchKeyRange(options);
+
+            if (result.isSuccess()) {
+
+                /* Found K >= endKey. */
+                if (range.endInclusive &&
+                    range.compare(range.endKey, privKey) == 0) {
+
+                    /* K == endKey and endKey is inclusive. */
+
+                    if (!sortedDups) {
+                        /* If dups are not configured, we're done. */
+                        return result;
+                    }
+
+                    /*
+                     * If there are dups, we're positioned at endKey's first
+                     * dup and we want to move to its last dup. Move to the
+                     * first dup for the next main key (getNextNoDup) and then
+                     * the prev record. In the absence of insertions by other
+                     * threads, the prev record is the last dup for endKey.
+                     */
+                    result = doGetNextNoDup(options);
+                    if (result.isSuccess()) {
+
+                        /*
+                         * K > endKey. Move backward to the last dup for
+                         * endKey.
+                         */
+                        result = doGetPrev(options);
+                    } else {
+
+                        /*
+                         * endKey is the last main key in the DB. Its last dup
+                         * is the last key in the DB.
+                         */
+                        result = doGetLast(options);
+                    }
+                } else {
+
+                    /*
+                     * K > endKey or endKey is exclusive (and K >= endKey). In
+                     * both cases, moving to the prev key finds the last key in
+                     * the range, whether or not there are dups.
+                     */
+                    result = doGetPrev(options);
+                }
+            } else {
+
+                /*
+                 * There are no keys >= endKey in the DB. The last key in the
+                 * range is the last key in the DB.
+                 */
+                result = doGetLast(options);
+            }
+
+            if (!result.isSuccess()) {
+                return result;
+            }
+
+            if (!range.checkEnd(privKey, true)) {
+
+                /*
+                 * The last call above (getPrev or getLast) returned a key
+                 * outside the endKey range. Another thread must have inserted
+                 * this key. Start over.
+                 */
+                continue;
+            }
+
+            return result;
+        }
+    }
+
+    /**
+     * Performs getLast operation when both a main key range (which must be a
+     * single key range) and a pkRange are specified. Does everything but the
+     * final checks for key and pKey in range, i.e., when SUCCESS is returned
+     * the caller should do the final two checks.
+     */
+    private OpResult getLastInPKeyRange(OpReadOptions options)
+        throws DatabaseException {
+
+        /* We can do an exact search when range and pkRange are single keys. */
+        if (pkRange.isSingleKey()) {
+            KeyRange.copy(range.beginKey, privKey);
+            KeyRange.copy(pkRange.beginKey, privPKey);
+            return doGetSearchBoth(options);
+        }
+
+        /*
+         * When dups are not configured, getSearchKey for the main key returns
+         * the only possible candidate record.
+         */
+        if (!sortedDups) {
+            KeyRange.copy(range.beginKey, privKey);
+            return doGetSearchKey(options);
+        }
+
+        /*
+         * K stands for the main key and D for the duplicate (data item) at the
+         * cursor position in the comments below
+         */
+        while (true) {
+
+            if (pkRange.endKey != null) {
+
+                KeyRange.copy(range.beginKey, privKey);
+                KeyRange.copy(pkRange.endKey, privPKey);
+                OpResult result = doGetSearchBothRange(options);
+
+                if (result.isSuccess()) {
+
+                    /* Found D >= endKey. */
+                    if (!pkRange.endInclusive ||
+                        pkRange.compare(pkRange.endKey, privPKey) != 0) {
+
+                        /*
+                         * D > endKey or endKey is exclusive (and D >= endKey).
+                         * In both cases, moving to the prev dup finds the last
+                         * key in the range.
+                         */
+                        result = doGetPrevDup(options);
+
+                        if (!result.isSuccess()) {
+                            return result;
+                        }
+
+                        if (!pkRange.checkEnd(privPKey, true)) {
+
+                            /*
+                             * getPrevDup returned a key outside the endKey
+                             * range. Another thread must have inserted this
+                             * key. Start over.
+                             */
+                            continue;
+                        }
+                    }
+                    /* Else D == endKey and endKey is inclusive. */
+
+                    return result;
+                }
+                /* Else there are no dups >= endKey.  Fall through. */
+            }
+
+            /*
+             * We're here for one of two reasons:
+             *  1. pkRange.endKey == null.
+             *  2. There are no dups >= endKey for the main key (status
+             *     returned by getSearchBothRange above was not SUCCESS).
+             * In both cases, the last dup in the range is the last dup for the
+             * main key.
+             */
+            KeyRange.copy(range.beginKey, privKey);
+            OpResult result = doGetSearchKey(options);
+
+            if (!result.isSuccess()) {
+                return result;
+            }
+
+            /*
+             * K == the main key and D is its first dup. We want to move to its
+             * last dup. Move to the first dup for the next main key;
+             * (getNextNoDup) and then the prev record. In the absence of
+             * insertions by other threads, the prev record is the last dup for
+             * the main key.
+             */
+            result = doGetNextNoDup(options);
+
+            if (result.isSuccess()) {
+
+                /*
+                 * K > main key and D is its first dup. Move to the prev record
+                 * which should be the last dup for the main key.
+                 */
+                result = doGetPrev(options);
+            } else {
+
+                /*
+                 * The main key specified is the last main key in the DB. Its
+                 * last dup is the last record in the DB.
+                 */
+                result = doGetLast(options);
+            }
+
+            if (!result.isSuccess()) {
+                return result;
+            }
+
+            if (!range.checkEnd(privKey, true)) {
+
+                /*
+                 * The last call above (getPrev or getLast) returned a key
+                 * outside the endKey range. Another thread must have inserted
+                 * this key. Start over.
+                 */
+                continue;
+            }
+
+            return result;
+        }
+    }
+
+    public OpResult getNext(DatabaseEntry key,
+                            DatabaseEntry pKey,
+                            DatabaseEntry data,
+                            OpReadOptions options)
+        throws DatabaseException {
+
+        OpResult result;
         if (!initialized) {
-            return getFirst(key, pKey, data, lockMode);
+            return getFirst(key, pKey, data, options);
         }
         if (!range.hasBound()) {
             setParams(key, pKey, data);
-            status = doGetNext(lockMode);
-            endOperation(null, status, null, null, null);
-            return status;
+            result = doGetNext(options);
+            endOperation(null, result, null, null, null);
+            return result;
         }
         if (pkRange != null) {
             if (pkRange.endKey == null) {
-                status = doGetNextDup(lockMode);
-                endOperation(null, status, key, pKey, data);
+                result = doGetNextDup(options);
+                endOperation(null, result, key, pKey, data);
             } else {
-                status = OperationStatus.NOTFOUND;
+                result = OpResult.FAILURE;
                 Cursor oldCursor = beginOperation();
                 try {
-                    status = doGetNextDup(lockMode);
-                    if (status == OperationStatus.SUCCESS &&
+                    result = doGetNextDup(options);
+                    if (result.isSuccess() &&
                         !pkRange.checkEnd(privPKey, true)) {
-                        status = OperationStatus.NOTFOUND;
+                        result = OpResult.FAILURE;
                     }
                 } finally {
-                    endOperation(oldCursor, status, key, pKey, data);
+                    endOperation(oldCursor, result, key, pKey, data);
                 }
             }
         } else if (range.singleKey) {
-            status = doGetNextDup(lockMode);
-            endOperation(null, status, key, pKey, data);
+            result = doGetNextDup(options);
+            endOperation(null, result, key, pKey, data);
         } else {
-            status = OperationStatus.NOTFOUND;
+            result = OpResult.FAILURE;
             Cursor oldCursor = beginOperation();
             try {
-                status = doGetNext(lockMode);
-                if (status == OperationStatus.SUCCESS &&
+                result = doGetNext(options);
+                if (result.isSuccess() &&
                     !range.check(privKey)) {
-                    status = OperationStatus.NOTFOUND;
+                    result = OpResult.FAILURE;
                 }
             } finally {
-                endOperation(oldCursor, status, key, pKey, data);
+                endOperation(oldCursor, result, key, pKey, data);
             }
         }
-        return status;
+        return result;
     }
 
-    public OperationStatus getNextNoDup(DatabaseEntry key,
-                                        DatabaseEntry pKey,
-                                        DatabaseEntry data,
-                                        LockMode lockMode)
+    public OpResult getNextNoDup(DatabaseEntry key,
+                                 DatabaseEntry pKey,
+                                 DatabaseEntry data,
+                                 OpReadOptions options)
         throws DatabaseException {
 
-        OperationStatus status;
+        OpResult result;
         if (!initialized) {
-            return getFirst(key, pKey, data, lockMode);
+            return getFirst(key, pKey, data, options);
         }
         if (!range.hasBound()) {
             setParams(key, pKey, data);
-            status = doGetNextNoDup(lockMode);
-            endOperation(null, status, null, null, null);
-            return status;
+            result = doGetNextNoDup(options);
+            endOperation(null, result, null, null, null);
+            return result;
         }
         if (range.singleKey) {
-            status = OperationStatus.NOTFOUND;
+            result = OpResult.FAILURE;
         } else {
-            status = OperationStatus.NOTFOUND;
+            result = OpResult.FAILURE;
             Cursor oldCursor = beginOperation();
             try {
-                status = doGetNextNoDup(lockMode);
-                if (status == OperationStatus.SUCCESS &&
+                result = doGetNextNoDup(options);
+                if (result.isSuccess() &&
                     !range.check(privKey)) {
-                    status = OperationStatus.NOTFOUND;
+                    result = OpResult.FAILURE;
                 }
             } finally {
-                endOperation(oldCursor, status, key, pKey, data);
+                endOperation(oldCursor, result, key, pKey, data);
             }
         }
-        return status;
+        return result;
     }
 
-    public OperationStatus getPrev(DatabaseEntry key,
-                                   DatabaseEntry pKey,
-                                   DatabaseEntry data,
-                                   LockMode lockMode)
+    public OpResult getPrev(DatabaseEntry key,
+                            DatabaseEntry pKey,
+                            DatabaseEntry data,
+                            OpReadOptions options)
         throws DatabaseException {
 
-        OperationStatus status;
+        OpResult result;
         if (!initialized) {
-            return getLast(key, pKey, data, lockMode);
+            return getLast(key, pKey, data, options);
         }
         if (!range.hasBound()) {
             setParams(key, pKey, data);
-            status = doGetPrev(lockMode);
-            endOperation(null, status, null, null, null);
-            return status;
+            result = doGetPrev(options);
+            endOperation(null, result, null, null, null);
+            return result;
         }
         if (pkRange != null) {
             if (pkRange.beginKey == null) {
-                status = doGetPrevDup(lockMode);
-                endOperation(null, status, key, pKey, data);
+                result = doGetPrevDup(options);
+                endOperation(null, result, key, pKey, data);
             } else {
-                status = OperationStatus.NOTFOUND;
+                result = OpResult.FAILURE;
                 Cursor oldCursor = beginOperation();
                 try {
-                    status = doGetPrevDup(lockMode);
-                    if (status == OperationStatus.SUCCESS &&
+                    result = doGetPrevDup(options);
+                    if (result.isSuccess() &&
                         !pkRange.checkBegin(privPKey, true)) {
-                        status = OperationStatus.NOTFOUND;
+                        result = OpResult.FAILURE;
                     }
                 } finally {
-                    endOperation(oldCursor, status, key, pKey, data);
+                    endOperation(oldCursor, result, key, pKey, data);
                 }
             }
         } else if (range.singleKey) {
-            status = doGetPrevDup(lockMode);
-            endOperation(null, status, key, pKey, data);
+            result = doGetPrevDup(options);
+            endOperation(null, result, key, pKey, data);
         } else {
-            status = OperationStatus.NOTFOUND;
+            result = OpResult.FAILURE;
             Cursor oldCursor = beginOperation();
             try {
-                status = doGetPrev(lockMode);
-                if (status == OperationStatus.SUCCESS &&
+                result = doGetPrev(options);
+                if (result.isSuccess() &&
                     !range.check(privKey)) {
-                    status = OperationStatus.NOTFOUND;
+                    result = OpResult.FAILURE;
                 }
             } finally {
-                endOperation(oldCursor, status, key, pKey, data);
+                endOperation(oldCursor, result, key, pKey, data);
             }
         }
-        return status;
+        return result;
     }
 
-    public OperationStatus getPrevNoDup(DatabaseEntry key,
-                                        DatabaseEntry pKey,
-                                        DatabaseEntry data,
-                                        LockMode lockMode)
+    public OpResult getPrevNoDup(DatabaseEntry key,
+                                 DatabaseEntry pKey,
+                                 DatabaseEntry data,
+                                 OpReadOptions options)
         throws DatabaseException {
 
-        OperationStatus status;
+        OpResult result;
         if (!initialized) {
-            return getLast(key, pKey, data, lockMode);
+            return getLast(key, pKey, data, options);
         }
         if (!range.hasBound()) {
             setParams(key, pKey, data);
-            status = doGetPrevNoDup(lockMode);
-            endOperation(null, status, null, null, null);
-            return status;
+            result = doGetPrevNoDup(options);
+            endOperation(null, result, null, null, null);
+            return result;
         }
         if (range.singleKey) {
-            status = OperationStatus.NOTFOUND;
+            result = OpResult.FAILURE;
         } else {
-            status = OperationStatus.NOTFOUND;
+            result = OpResult.FAILURE;
             Cursor oldCursor = beginOperation();
             try {
-                status = doGetPrevNoDup(lockMode);
-                if (status == OperationStatus.SUCCESS &&
+                result = doGetPrevNoDup(options);
+                if (result.isSuccess() &&
                     !range.check(privKey)) {
-                    status = OperationStatus.NOTFOUND;
+                    result = OpResult.FAILURE;
                 }
             } finally {
-                endOperation(oldCursor, status, key, pKey, data);
+                endOperation(oldCursor, result, key, pKey, data);
             }
         }
-        return status;
+        return result;
     }
 
-    public OperationStatus getSearchKey(DatabaseEntry key,
-                                        DatabaseEntry pKey,
-                                        DatabaseEntry data,
-                                        LockMode lockMode)
+    public OpResult getSearchKey(DatabaseEntry key,
+                                 DatabaseEntry pKey,
+                                 DatabaseEntry data,
+                                 OpReadOptions options)
         throws DatabaseException {
 
-        OperationStatus status;
+        OpResult result;
         if (!range.hasBound()) {
             setParams(key, pKey, data);
-            status = doGetSearchKey(lockMode);
-            endOperation(null, status, null, null, null);
-            return status;
+            result = doGetSearchKey(options);
+            endOperation(null, result, null, null, null);
+            return result;
         }
         if (!range.check(key)) {
-            status = OperationStatus.NOTFOUND;
+            result = OpResult.FAILURE;
         } else if (pkRange != null) {
-            status = OperationStatus.NOTFOUND;
+            result = OpResult.FAILURE;
             Cursor oldCursor = beginOperation();
             try {
                 shareData(key, privKey);
-                status = doGetSearchKey(lockMode);
-                if (status == OperationStatus.SUCCESS &&
+                result = doGetSearchKey(options);
+                if (result.isSuccess() &&
                     !pkRange.check(privPKey)) {
-                    status = OperationStatus.NOTFOUND;
+                    result = OpResult.FAILURE;
                 }
             } finally {
-                endOperation(oldCursor, status, key, pKey, data);
+                endOperation(oldCursor, result, key, pKey, data);
             }
         } else {
             shareData(key, privKey);
-            status = doGetSearchKey(lockMode);
-            endOperation(null, status, key, pKey, data);
+            result = doGetSearchKey(options);
+            endOperation(null, result, key, pKey, data);
         }
-        return status;
+        return result;
     }
 
-    public OperationStatus getSearchBoth(DatabaseEntry key,
-                                         DatabaseEntry pKey,
-                                         DatabaseEntry data,
-                                         LockMode lockMode)
+    public OpResult getSearchBoth(DatabaseEntry key,
+                                  DatabaseEntry pKey,
+                                  DatabaseEntry data,
+                                  OpReadOptions options)
         throws DatabaseException {
 
-        OperationStatus status;
+        OpResult result;
         if (!range.hasBound()) {
             setParams(key, pKey, data);
-            status = doGetSearchBoth(lockMode);
-            endOperation(null, status, null, null, null);
-            return status;
+            result = doGetSearchBoth(options);
+            endOperation(null, result, null, null, null);
+            return result;
         }
         if (!range.check(key) ||
             (pkRange != null && !pkRange.check(pKey))) {
-            status = OperationStatus.NOTFOUND;
+            result = OpResult.FAILURE;
         } else {
             shareData(key, privKey);
             if (secCursor != null) {
@@ -639,52 +831,52 @@ public class RangeCursor implements Cloneable {
             } else {
                 shareData(data, privData);
             }
-            status = doGetSearchBoth(lockMode);
-            endOperation(null, status, key, pKey, data);
+            result = doGetSearchBoth(options);
+            endOperation(null, result, key, pKey, data);
         }
-        return status;
+        return result;
     }
 
-    public OperationStatus getSearchKeyRange(DatabaseEntry key,
-                                             DatabaseEntry pKey,
-                                             DatabaseEntry data,
-                                             LockMode lockMode)
+    public OpResult getSearchKeyRange(DatabaseEntry key,
+                                      DatabaseEntry pKey,
+                                      DatabaseEntry data,
+                                      OpReadOptions options)
         throws DatabaseException {
 
-        OperationStatus status = OperationStatus.NOTFOUND;
+        OpResult result = OpResult.FAILURE;
         if (!range.hasBound()) {
             setParams(key, pKey, data);
-            status = doGetSearchKeyRange(lockMode);
-            endOperation(null, status, null, null, null);
-            return status;
+            result = doGetSearchKeyRange(options);
+            endOperation(null, result, null, null, null);
+            return result;
         }
         Cursor oldCursor = beginOperation();
         try {
             shareData(key, privKey);
-            status = doGetSearchKeyRange(lockMode);
-            if (status == OperationStatus.SUCCESS &&
+            result = doGetSearchKeyRange(options);
+            if (result.isSuccess() &&
                 (!range.check(privKey) ||
                  (pkRange != null && !pkRange.check(pKey)))) {
-                status = OperationStatus.NOTFOUND;
+                result = OpResult.FAILURE;
             }
         } finally {
-            endOperation(oldCursor, status, key, pKey, data);
+            endOperation(oldCursor, result, key, pKey, data);
         }
-        return status;
+        return result;
     }
 
-    public OperationStatus getSearchBothRange(DatabaseEntry key,
-                                              DatabaseEntry pKey,
-                                              DatabaseEntry data,
-                                              LockMode lockMode)
+    public OpResult getSearchBothRange(DatabaseEntry key,
+                                       DatabaseEntry pKey,
+                                       DatabaseEntry data,
+                                       OpReadOptions options)
         throws DatabaseException {
 
-        OperationStatus status = OperationStatus.NOTFOUND;
+        OpResult result = OpResult.FAILURE;
         if (!range.hasBound()) {
             setParams(key, pKey, data);
-            status = doGetSearchBothRange(lockMode);
-            endOperation(null, status, null, null, null);
-            return status;
+            result = doGetSearchBothRange(options);
+            endOperation(null, result, null, null, null);
+            return result;
         }
         Cursor oldCursor = beginOperation();
         try {
@@ -694,120 +886,122 @@ public class RangeCursor implements Cloneable {
             } else {
                 shareData(data, privData);
             }
-            status = doGetSearchBothRange(lockMode);
-            if (status == OperationStatus.SUCCESS &&
+            result = doGetSearchBothRange(options);
+            if (result.isSuccess() &&
                 (!range.check(privKey) ||
                  (pkRange != null && !pkRange.check(pKey)))) {
-                status = OperationStatus.NOTFOUND;
+                result = OpResult.FAILURE;
             }
         } finally {
-            endOperation(oldCursor, status, key, pKey, data);
+            endOperation(oldCursor, result, key, pKey, data);
         }
-        return status;
+        return result;
     }
 
-    public OperationStatus getSearchRecordNumber(DatabaseEntry key,
-                                                 DatabaseEntry pKey,
-                                                 DatabaseEntry data,
-                                                 LockMode lockMode)
+    public OpResult getSearchRecordNumber(DatabaseEntry key,
+                                          DatabaseEntry pKey,
+                                          DatabaseEntry data,
+                                          OpReadOptions options)
         throws DatabaseException {
 
-        OperationStatus status;
+        OpResult result;
         if (!range.hasBound()) {
             setParams(key, pKey, data);
-            status = doGetSearchRecordNumber(lockMode);
-            endOperation(null, status, null, null, null);
-            return status;
+            result = doGetSearchRecordNumber(options);
+            endOperation(null, result, null, null, null);
+            return result;
         }
         if (!range.check(key)) {
-            status = OperationStatus.NOTFOUND;
+            result = OpResult.FAILURE;
         } else {
             shareData(key, privKey);
-            status = doGetSearchRecordNumber(lockMode);
-            endOperation(null, status, key, pKey, data);
+            result = doGetSearchRecordNumber(options);
+            endOperation(null, result, key, pKey, data);
         }
-        return status;
+        return result;
     }
 
-    public OperationStatus getNextDup(DatabaseEntry key,
-                                      DatabaseEntry pKey,
-                                      DatabaseEntry data,
-                                      LockMode lockMode)
+    public OpResult getNextDup(DatabaseEntry key,
+                               DatabaseEntry pKey,
+                               DatabaseEntry data,
+                               OpReadOptions options)
         throws DatabaseException {
 
         if (!initialized) {
             throw new IllegalStateException("Cursor not initialized");
         }
-        OperationStatus status;
+        OpResult result;
         if (!range.hasBound()) {
             setParams(key, pKey, data);
-            status = doGetNextDup(lockMode);
-            endOperation(null, status, null, null, null);
+            result = doGetNextDup(options);
+            endOperation(null, result, null, null, null);
         } else if (pkRange != null && pkRange.endKey != null) {
-            status = OperationStatus.NOTFOUND;
+            result = OpResult.FAILURE;
             Cursor oldCursor = beginOperation();
             try {
-                status = doGetNextDup(lockMode);
-                if (status == OperationStatus.SUCCESS &&
+                result = doGetNextDup(options);
+                if (result.isSuccess() &&
                     !pkRange.checkEnd(privPKey, true)) {
-                    status = OperationStatus.NOTFOUND;
+                    result = OpResult.FAILURE;
                 }
             } finally {
-                endOperation(oldCursor, status, key, pKey, data);
+                endOperation(oldCursor, result, key, pKey, data);
             }
         } else {
-            status = doGetNextDup(lockMode);
-            endOperation(null, status, key, pKey, data);
+            result = doGetNextDup(options);
+            endOperation(null, result, key, pKey, data);
         }
-        return status;
+        return result;
     }
 
-    public OperationStatus getPrevDup(DatabaseEntry key,
-                                      DatabaseEntry pKey,
-                                      DatabaseEntry data,
-                                      LockMode lockMode)
+    public OpResult getPrevDup(DatabaseEntry key,
+                               DatabaseEntry pKey,
+                               DatabaseEntry data,
+                               OpReadOptions options)
         throws DatabaseException {
 
         if (!initialized) {
             throw new IllegalStateException("Cursor not initialized");
         }
-        OperationStatus status;
+        OpResult result;
         if (!range.hasBound()) {
             setParams(key, pKey, data);
-            status = doGetPrevDup(lockMode);
-            endOperation(null, status, null, null, null);
+            result = doGetPrevDup(options);
+            endOperation(null, result, null, null, null);
         } else if (pkRange != null && pkRange.beginKey != null) {
-            status = OperationStatus.NOTFOUND;
+            result = OpResult.FAILURE;
             Cursor oldCursor = beginOperation();
             try {
-                status = doGetPrevDup(lockMode);
-                if (status == OperationStatus.SUCCESS &&
+                result = doGetPrevDup(options);
+                if (result.isSuccess() &&
                     !pkRange.checkBegin(privPKey, true)) {
-                    status = OperationStatus.NOTFOUND;
+                    result = OpResult.FAILURE;
                 }
             } finally {
-                endOperation(oldCursor, status, key, pKey, data);
+                endOperation(oldCursor, result, key, pKey, data);
             }
         } else {
-            status = doGetPrevDup(lockMode);
-            endOperation(null, status, key, pKey, data);
+            result = doGetPrevDup(options);
+            endOperation(null, result, key, pKey, data);
         }
-        return status;
+        return result;
     }
 
-    public OperationStatus getCurrent(DatabaseEntry key,
-                                      DatabaseEntry pKey,
-                                      DatabaseEntry data,
-                                      LockMode lockMode)
+    public OpResult getCurrent(DatabaseEntry key,
+                               DatabaseEntry pKey,
+                               DatabaseEntry data,
+                               OpReadOptions options)
         throws DatabaseException {
 
         if (!initialized) {
             throw new IllegalStateException("Cursor not initialized");
         }
         if (secCursor != null && pKey != null) {
-            return secCursor.getCurrent(key, pKey, data, lockMode);
+            return OpResult.make(
+                secCursor.getCurrent(key, pKey, data, options.getLockMode()));
         } else {
-            return cursor.getCurrent(key, data, lockMode);
+            return OpResult.make(
+                cursor.getCurrent(key, data, options.getLockMode()));
         }
     }
 
@@ -870,156 +1064,192 @@ public class RangeCursor implements Cloneable {
         return DbCompat.putBefore(cursor, key, data);
     }
 
-    private OperationStatus doGetFirst(LockMode lockMode)
+    private OpResult doGetFirst(OpReadOptions options)
         throws DatabaseException {
 
         if (secCursor != null && privPKey != null) {
-            return secCursor.getFirst(privKey, privPKey, privData, lockMode);
+            return OpResult.make(
+                secCursor.getFirst(
+                    privKey, privPKey, privData, options.getLockMode()));
         } else {
-            return cursor.getFirst(privKey, privData, lockMode);
+            return OpResult.make(
+                cursor.getFirst(privKey, privData, options.getLockMode()));
         }
     }
 
-    private OperationStatus doGetLast(LockMode lockMode)
+    private OpResult doGetLast(OpReadOptions options)
         throws DatabaseException {
 
         if (secCursor != null && privPKey != null) {
-            return secCursor.getLast(privKey, privPKey, privData, lockMode);
+            return OpResult.make(
+                secCursor.getLast(
+                    privKey, privPKey, privData, options.getLockMode()));
         } else {
-            return cursor.getLast(privKey, privData, lockMode);
+            return OpResult.make(
+                cursor.getLast(privKey, privData, options.getLockMode()));
         }
     }
 
-    private OperationStatus doGetNext(LockMode lockMode)
+    private OpResult doGetNext(OpReadOptions options)
         throws DatabaseException {
 
         if (secCursor != null && privPKey != null) {
-            return secCursor.getNext(privKey, privPKey, privData, lockMode);
+            return OpResult.make(
+                secCursor.getNext(
+                    privKey, privPKey, privData, options.getLockMode()));
         } else {
-            return cursor.getNext(privKey, privData, lockMode);
+            return OpResult.make(
+                cursor.getNext(privKey, privData, options.getLockMode()));
         }
     }
 
-    private OperationStatus doGetNextDup(LockMode lockMode)
+    private OpResult doGetNextDup(OpReadOptions options)
         throws DatabaseException {
 
         if (secCursor != null && privPKey != null) {
-            return secCursor.getNextDup(privKey, privPKey, privData, lockMode);
+            return OpResult.make(
+                secCursor.getNextDup(
+                    privKey, privPKey, privData, options.getLockMode()));
         } else {
-            return cursor.getNextDup(privKey, privData, lockMode);
+            return OpResult.make(
+                cursor.getNextDup(privKey, privData, options.getLockMode()));
         }
     }
 
-    private OperationStatus doGetNextNoDup(LockMode lockMode)
+    private OpResult doGetNextNoDup(OpReadOptions options)
         throws DatabaseException {
 
         if (secCursor != null && privPKey != null) {
-            return secCursor.getNextNoDup(privKey, privPKey, privData,
-                                          lockMode);
+            return OpResult.make(
+                secCursor.getNextNoDup(
+                    privKey, privPKey, privData, options.getLockMode()));
         } else {
-            return cursor.getNextNoDup(privKey, privData, lockMode);
+            return OpResult.make(
+                cursor.getNextNoDup(privKey, privData, options.getLockMode()));
         }
     }
 
-    private OperationStatus doGetPrev(LockMode lockMode)
+    private OpResult doGetPrev(OpReadOptions options)
         throws DatabaseException {
 
         if (secCursor != null && privPKey != null) {
-            return secCursor.getPrev(privKey, privPKey, privData, lockMode);
+            return OpResult.make(
+                secCursor.getPrev(
+                    privKey, privPKey, privData, options.getLockMode()));
         } else {
-            return cursor.getPrev(privKey, privData, lockMode);
+            return OpResult.make(
+                cursor.getPrev(privKey, privData, options.getLockMode()));
         }
     }
 
-    private OperationStatus doGetPrevDup(LockMode lockMode)
+    private OpResult doGetPrevDup(OpReadOptions options)
         throws DatabaseException {
 
         if (secCursor != null && privPKey != null) {
-            return secCursor.getPrevDup(privKey, privPKey, privData, lockMode);
+            return OpResult.make(
+                secCursor.getPrevDup(
+                    privKey, privPKey, privData, options.getLockMode()));
         } else {
-            return cursor.getPrevDup(privKey, privData, lockMode);
+            return OpResult.make(
+                cursor.getPrevDup(privKey, privData, options.getLockMode()));
         }
     }
 
-    private OperationStatus doGetPrevNoDup(LockMode lockMode)
+    private OpResult doGetPrevNoDup(OpReadOptions options)
         throws DatabaseException {
 
         if (secCursor != null && privPKey != null) {
-            return secCursor.getPrevNoDup(privKey, privPKey, privData,
-                                          lockMode);
+            return OpResult.make(
+                secCursor.getPrevNoDup(
+                    privKey, privPKey, privData, options.getLockMode()));
         } else {
-            return cursor.getPrevNoDup(privKey, privData, lockMode);
+            return OpResult.make(
+                cursor.getPrevNoDup(privKey, privData, options.getLockMode()));
         }
     }
 
-    private OperationStatus doGetSearchKey(LockMode lockMode)
-        throws DatabaseException {
-
-        if (checkRecordNumber() && DbCompat.getRecordNumber(privKey) <= 0) {
-            return OperationStatus.NOTFOUND;
-        }
-        if (secCursor != null && privPKey != null) {
-            return secCursor.getSearchKey(privKey, privPKey, privData,
-                                          lockMode);
-        } else {
-            return cursor.getSearchKey(privKey, privData, lockMode);
-        }
-    }
-
-    private OperationStatus doGetSearchKeyRange(LockMode lockMode)
-        throws DatabaseException {
-
-        if (checkRecordNumber() && DbCompat.getRecordNumber(privKey) <= 0) {
-            return OperationStatus.NOTFOUND;
-        }
-        if (secCursor != null && privPKey != null) {
-            return secCursor.getSearchKeyRange(privKey, privPKey, privData,
-                                               lockMode);
-        } else {
-            return cursor.getSearchKeyRange(privKey, privData, lockMode);
-        }
-    }
-
-    private OperationStatus doGetSearchBoth(LockMode lockMode)
+    private OpResult doGetSearchKey(OpReadOptions options)
         throws DatabaseException {
 
         if (checkRecordNumber() && DbCompat.getRecordNumber(privKey) <= 0) {
-            return OperationStatus.NOTFOUND;
+            return OpResult.FAILURE;
         }
         if (secCursor != null && privPKey != null) {
-            return secCursor.getSearchBoth(privKey, privPKey, privData,
-                                           lockMode);
+            return OpResult.make(
+                secCursor.getSearchKey(
+                    privKey, privPKey, privData, options.getLockMode()));
         } else {
-            return cursor.getSearchBoth(privKey, privData, lockMode);
+            return OpResult.make(
+                cursor.getSearchKey(privKey, privData, options.getLockMode()));
         }
     }
 
-    private OperationStatus doGetSearchBothRange(LockMode lockMode)
+    private OpResult doGetSearchKeyRange(OpReadOptions options)
         throws DatabaseException {
 
         if (checkRecordNumber() && DbCompat.getRecordNumber(privKey) <= 0) {
-            return OperationStatus.NOTFOUND;
+            return OpResult.FAILURE;
         }
         if (secCursor != null && privPKey != null) {
-            return secCursor.getSearchBothRange(privKey, privPKey,
-                                                privData, lockMode);
+            return OpResult.make(
+                secCursor.getSearchKeyRange(
+                    privKey, privPKey, privData, options.getLockMode()));
         } else {
-            return cursor.getSearchBothRange(privKey, privData, lockMode);
+            return OpResult.make(
+                cursor.getSearchKeyRange(
+                    privKey, privData, options.getLockMode()));
         }
     }
 
-    private OperationStatus doGetSearchRecordNumber(LockMode lockMode)
+    private OpResult doGetSearchBoth(OpReadOptions options)
+        throws DatabaseException {
+
+        if (checkRecordNumber() && DbCompat.getRecordNumber(privKey) <= 0) {
+            return OpResult.FAILURE;
+        }
+        if (secCursor != null && privPKey != null) {
+            return OpResult.make(
+                secCursor.getSearchBoth(
+                    privKey, privPKey, privData, options.getLockMode()));
+        } else {
+            return OpResult.make(
+                cursor.getSearchBoth(
+                    privKey, privData, options.getLockMode()));
+        }
+    }
+
+    private OpResult doGetSearchBothRange(OpReadOptions options)
+        throws DatabaseException {
+
+        if (checkRecordNumber() && DbCompat.getRecordNumber(privKey) <= 0) {
+            return OpResult.FAILURE;
+        }
+        if (secCursor != null && privPKey != null) {
+            return OpResult.make(
+                secCursor.getSearchBothRange(
+                    privKey, privPKey, privData, options.getLockMode()));
+        } else {
+            return OpResult.make(
+                cursor.getSearchBothRange(
+                    privKey, privData, options.getLockMode()));
+        }
+    }
+
+    private OpResult doGetSearchRecordNumber(OpReadOptions options)
         throws DatabaseException {
 
         if (DbCompat.getRecordNumber(privKey) <= 0) {
-            return OperationStatus.NOTFOUND;
+            return OpResult.FAILURE;
         }
         if (secCursor != null && privPKey != null) {
-            return DbCompat.getSearchRecordNumber(secCursor, privKey, privPKey,
-                                                  privData, lockMode);
+            return OpResult.make(
+                DbCompat.getSearchRecordNumber(
+                    secCursor, privKey, privPKey, privData,
+                    options.getLockMode()));
         } else {
-            return DbCompat.getSearchRecordNumber(cursor, privKey, privData,
-                                                  lockMode);
+            return OpResult.make(
+                DbCompat.getSearchRecordNumber(
+                    cursor, privKey, privData, options.getLockMode()));
         }
     }
 

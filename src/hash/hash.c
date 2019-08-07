@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  */
 /*
  * Copyright (c) 1990, 1993, 1994
@@ -344,15 +344,13 @@ __hamc_cmp(dbc, other_dbc, result)
 	DBC *dbc, *other_dbc;
 	int *result;
 {
-	ENV *env;
 	HASH_CURSOR *hcp, *ohcp;
 
-	env = dbc->env;
 	hcp = (HASH_CURSOR *)dbc->internal;
 	ohcp = (HASH_CURSOR *)other_dbc->internal;
 
-	DB_ASSERT (env, hcp->pgno == ohcp->pgno);
-	DB_ASSERT (env, hcp->indx == ohcp->indx);
+	DB_ASSERT(dbc->env, hcp->pgno == ohcp->pgno);
+	DB_ASSERT(dbc->env, hcp->indx == ohcp->indx);
 
 	/* Only compare the duplicate offsets if this is a duplicate item. */
 	if ((F_ISSET(hcp, H_ISDUP) && hcp->dup_off != ohcp->dup_off) ||
@@ -380,7 +378,7 @@ __hamc_del(dbc, flags)
 	hcp = (HASH_CURSOR *)dbc->internal;
 
 	if (F_ISSET(hcp, H_DELETED))
-		return (DB_NOTFOUND);
+		return (DBC_ERR(dbc, DB_NOTFOUND));
 
 	if ((ret = __ham_get_meta(dbc)) != 0)
 		goto out;
@@ -536,7 +534,7 @@ next:			ret = __ham_item_next(dbc, lock_type, pgnop);
 	case DB_CURRENT:
 		/* cgetchk has already determined that the cursor is set. */
 		if (F_ISSET(hcp, H_DELETED)) {
-			ret = DB_KEYEMPTY;
+			ret = DBC_ERR(dbc, DB_KEYEMPTY);
 			goto err;
 		}
 
@@ -560,9 +558,9 @@ next:			ret = __ham_item_next(dbc, lock_type, pgnop);
 				ret = __ham_dup_return(dbc, data, flags);
 			break;
 		} else if (!F_ISSET(hcp, H_NOMORE)) {
+			ret = USR_ERR(env, EINVAL);
 			__db_errx(env, DB_STR("1130",
 			    "H_NOMORE returned to __hamc_get"));
-			ret = EINVAL;
 			break;
 		}
 
@@ -578,7 +576,7 @@ next:			ret = __ham_item_next(dbc, lock_type, pgnop);
 			    dbc->thread_info, hcp->page, dbc->priority);
 			hcp->page = NULL;
 			if (hcp->bucket == 0) {
-				ret = DB_NOTFOUND;
+				ret = DBC_ERR(dbc, DB_NOTFOUND);
 				hcp->pgno = PGNO_INVALID;
 				goto err;
 			}
@@ -600,7 +598,7 @@ next:			ret = __ham_item_next(dbc, lock_type, pgnop);
 			F_CLR(hcp, H_ISDUP);
 			hcp->pgno = BUCKET_TO_PAGE(hcp, hcp->bucket);
 			if (hcp->bucket > hcp->hdr->max_bucket) {
-				ret = DB_NOTFOUND;
+				ret = DBC_ERR(dbc, DB_NOTFOUND);
 				hcp->pgno = PGNO_INVALID;
 				goto err;
 			}
@@ -614,7 +612,7 @@ next:			ret = __ham_item_next(dbc, lock_type, pgnop);
 		case DB_SET:
 		case DB_SET_RANGE:
 			/* Key not found. */
-			ret = DB_NOTFOUND;
+			ret = DBC_ERR(dbc, DB_NOTFOUND);
 			goto err;
 		case DB_CURRENT:
 			/*
@@ -623,7 +621,7 @@ next:			ret = __ham_item_next(dbc, lock_type, pgnop);
 			 * locking.  We return the same error code as we would
 			 * if the cursor were deleted.
 			 */
-			ret = DB_KEYEMPTY;
+			ret = DBC_ERR(dbc, DB_KEYEMPTY);
 			goto err;
 		default:
 			DB_ASSERT(env, 0);
@@ -658,7 +656,7 @@ __ham_bulk(dbc, data, flags)
 	db_pgno_t pgno;
 	off_t blob_size;
 	int32_t *endp, *offp, *saveoff;
-	uintmax_t blob_id;
+	db_seq_t blob_id;
 	u_int32_t key_off, key_size, pagesize, size, space;
 	u_int8_t *dbuf, *dp, *hk, *np, *tmp;
 	int is_dup, is_key;
@@ -715,7 +713,7 @@ next_pg:
 				np += key_size;
 			} else if (HPAGE_PTYPE(hk) == H_BLOB) {
 				__db_errx(dbp->env, DB_STR("1185",
-				    "Blob item key."));
+				    "External file key."));
 				(void)__env_panic(dbp->env, DB_RUNRECOVERY);
 			} else {
 				if (need_pg) {
@@ -756,7 +754,7 @@ get_key_space:
 back_up:
 					if (indx != 0) {
 						indx -= 2;
-						/* XXX
+						/* !!!
 						 * It's not clear that this is
 						 * the right way to fix this,
 						 * but here goes.
@@ -902,7 +900,7 @@ get_space:
 				/*
 				 * Since space is an unsigned, if we happen
 				 * to wrap, then this comparison will turn out
-				 * to be true.  XXX Wouldn't it be better to
+				 * to be true.  !!! Wouldn't it be better to
 				 * simply check above that space is greater than
 				 * the value we're about to subtract???
 				 */
@@ -997,9 +995,7 @@ get_space:
 				goto back_up;
 
 			memcpy(&hblob, hk, HBLOB_SIZE);
-			GET_BLOB_ID(dbp->env, hblob, blob_id, ret);
-			if (ret != 0)
-				return (ret);
+			blob_id = (db_seq_t)hblob.id;
 			GET_BLOB_SIZE(dbc->env, hblob, blob_size, ret);
 			if (ret != 0)
 				return (ret);
@@ -1057,7 +1053,7 @@ get_space:
 			 * DBC->get(DB_NEXT) will return DB_NOTFOUND.
 			 */
 			cp->bucket--;
-			ret = DB_NOTFOUND;
+			ret = DBC_ERR(dbc, DB_NOTFOUND);
 		} else {
 			/*
 			 * Start on the next bucket.
@@ -1114,7 +1110,7 @@ __hamc_put(dbc, key, data, flags, pgnop)
 
 	if (F_ISSET(hcp, H_DELETED) && flags != DB_KEYFIRST &&
 	    flags != DB_KEYLAST && flags != DB_OVERWRITE_DUP)
-		return (DB_NOTFOUND);
+		return (DBC_ERR(dbc, DB_NOTFOUND));
 
 	if ((ret = __ham_get_meta(dbc)) != 0)
 		goto err1;
@@ -1173,7 +1169,7 @@ __hamc_put(dbc, key, data, flags, pgnop)
 		} else if (ret == 0 && flags == DB_NOOVERWRITE &&
 		    !F_ISSET(hcp, H_DELETED)) {
 			if (*pgnop == PGNO_INVALID)
-				ret = DB_KEYEXIST;
+				ret = DBC_ERR(dbc, DB_KEYEXIST);
 			else
 				ret = __bam_opd_exists(dbc, *pgnop);
 			if (ret != 0)
@@ -1600,7 +1596,7 @@ __ham_dup_return(dbc, val, flags)
 				cmp = -cmp;
 			} else if (((HKEYDATA *)hk)->type == H_BLOB) {
 				__db_errx(dbp->env, DB_STR("1186",
-		    "Error - found a blob file in a duplicate data set."));
+		    "Error - found an external file in a duplicate data set."));
 				(void)__env_panic(dbp->env, DB_RUNRECOVERY);
 			} else {
 				/*
@@ -1611,7 +1607,7 @@ __ham_dup_return(dbc, val, flags)
 				tmp_val.size = LEN_HDATA(dbp, hcp->page,
 				    dbp->pgsize, hcp->indx);
 				cmp = dbp->dup_compare == NULL ?
-				    __bam_defcmp(dbp, &tmp_val, val, NULL) :
+				    __dbt_defcmp(dbp, &tmp_val, val, NULL) :
 				    dbp->dup_compare(dbp, &tmp_val, val, NULL);
 			}
 
@@ -1621,7 +1617,7 @@ __ham_dup_return(dbc, val, flags)
 		}
 
 		if (cmp != 0)
-			return (DB_NOTFOUND);
+			return (DBC_ERR(dbc, DB_NOTFOUND));
 	}
 
 	/*
@@ -1715,7 +1711,7 @@ __ham_overwrite(dbc, nval, flags)
 	void *newrec;
 	u_int8_t *hk, *p;
 	u_int32_t len, nondup_size;
-	uintmax_t blob_id, new_blob_id;
+	db_seq_t blob_id, new_blob_id;
 	db_indx_t newsize;
 	off_t blob_size;
 	int ret;
@@ -1875,7 +1871,7 @@ __ham_overwrite(dbc, nval, flags)
 				tmp_val2.size = hcp->dup_len;
 				if (dbp->dup_compare(
 				    dbp, nval, &tmp_val2, NULL) != 0) {
-					__db_errx(env, DB_STR("1131",
+					__db_errx(env, DB_STR("1004",
 			    "Existing data sorts differently from put data"));
 					return (EINVAL);
 				}
@@ -1941,9 +1937,7 @@ __ham_overwrite(dbc, nval, flags)
 			* That means that we can skip the replpair
 			* call.
 			*/
-			GET_BLOB_ID(env, hblob, blob_id, ret);
-			if (ret != 0)
-				return (ret);
+			blob_id = (db_seq_t)hblob.id;
 			GET_BLOB_SIZE(env, hblob, blob_size, ret);
 			if (ret != 0)
 				return (ret);
@@ -2083,7 +2077,7 @@ __ham_lookup(dbc, key, sought, mode, pgnop)
 			return (ret);
 	}
 	F_SET(hcp, H_NOMORE);
-	return (DB_NOTFOUND);
+	return (DBC_ERR(dbc, DB_NOTFOUND));
 }
 
 /*

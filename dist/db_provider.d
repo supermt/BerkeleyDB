@@ -7,6 +7,10 @@
 provider bdb {
 /*
  * 
+ * Copyright (c) 2011, 2019 Oracle and/or its affiliates.  All rights reserved.
+ * 
+ * See the file LICENSE for license information.
+ * 
  * dist/events.in - This description of Oracle Berkeley DB's internal
  * events hierarchy is processed by 'dist/s_include' to generate the
  * platform-independant file dist/db_provider.d. The 'configure' step on the
@@ -23,8 +27,6 @@ provider bdb {
  * Events are listed grouped by their relation to one another, rather than
  * alphabetically. For instance allocation and free events are adjacent.
  * New, unrelated events are placed at the end of their event class.
- * 
- * Copyright (c) 2011, 2013 Oracle and/or its affiliates.  All rights reserved.
  * 
  */
 
@@ -321,14 +323,20 @@ provider bdb {
     probe race__ramc_get(char *file, char *db, struct _db_page *pg, unsigned flags);
 
 /* The statistics counters for replication are for internal use. */
+    probe rep__election(unsigned count, unsigned generation);
+    probe rep__election_won(unsigned count, unsigned generation);
+    probe rep__ext_chunk_rereq(unsigned rereq, unsigned master_id);
+    probe rep__ext_deleted(unsigned deleted, unsigned eid);
+    probe rep__ext_duplicated(unsigned duplicated, unsigned eid);
+    probe rep__ext_records(unsigned records, unsigned eid);
+    probe rep__ext_truncated(unsigned truncated, unsigned eid);
+    probe rep__ext_update_rereq(unsigned update_rereq, unsigned eid);
     probe rep__log_queued(unsigned count, DB_LSN *lsn);
+    probe rep__log_request(unsigned count, unsigned eid);
+    probe rep__master_change(unsigned count, unsigned eid);
     probe rep__pg_duplicated(unsigned eid, unsigned pgno, unsigned file, unsigned count);
     probe rep__pg_record(unsigned count, unsigned eid);
     probe rep__pg_request(unsigned count, unsigned eid);
-    probe rep__election_won(unsigned count, unsigned generation);
-    probe rep__election(unsigned count, unsigned generation);
-    probe rep__log_request(unsigned count, unsigned eid);
-    probe rep__master_change(unsigned count, unsigned eid);
 
 /* The txn category covers the basic transaction operations. */
     /* A transaction was successfully begun. */

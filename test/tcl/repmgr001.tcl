@@ -1,7 +1,7 @@
 #
-# See the file LICENSE for redistribution information.
+# Copyright (c) 2010, 2019 Oracle and/or its affiliates.  All rights reserved.
 #
-# Copyright (c) 2010, 2013 Oracle and/or its affiliates.  All rights reserved.
+# See the file LICENSE for license information.
 #
 # $Id$
 #
@@ -41,6 +41,7 @@ proc basic_repmgr_test { niter inmemdb inmemlog \
 	global overflowword1
 	global overflowword2
 	global databases_in_memory
+	global ipversion
 	set overflowword1 "0"
 	set overflowword2 "0"
 	set nsites 3
@@ -64,8 +65,11 @@ proc basic_repmgr_test { niter inmemdb inmemlog \
 		set verbargs " -verbose {$verbose_type on} "
 	}
 
+	set sslargs [setup_repmgr_sslargs]
+
 	env_cleanup $testdir
 	set ports [available_ports $nsites]
+	set hoststr [get_hoststr $ipversion]
 
 	set masterdir $testdir/MASTERDIR
 	set clientdir $testdir/CLIENTDIR
@@ -105,39 +109,39 @@ proc basic_repmgr_test { niter inmemdb inmemlog \
 	# Open a master.
 	puts "\tBasic repmgr test.a: Start an appointed master."
 	set ma_envcmd "berkdb_env_noerr -create $logargs $verbargs \
-	    $private \
+	    $private $sslargs \
 	    -errpfx MASTER -home $masterdir $txnargs -rep -thread \
 	    -lock_max_locks 10000 -lock_max_objects 10000 $repmemarg"
 	set masterenv [eval $ma_envcmd]
 	$masterenv repmgr -ack all \
-	    -local [list 127.0.0.1 [lindex $ports 0]] \
+	    -local [list $hoststr [lindex $ports 0]] \
 	    -start master
 
 	# Open first client
 	puts "\tBasic repmgr test.b: Start first client."
 	set cl_envcmd "berkdb_env_noerr -create $verbargs $logargs \
-	    $private \
+	    $private $sslargs \
 	    -errpfx CLIENT -home $clientdir $txnargs -rep -thread \
 	    -lock_max_locks 10000 -lock_max_objects 10000 $repmemarg"
 	set clientenv [eval $cl_envcmd]
 	$clientenv repmgr -ack all \
-	    -local [list 127.0.0.1 [lindex $ports 1]] \
-	    -remote [list 127.0.0.1 [lindex $ports 0]] \
-	    -remote [list 127.0.0.1 [lindex $ports 2]] \
+	    -local [list $hoststr [lindex $ports 1]] \
+	    -remote [list $hoststr [lindex $ports 0]] \
+	    -remote [list $hoststr [lindex $ports 2]] \
 	    -start client
 	await_startup_done $clientenv
 
 	# Open second client
 	puts "\tBasic repmgr test.c: Start second client."
 	set cl2_envcmd "berkdb_env_noerr -create $verbargs $logargs \
-	    $private \
+	    $private $sslargs \
 	    -errpfx CLIENT2 -home $clientdir2 $txnargs -rep -thread \
 	    -lock_max_locks 10000 -lock_max_objects 10000 $repmemarg"
 	set clientenv2 [eval $cl2_envcmd]
 	$clientenv2 repmgr -ack all  \
-	    -local [list 127.0.0.1 [lindex $ports 2]] \
-	    -remote [list 127.0.0.1 [lindex $ports 0]] \
-	    -remote [list 127.0.0.1 [lindex $ports 1]] \
+	    -local [list $hoststr [lindex $ports 2]] \
+	    -remote [list $hoststr [lindex $ports 0]] \
+	    -remote [list $hoststr [lindex $ports 1]] \
 	    -start client
 	await_startup_done $clientenv2
 

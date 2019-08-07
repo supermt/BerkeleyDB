@@ -80,23 +80,6 @@ typedef enum {
 	DB_TXN_PRINT=7			/* Public. */
 } db_recops;
 
-struct __db;			typedef struct __db DB;
-struct __db_channel;		typedef struct __db_channel DB_CHANNEL;
-struct __db_compact;	typedef struct __db_compact DB_COMPACT;
-struct __db_lock_u;		typedef struct __db_lock_u DB_LOCK;
-struct __db_lsn;		typedef struct __db_lsn DB_LSN;
-struct __db_preplist;	typedef struct __db_preplist DB_PREPLIST;
-struct __db_repmgrsite; typedef struct __db_repmgrsite DB_REPMGR_SITE;
-struct __db_sequence;	typedef struct __db_sequence DB_SEQUENCE;
-struct __db_site;	typedef struct __db_site DB_SITE;
-struct __db_stream;	typedef struct __db_stream DB_STREAM;
-struct __dbc;			typedef struct __dbc DBC;
-struct __dbenv;			typedef struct __dbenv DB_ENV;
-struct __dbt;			typedef struct __dbt DBT;
-struct __dbtxn;			typedef struct __dbtxn DB_TXN;
-struct __key_range;		typedef struct __key_range DB_KEY_RANGE;
-struct __db_txn_token;	typedef struct __db_txn_token DB_TXN_TOKEN;
-
 %typemap(cstype) char ** "out IntPtr"
 %typemap(imtype) char ** "out IntPtr"
 %typemap(csin) char ** "out $csinput"
@@ -340,7 +323,7 @@ struct __db_txn_token;	typedef struct __db_txn_token DB_TXN_TOKEN;
 		return ret;
 }
 
-typedef struct __db_channel
+typedef struct
 {
 %extend {
 	int close(u_int32_t flags) {
@@ -371,7 +354,7 @@ typedef struct __db_channel
 }
 } DB_CHANNEL;
 
-typedef struct __db_compact {
+typedef struct {
 	/* Input Parameters. */
 	%typemap(csvarout) u_int32_t compact_fillpercent %{%}              
 	u_int32_t	compact_fillpercent;	/* Desired fillfactor: 1-100 */
@@ -394,7 +377,7 @@ typedef struct __db_compact {
 	db_pgno_t	compact_pages_truncated; /* Pages truncated to OS. */
 } DB_COMPACT;
 
-typedef struct __db_lsn {
+typedef struct {
 	u_int32_t file;
 	u_int32_t offset;
 } DB_LSN;
@@ -455,14 +438,6 @@ typedef struct __db_lsn {
 		return ret;
 	}
 	
-	internal int get_blob_dir(out string dir) {
-		int ret;
-		IntPtr dirp;
-		ret = get_blob_dir(out dirp);
-		dir = Marshal.PtrToStringAnsi(dirp);
-		return ret;
-	}
-	
 	internal int get_blob_sub_dir(out string dir) {
 		int ret;
 		IntPtr dirp;
@@ -480,6 +455,14 @@ typedef struct __db_lsn {
 		dbnamep = Marshal.PtrToStringAnsi(dp);
 		return ret;
 	}
+
+	internal int get_ext_file_dir(out string dir) {
+		int ret;
+		IntPtr dirp;
+		ret = get_ext_file_dir(out dirp);
+		dir = Marshal.PtrToStringAnsi(dirp);
+		return ret;
+	}
 	
 	internal int get_re_source(out string source) {
 		int ret;
@@ -489,7 +472,7 @@ typedef struct __db_lsn {
 		return ret;
 	}
 %}
-typedef struct __db
+typedef struct
 {
 	%typemap(cstype) void *api_internal "BaseDatabase"
 	%typemap(imtype) void *api_internal "BaseDatabase"
@@ -537,7 +520,11 @@ typedef struct __db
 	int compact(DB_TXN *txn, DBT *start, DBT *stop, DB_COMPACT *cdata, u_int32_t flags, DBT *end) {
 		return self->compact(self, txn, start, stop, cdata, flags, end);
 	}
-	
+
+	int convert(const char *file, int lorder) {
+		return self->convert(self, file, lorder);
+	}
+
 	%csmethodmodifiers cursor "private"
 	DBC *cursor(DB_TXN *txn, u_int32_t flags, int *err) {
 		DBC *cursor = NULL;
@@ -631,22 +618,8 @@ typedef struct __db
 		return self->set_append_recno(self, callback);
 	}
 	
-	int get_blob_dir(const char **dir) {
-		return self->get_blob_dir(self, dir);
-	}
-	int set_blob_dir(const char *dir) {
-		return self->set_blob_dir(self, dir);
-	}
-	
 	int get_blob_sub_dir(const char **dir) {
 		return self->get_blob_sub_dir(self, dir);
-	}
-	
-	int get_blob_threshold(u_int32_t *bytes) {
-		return self->get_blob_threshold(self, bytes);
-	}
-	int set_blob_threshold(u_int32_t bytes, u_int32_t flags) {
-		return self->set_blob_threshold(self, bytes, flags);
 	}
 	
 	%typemap(cstype) int (*)(DB*, const DBT*, const DBT*, size_t *) "BDB_CompareDelegate"
@@ -703,6 +676,19 @@ typedef struct __db
 	%typemap(csin) void (*db_errcall_fcn)(const DB_ENV *dbenv, const char *errpfx, const char *errmsg) "db_errcall_fcn"
 	void set_errcall(void (*db_errcall_fcn)(const DB_ENV *dbenv, const char *errpfx, const char *errmsg)) {
 		self->set_errcall(self, db_errcall_fcn);
+	}
+
+	int get_ext_file_dir(const char **dir) {
+		return self->get_ext_file_dir(self, dir);
+	}
+	int set_ext_file_dir(const char *dir) {
+		return self->set_ext_file_dir(self, dir);
+	}
+	int get_ext_file_threshold(u_int32_t *bytes) {
+		return self->get_ext_file_threshold(self, bytes);
+	}
+	int set_ext_file_threshold(u_int32_t bytes, u_int32_t flags) {
+		return self->set_ext_file_threshold(self, bytes, flags);
 	}
 	
 	%typemap(cstype) int (*)(DB*, int, int) "BDB_DbFeedbackDelegate"
@@ -778,7 +764,41 @@ typedef struct __db
 	int set_pagesize(u_int32_t pgsz) {
 		return self->set_pagesize(self, pgsz);
 	}
+		
+	%typemap(cstype) void (*)(const DB_ENV *, const char *, const char *) "BDB_MsgcallDelegate"
+	%typemap(imtype) void (*)(const DB_ENV *, const char *, const char *) "BDB_MsgcallDelegate"
+	%typemap(csin) void (*db_msgcall_fcn)(const DB_ENV *dbenv, const char *msgpfx, const char *msg) "db_msgcall_fcn"
+	void set_msgcall(void (*db_msgcall_fcn)(const DB_ENV *dbenv, const char *msgpfx, const char *msg)) {
+		self->set_msgcall(self, db_msgcall_fcn);
+	}
 
+	int set_msgfile(char *msgfile) {
+		int ret;
+		FILE *fmsg;
+		ret = 0;
+		fmsg = NULL;
+		self->get_msgfile(self, &fmsg);
+		if (fmsg != NULL && fmsg != stdout && fmsg != stderr) {
+			fclose(fmsg);
+			fmsg = NULL;
+		}
+		if (strcmp(msgfile, "") == 0 || msgfile == NULL)
+			self->set_msgfile(self, NULL);
+		else if (strcmp(msgfile, "stdout") == 0)
+			self->set_msgfile(self, stdout);
+		else if (strcmp(msgfile, "stderr") == 0)
+			self->set_msgfile(self, stderr);
+		else {
+			fmsg = fopen(msgfile, "a");
+			if (fmsg != NULL) {
+				self->set_msgfile(self, fmsg);
+			}
+			else
+				ret = 1;
+		}
+		return ret;
+	}
+	
 	%typemap(cstype) DBT *get_partition_keys "DatabaseEntry[]"
 	%typemap(imtype) DBT *get_partition_keys "IntPtr"
 	%csmethodmodifiers get_partition_keys "private"
@@ -894,7 +914,7 @@ typedef struct __db
 	int upgrade(const char *file, u_int32_t flags) {
 		return self->upgrade(self, file, flags);
 	}
-	
+
 	%typemap(cstype) FILE * "System.IO.TextWriter"
 	%typemap(imtype) FILE * "System.IO.TextWriter"
 	%typemap(csin) FILE * "$csinput"
@@ -927,7 +947,7 @@ typedef struct __db
 		return ret;
 	}
 %}
-typedef struct __dbc
+typedef struct 
 {
 %extend {
 	int close() {
@@ -993,7 +1013,7 @@ typedef struct __dbc
 }
 %}
 
-typedef struct __db_txn_token
+typedef struct
 {
 %typemap(cstype) u_int8_t [DB_TXN_TOKEN_SIZE] "byte[]"
 %typemap(imtype, out = "IntPtr") u_int8_t [DB_TXN_TOKEN_SIZE] "byte[]"
@@ -1020,7 +1040,7 @@ u_int8_t buf[DB_TXN_TOKEN_SIZE];
 		}
 	}
 %}
-typedef struct __dbt
+typedef struct
 {
 	u_int32_t dlen;
 	u_int32_t doff;
@@ -1082,7 +1102,7 @@ typedef struct __dbt
 	}
 %}
 
-typedef struct __db_site
+typedef struct 
 {
 %extend {
 	int close() {
@@ -1111,7 +1131,7 @@ typedef struct __db_site
 }
 } DB_SITE;
 
-typedef struct __db_stream
+typedef struct
 {
 %extend {
 	int close(u_int32_t flags) {
@@ -1132,7 +1152,7 @@ typedef struct __db_stream
 }
 } DB_STREAM;
 
-typedef struct __db_repmgrsite
+typedef struct
 {
 	%typemap(csvarin) int eid %{%}
 	int eid;
@@ -1144,6 +1164,8 @@ typedef struct __db_repmgrsite
 	u_int32_t status;
 	%typemap(csvarin) u_int32_t flags %{%}
 	u_int32_t flags;
+	%typemap(csvarin) DB_LSN max_ack_lsn %{%}
+	DB_LSN max_ack_lsn;
 } DB_REPMGR_SITE;
 
 %typemap(cscode) DB_TXN %{
@@ -1156,7 +1178,7 @@ typedef struct __db_repmgrsite
 	}	
 %}
 
-typedef struct __dbtxn
+typedef struct
 {
 %extend {
 	int abort() {
@@ -1402,10 +1424,10 @@ typedef struct __dbtxn
         
 		return ret;
 	}
-	internal int get_blob_dir(out string dir) {
+	internal int get_ext_file_dir(out string dir) {
 		int ret;
 		IntPtr dirp;
-		ret = get_blob_dir(out dirp);
+		ret = get_ext_file_dir(out dirp);
 		dir = Marshal.PtrToStringAnsi(dirp);
 		return ret;
 	}
@@ -1437,6 +1459,13 @@ typedef struct __dbtxn
 		dir = Marshal.PtrToStringAnsi(dirp);
 		return ret;
 	}
+	internal int get_region_dir(out string dir) {
+		int ret;
+		IntPtr dirp;
+		ret = get_region_dir(out dirp);
+		dir = Marshal.PtrToStringAnsi(dirp);
+		return ret;
+	}
 	internal int get_tmp_dir(out string dir) {
 		int ret;
 		IntPtr dirp;
@@ -1449,7 +1478,7 @@ typedef struct __dbtxn
 %typemap(csimports) DB_ENV "using System;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;"		
-typedef struct __dbenv
+typedef struct
 {
 
 %typemap(cstype) void *api2_internal "DatabaseEnvironment"
@@ -1765,6 +1794,17 @@ typedef struct __dbenv
 		return self->repmgr_get_ack_policy(self, ack_policy);
 	}
 
+	int repmgr_set_ssl_config(int config_type, char *value) {
+		return self->repmgr_set_ssl_config(self, config_type, value);
+	}
+
+	int repmgr_get_incoming_queue_max(u_int32_t *gbytes, u_int32_t *bytes) {
+		return self->repmgr_get_incoming_queue_max(self, gbytes, bytes);
+	}
+	int repmgr_set_incoming_queue_max(u_int32_t gbytes, u_int32_t bytes) {
+		return self->repmgr_set_incoming_queue_max(self, gbytes, bytes);
+	}
+
 	DB_CHANNEL *repmgr_channel(int eid, u_int32_t flags, int *err) {
 		DB_CHANNEL *channel = NULL;
 		*err = self->repmgr_channel(self, eid, &channel, flags);
@@ -1935,20 +1975,6 @@ typedef struct __dbenv
 		return self->set_backup_config(self, cfg, value);
 	}
 
-	int get_blob_dir(const char **dirp) {
-		return self->get_blob_dir(self, dirp);
-	}
-	int set_blob_dir(const char *dir) {
-		return self->set_blob_dir(self, dir);
-	}
-	
-	int get_blob_threshold(u_int32_t *bytes) {
-		return self->get_blob_threshold(self, bytes);
-	}
-	int set_blob_threshold(u_int32_t bytes, u_int32_t flags) {
-		return self->set_blob_threshold(self, bytes, flags);
-	}
-
 	int get_cachesize(u_int32_t *gbytes, u_int32_t *bytes, int *ncache) {
 		return self->get_cachesize(self, gbytes, bytes, ncache);
 	}
@@ -1961,6 +1987,10 @@ typedef struct __dbenv
 	}
 	int set_cache_max(u_int32_t gbytes, u_int32_t bytes) {
 		return self->set_cache_max(self, gbytes, bytes);
+	}
+
+	int get_ext_file_dir(const char **dirp) {
+		return self->get_ext_file_dir(self, dirp);
 	}
 	
 	%typemap(cstype) char ** "List<string>"
@@ -2007,6 +2037,17 @@ typedef struct __dbenv
 	%typemap(csin) void (*callback)(DB_ENV *dbenv, u_int32_t, void*) "callback"
 	int set_event_notify(void (*callback)(DB_ENV *env, u_int32_t event, void *event_info)) {
 		return self->set_event_notify(self, callback);
+	}
+
+	int set_ext_file_dir(const char *dir) {
+		return self->set_ext_file_dir(self, dir);
+	}
+	
+	int get_ext_file_threshold(u_int32_t *bytes) {
+		return self->get_ext_file_threshold(self, bytes);
+	}
+	int set_ext_file_threshold(u_int32_t bytes, u_int32_t flags) {
+		return self->set_ext_file_threshold(self, bytes, flags);
 	}
 	
 	%typemap(cstype) void (*)(DB_ENV*, int, int) "BDB_EnvFeedbackDelegate"
@@ -2183,7 +2224,48 @@ typedef struct __dbenv
 	int set_mp_mmapsize(size_t mp_mmapsize) {
 		return self->set_mp_mmapsize(self, mp_mmapsize);
 	}
+		
+	%typemap(cstype) void (*)(const DB_ENV *, const char *, const char *) "BDB_MsgcallDelegate"
+	%typemap(imtype) void (*)(const DB_ENV *, const char *, const char *) "BDB_MsgcallDelegate"
+	%typemap(csin) void (*db_msgcall_fcn)(const DB_ENV *dbenv, const char *, const char *msg) "db_msgcall_fcn"
+	void set_msgcall(void (*db_msgcall_fcn)(const DB_ENV *dbenv, const char *, const char *msg)) {
+		self->set_msgcall(self, db_msgcall_fcn);
+	}
 	
+	int set_msgfile(char *msgfile) {
+		int ret;
+		FILE *fmsg;
+		ret = 0;
+		fmsg = NULL;
+		self->get_msgfile(self, &fmsg);
+		if (fmsg != NULL && fmsg != stdout && fmsg != stderr) {
+			fclose(fmsg);
+			fmsg = NULL;
+		}
+		if (strcmp(msgfile, "") == 0 || msgfile == NULL)
+			self->set_msgfile(self, NULL);
+		else if (strcmp(msgfile, "stdout") == 0)
+			self->set_msgfile(self, stdout);
+		else if (strcmp(msgfile, "stderr") == 0)
+			self->set_msgfile(self, stderr);
+		else {
+			fmsg = fopen(msgfile, "a");
+			if (fmsg != NULL) {
+				self->set_msgfile(self, fmsg);
+			}
+			else
+				ret = 1;
+		}
+		return ret;
+	}
+
+	int get_region_dir(const char **dir){
+		return self->get_region_dir(self, dir);
+	}
+	int set_region_dir(const char *dir){
+		return self->set_region_dir(self, dir);
+	}
+
 	int get_thread_count(u_int32_t *count) {
 		return self->get_thread_count(self, count);
 	}
@@ -2293,6 +2375,18 @@ typedef struct __dbenv
 			return ret;
 		if (onoff)
 			*msgs |= DB_VERB_REPMGR_MISC;
+		if ((ret = self->get_verbose(self, DB_VERB_REPMGR_SSL_ALL, &onoff)) != 0)
+			return ret;
+		if (onoff)
+			*msgs |= DB_VERB_REPMGR_SSL_ALL;	
+		if ((ret = self->get_verbose(self, DB_VERB_REPMGR_SSL_CONN, &onoff)) != 0)
+			return ret;
+		if (onoff)
+			*msgs |= DB_VERB_REPMGR_SSL_CONN;
+		if ((ret = self->get_verbose(self, DB_VERB_REPMGR_SSL_IO, &onoff)) != 0)
+			return ret;
+		if (onoff)
+			*msgs |= DB_VERB_REPMGR_SSL_IO;			
 		if ((ret = self->get_verbose(self, DB_VERB_WAITSFOR, &onoff)) != 0)
 			return ret;
 		if (onoff)
@@ -2345,6 +2439,15 @@ typedef struct __dbenv
 		if ((which & DB_VERB_REPMGR_MISC) &&
 			(ret = self->set_verbose(self, DB_VERB_REPMGR_MISC, onoff)) != 0)
 			return ret;
+		if ((which & DB_VERB_REPMGR_SSL_ALL) &&
+			(ret = self->set_verbose(self, DB_VERB_REPMGR_SSL_ALL, onoff)) != 0)
+			return ret;	
+		if ((which & DB_VERB_REPMGR_SSL_CONN) &&
+			(ret = self->set_verbose(self, DB_VERB_REPMGR_SSL_CONN, onoff)) != 0)
+			return ret;
+		if ((which & DB_VERB_REPMGR_SSL_IO) &&
+			(ret = self->set_verbose(self, DB_VERB_REPMGR_SSL_IO, onoff)) != 0)
+			return ret;
 		if ((which & DB_VERB_WAITSFOR) &&
 			(ret = self->set_verbose(self, DB_VERB_WAITSFOR, onoff)) != 0)
 			return ret;
@@ -2391,7 +2494,7 @@ typedef struct __dbenv
 }
 } DB_ENV;
 
-typedef struct __key_range {
+typedef struct {
 	%typemap(csvarin) double less %{%}
 	double less;
 	%typemap(csvarin) double equal %{%}
@@ -2400,7 +2503,7 @@ typedef struct __key_range {
 	double greater;
 } DB_KEY_RANGE;
 
-typedef struct __db_lock_u {
+typedef struct {
 	roff_t		off;		/* Offset of the lock in the region */
 	u_int32_t	ndx;		/* Index of the object referenced by
 					 * this lock; used for locking. */
@@ -2408,7 +2511,7 @@ typedef struct __db_lock_u {
 	db_lockmode_t	mode;		/* mode of this lock. */
 } DB_LOCK;
 
-typedef struct __db_lockreq {
+typedef struct {
 	db_lockop_t	 op;		/* Operation. */
 	db_lockmode_t	 mode;		/* Requested mode. */
 	db_timeout_t	 timeout;	/* Time to expire lock. */
@@ -2463,7 +2566,7 @@ size_t alloc_dbt_arr(DB_ENV *dbenv, int num_dbt, void **ptr) {
 
 
 
-typedef struct __db_preplist {
+typedef struct {
         %typemap(cstype) u_int8_t [DB_GID_SIZE] "byte[]"
         %typemap(imtype) u_int8_t [DB_GID_SIZE] "byte[]"
         %typemap(csout, excode=SWIGEXCODE) u_int8_t [DB_GID_SIZE] "{byte[] res = (byte [])($imcall); $excode; return res;}"
@@ -2492,7 +2595,7 @@ typedef struct __db_preplist {
 		return ret;
 	}
 %}
-typedef struct __db_sequence {
+typedef struct {
 %extend {
 	DB_SEQUENCE(DB *dbp, u_int32_t flags) {
 		DB_SEQUENCE *seq = NULL;

@@ -1,6 +1,6 @@
-# See the file LICENSE for redistribution information.
+# Copyright (c) 2000, 2019 Oracle and/or its affiliates.  All rights reserved.
 #
-# Copyright (c) 2000, 2013 Oracle and/or its affiliates.  All rights reserved.
+# See the file LICENSE for license information.
 #
 # $Id$
 #
@@ -38,7 +38,7 @@ proc fop005 { method args } {
 	}
 
 	# Look for incompatible configurations of blob.
-	foreach conf { "-encryptaes" "-encrypt" "-compress" "-dup" "-dupsort" \
+	foreach conf { "-compress" "-dup" "-dupsort" \
 	    "-read_uncommitted" "-multiversion" } {
 		if { [lsearch -exact $args $conf] != -1 } {
 			set skipblob 1
@@ -201,7 +201,15 @@ proc fop005 { method args } {
 							    $blobsubdir 1
 						}
 					}
-
+					# Check that the blob subdirectory is
+					# removed when no txn is used.
+					if { $op == "noenv" || $op == "env" } {
+						if { $format == "blob" } {
+							check_blob_sub_exists \
+							    $blobdir \
+							    $blobsubdir 0
+						}
+					}
 					if { $env != "NULL" } {
 						error_check_good envclose \
 						    [$env close] 0

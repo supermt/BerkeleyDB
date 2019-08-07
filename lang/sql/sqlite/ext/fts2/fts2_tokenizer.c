@@ -1,4 +1,10 @@
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2007 June 22
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -28,7 +34,7 @@
 
 #include "sqlite3.h"
 #include "sqlite3ext.h"
-SQLITE_EXTENSION_INIT1
+SQLITE_EXTENSION_INIT3
 
 #include "fts2_hash.h"
 #include "fts2_tokenizer.h"
@@ -99,7 +105,11 @@ static void scalarFunc(
 
 #ifdef SQLITE_TEST
 
-#include <tcl.h>
+#if defined(INCLUDE_SQLITE_TCL_H)
+#  include "sqlite_tcl.h"
+#else
+#  include "tcl.h"
+#endif
 #include <string.h>
 
 /*

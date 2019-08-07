@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -16,6 +16,8 @@
 /*
  * __memp_dirty --
  *	Upgrade a page from a read-only to a writable pointer.
+ *
+ *	The buffer for the returned page is always exclusively locked.
  *
  * PUBLIC: int __memp_dirty __P((DB_MPOOLFILE *, void *,
  * PUBLIC:     DB_THREAD_INFO *, DB_TXN *, DB_CACHE_PRIORITY, u_int32_t));
@@ -52,7 +54,7 @@ __memp_dirty(dbmfp, addrp, ip, txn, priority, flags)
 	bhp = (BH *)((u_int8_t *)pgaddr - SSZA(BH, buf));
 	pgno = bhp->pgno;
 
-	/* If we have it exclusively then its already dirty. */
+	/* If we have it exclusively then it should already be dirty. */
 	if (F_ISSET(bhp, BH_EXCLUSIVE)) {
 		DB_ASSERT(env, F_ISSET(bhp, BH_DIRTY));
 		return (0);
@@ -74,15 +76,27 @@ __memp_dirty(dbmfp, addrp, ip, txn, priority, flags)
 	    ancestor = ancestor->parent)
 		;
 
-	if (mvcc && txn != NULL && flags == DB_MPOOL_DIRTY &&
+	/*
+	 * We need to check for making a MVCC copy when plainly dirtying the
+	 * buffer or, sometimes, for DB_MPOOL_EDIT.  That 'sometimes' is when
+	 * when MVCC is enabled for a replication client.  In that case
+	 * __rep_process_txn() applies updates inside of a transaction with both
+	 * DB_TXN_DISPATCH and DB_TXN_SNAPSHOT set.  This depends on those txns
+	 * only committing changes.  Processing an abort should not make any
+	 * copies -- it does not need to.
+	 */
+	if (mvcc && txn != NULL &&
+	    (flags == DB_MPOOL_DIRTY ||
+	   (FLD_ISSET(txn->begin_flags, DB_TXN_DISPATCH) &&
+	    FLD_ISSET(txn->begin_flags, DB_TXN_SNAPSHOT))) &&
 	    (!BH_OWNED_BY(env, bhp, ancestor) || SH_CHAIN_HASNEXT(bhp, vc))) {
-		atomic_inc(env, &bhp->ref);
+		(void)atomic_inc(env, &bhp->ref);
 		*(void **)addrp = NULL;
 		if ((ret = __memp_fput(dbmfp, ip, pgaddr, priority)) != 0) {
 			__db_errx(env, DB_STR_A("3009",
 			    "%s: error releasing a read-only page", "%s"),
 			    __memp_fn(dbmfp));
-			atomic_dec(env, &bhp->ref);
+			(void)atomic_dec(env, &bhp->ref);
 			return (ret);
 		}
 		if ((ret = __memp_fget(dbmfp,
@@ -91,10 +105,10 @@ __memp_dirty(dbmfp, addrp, ip, txn, priority, flags)
 				__db_errx(env, DB_STR_A("3010",
 				    "%s: error getting a page for writing",
 				    "%s"), __memp_fn(dbmfp));
-			atomic_dec(env, &bhp->ref);
+			(void)atomic_dec(env, &bhp->ref);
 			return (ret);
 		}
-		atomic_dec(env, &bhp->ref);
+		(void)atomic_dec(env, &bhp->ref);
 
 		/*
 		 * If the MVCC handle count hasn't changed, we should get a
@@ -114,9 +128,13 @@ __memp_dirty(dbmfp, addrp, ip, txn, priority, flags)
 	hp = R_ADDR(infop, c_mp->htab);
 	hp = &hp[bhp->bucket];
 
-	/* Drop the shared latch and get an exclusive. We have the buf ref'ed.*/
+	/*
+	 * Swap the shared latch for an exclusive one.  The refcount on the buf
+	 * keeps it from going away while waiting for the exclusive latch.
+	 */
 	MUTEX_UNLOCK(env, bhp->mtx_buf);
 	MUTEX_LOCK(env, bhp->mtx_buf);
+	DB_TEST_CRASH(env->test_abort, DB_TEST_EXC_LATCH);
 	DB_ASSERT(env, !F_ISSET(bhp, BH_EXCLUSIVE));
 	F_SET(bhp, BH_EXCLUSIVE);
 
@@ -125,7 +143,7 @@ __memp_dirty(dbmfp, addrp, ip, txn, priority, flags)
 #ifdef DIAGNOSTIC
 		MUTEX_LOCK(env, hp->mtx_hash);
 #endif
-		atomic_inc(env, &hp->hash_page_dirty);
+		(void)atomic_inc(env, &hp->hash_page_dirty);
 		F_SET(bhp, BH_DIRTY);
 #ifdef DIAGNOSTIC
 		MUTEX_UNLOCK(env, hp->mtx_hash);

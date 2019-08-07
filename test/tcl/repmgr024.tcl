@@ -1,6 +1,6 @@
-# See the file LICENSE for redistribution information.
+# Copyright (c) 2009, 2019 Oracle and/or its affiliates.  All rights reserved.
 #
-# Copyright (c) 2009, 2013 Oracle and/or its affiliates.  All rights reserved.
+# See the file LICENSE for license information.
 #
 # TEST	repmgr024
 # TEST	Test of group-wide log archiving awareness.
@@ -46,6 +46,7 @@ proc repmgr024_sub { method niter tnum testopt largs } {
 	global repfiles_in_memory
 	global rep_verbose
 	global verbose_type
+	global ipversion
 
 	set verbargs ""
 	if { $rep_verbose == 1 } {
@@ -57,11 +58,15 @@ proc repmgr024_sub { method niter tnum testopt largs } {
 		set repmemargs "-rep_inmem_files "
 	}
 
+	set sslargs [setup_repmgr_sslargs]
+
 	env_cleanup $testdir
 	file mkdir [set dira $testdir/SITE_A]
 	file mkdir [set dirb $testdir/SITE_B]
 	file mkdir [set dirc $testdir/SITE_C]
+
 	foreach { porta portb portc } [available_ports 3] {}
+	set hoststr [get_hoststr $ipversion]
 
 	# Log size is small so we quickly create more than one.
 	# The documentation says that the log file must be at least
@@ -72,7 +77,7 @@ proc repmgr024_sub { method niter tnum testopt largs } {
 	set log_max [expr $log_buf * 4]
 
 	set cmda "berkdb_env_noerr -create -txn nosync \
-	    $verbargs $repmemargs -rep -thread -event \
+	    $verbargs $repmemargs $sslargs -rep -thread -event \
 	    -log_buffer $log_buf -log_max $log_max -errpfx SITE_A \
 	    -home $dira"
 	set enva [eval $cmda]
@@ -80,7 +85,7 @@ proc repmgr024_sub { method niter tnum testopt largs } {
 	# otherwise it will never wait when the client is closed and
 	# we want to give it a chance to wait later in the test.
 	$enva repmgr -timeout {connection_retry 5000000} \
-	    -local [list 127.0.0.1 $porta] -start master
+	    -local [list $hoststr $porta] -start master
 
 	# Define envb as a view if needed.
 	if { $testopt == "view" } {
@@ -90,24 +95,24 @@ proc repmgr024_sub { method niter tnum testopt largs } {
 		set viewstr ""
 	}
 	set cmdb "berkdb_env_noerr -create -txn nosync \
-	    $verbargs $repmemargs -rep -thread -event \
+	    $verbargs $repmemargs $sslargs -rep -thread -event \
 	    -log_buffer $log_buf -log_max $log_max -errpfx SITE_B \
 	    $viewstr -home $dirb"
 	set envb [eval $cmdb]
 	$envb repmgr -timeout {connection_retry 5000000} \
-	    -local [list 127.0.0.1 $portb] -start client \
-	    -remote [list 127.0.0.1 $porta]
+	    -local [list $hoststr $portb] -start client \
+	    -remote [list $hoststr $porta]
 	puts "\tRepmgr$tnum.a: wait for client B to sync with master."
 	await_startup_done $envb
 
 	set cmdc "berkdb_env_noerr -create -txn nosync \
-	    $verbargs $repmemargs -rep -thread -event \
+	    $verbargs $repmemargs $sslargs -rep -thread -event \
 	    -log_buffer $log_buf -log_max $log_max -errpfx SITE_C \
 	    -home $dirc"
 	set envc [eval $cmdc]
 	$envc repmgr -timeout {connection_retry 5000000} \
-	    -local [list 127.0.0.1 $portc] -start client \
-	    -remote [list 127.0.0.1 $porta]
+	    -local [list $hoststr $portc] -start client \
+	    -remote [list $hoststr $porta]
 	puts "\tRepmgr$tnum.b: wait for client C to sync with master."
 	await_startup_done $envc
 
@@ -125,6 +130,15 @@ proc repmgr024_sub { method niter tnum testopt largs } {
 		puts "\tRepmgr$tnum.c: Running rep_test in replicated env."
 		eval rep_test $method $enva NULL $niter $start 0 0 $largs
 		incr start $niter
+		#
+		# On some platforms, views can process new log records from
+		# the master faster than they can apply them because views
+		# don't send acks.  Allow a little extra time for the view
+		# apply to catch up in this tight loop.
+		#
+		if { $testopt == "view" } {
+			tclsleep 2
+		}
 
 		set res [eval exec $util_path/db_archive -h $dira]
 		if { [llength $res] != 0 } {
@@ -137,7 +151,7 @@ proc repmgr024_sub { method niter tnum testopt largs } {
 	set outstr "Close"
 	if { $testopt == "liverem" } {
 		set outstr "Remove and close"
-		$enva repmgr -remove  [list 127.0.0.1 $portc]
+		$enva repmgr -remove  [list $hoststr $portc]
 		await_event $envc local_site_removed
 	}
 	puts "\tRepmgr$tnum.d: $outstr client."
@@ -172,6 +186,16 @@ proc repmgr024_sub { method niter tnum testopt largs } {
 		puts "\tRepmgr$tnum.e: Running rep_test in replicated env."
 		eval rep_test $method $enva NULL $niter $start 0 0 $largs
 		incr start $niter
+		#
+		# After liverem removes its client, it is possible on some
+		# platforms for the master to blast the remaining client with
+		# log records faster than the client can apply them because
+		# the master is only sending to one site now.  Allow extra
+		# time for the client to catch up.
+		#
+		if { $testopt == "view" || $testopt == "liverem" } {
+			tclsleep 2
+		}
 
 		# We use log_archive when we want to remove log files so
 		# that if we are running verbose, we get all of the output
@@ -188,6 +212,10 @@ proc repmgr024_sub { method niter tnum testopt largs } {
 			set stop 1
 		}
 	}
+
+	# Test the stable log file stat.  Make sure it has an initial value.
+	set stable_lf1 [stat_field $enva repmgr_stat "Group stable log file"]
+	error_check_good init_stable_lf [expr $stable_lf1 > 0] 1
 
 	#
 	# Get the new last log file for client 1.
@@ -268,6 +296,10 @@ proc repmgr024_sub { method niter tnum testopt largs } {
 	puts "\tRepmgr$tnum.l: Advance master log files."
 	set start [repmgr024_advlog $method $niter $start \
 	    $enva $dira $last_client_log $largs]
+
+	# Make sure the stable log file stat increased.
+	set stable_lf2 [stat_field $enva repmgr_stat "Group stable log file"]
+	error_check_good later_stable_lf [expr $stable_lf2 > $stable_lf1] 1
 
 	#
 	# Make sure neither log_archive in same process nor db_archive

@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2001, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2001, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file EXAMPLES-LICENSE for license information.
  *
  * $Id$
  */
@@ -48,12 +48,13 @@ hm_loop(args)
 	DB_LSN permlsn;
 	DBT rec, control;
 	APP_DATA *app;
-	const char *c, *home, *progname;
+	const char *home, *progname;
+	char *last_colon, *portstr;
 	elect_args *ea;
 	hm_loop_args *ha;
 	machtab_t *tab;
 	thread_t elect_thr, *site_thrs, *tmp, tid;
-	repsite_t self;
+	repsite_t newsite;
 	u_int32_t timeout;
 	int eid, n, nsites, nsites_allocd;
 	int already_open, r, ret, t_ret;
@@ -68,10 +69,10 @@ hm_loop(args)
 	ha = (hm_loop_args *)args;
 	dbenv = ha->dbenv;
 	fd = ha->fd;
-	home = ha->home;
 	eid = ha->eid;
 	progname = ha->progname;
 	tab = ha->tab;
+	COMPQUIET(home, ha->home);
 	free(ha);
 	app = dbenv->app_private;
 
@@ -80,6 +81,10 @@ hm_loop(args)
 
 	for (ret = 0; ret == 0;) {
 		if ((ret = get_next_message(fd, &rec, &control)) != 0) {
+			if (app->shared_data.app_finished) {
+				ret = 0;
+				goto netclose;
+			}
 			/*
 			 * Close this connection; if it's the master call
 			 * for an election.
@@ -137,17 +142,24 @@ hm_loop(args)
 			if (rec.size == 0)
 				break;
 
-			/* It's me, do nothing. */
-			if (strncmp(myaddr, rec.data, rec.size) == 0)
-				break;
-
-			self.host = (char *)rec.data;
-			self.host = strtok(self.host, ":");
-			if ((c = strtok(NULL, ":")) == NULL) {
+			newsite.host = (char *)rec.data;
+			/*
+			 * Parse for last colon in host:port string to
+			 * allow for IPv6 addresses in which the host
+			 * string itself contains colons.
+			 */
+			if ((last_colon = 
+			    strrchr(newsite.host, ':')) == NULL ) {
 				dbenv->errx(dbenv, "Bad host specification");
 				goto out;
 			}
-			self.port = atoi(c);
+			portstr = last_colon + 1;
+			*last_colon = '\0';
+			newsite.port = atoi(portstr);
+
+			/* It's me, do nothing. */
+			if (strcmp(myaddr, newsite.host) == 0)
+				break;
 
 			/*
 			 * We try to connect to the new site.  If we can't,
@@ -167,7 +179,7 @@ hm_loop(args)
 				nsites_allocd += 10;
 			}
 			if ((ret = connect_site(dbenv, tab, progname,
-			    &self, &already_open, &tid)) != 0)
+			    &newsite, &already_open, &tid)) != 0)
 				goto out;
 			if (!already_open)
 				memcpy(&site_thrs
@@ -183,6 +195,7 @@ hm_loop(args)
 					    "thread join failure");
 					goto out;
 				}
+				free(ea);
 				ea = NULL;
 			}
 			if ((ea = calloc(sizeof(elect_args), 1)) == NULL) {
@@ -219,15 +232,21 @@ hm_loop(args)
 
 out:	if ((t_ret = machtab_rem(tab, eid, 1)) != 0 && ret == 0)
 		ret = t_ret;
-
+netclose:
 	/* Don't close the environment before any children exit. */
-	if (ea != NULL && thread_join(elect_thr, &status) != 0)
-		dbenv->errx(dbenv, "can't join election thread");
+	if (ea != NULL) {
+		if (thread_join(elect_thr, &status) != 0)
+			dbenv->errx(dbenv, "can't join election thread");
+		free(ea);
+		ea = NULL;
+	}
 
-	if (site_thrs != NULL)
+	if (site_thrs != NULL) {
 		while (--nsites >= 0)
 			if (thread_join(site_thrs[nsites], &status) != 0)
 				dbenv->errx(dbenv, "can't join site thread");
+		free(site_thrs);
+	}
 
 	return ((void *)(uintptr_t)ret);
 }
@@ -242,7 +261,8 @@ connect_thread(args)
 	void *args;
 {
 	DB_ENV *dbenv;
-	const char *home, *progname;
+	APP_DATA *app;
+	const char *home, *host, *progname;
 	hm_loop_args *ha;
 	connect_args *cargs;
 	machtab_t *machtab;
@@ -252,18 +272,21 @@ connect_thread(args)
 	socket_t fd, ns;
 
 	ha = NULL;
+	i = 0;
 	cargs = (connect_args *)args;
 	dbenv = cargs->dbenv;
 	home = cargs->home;
 	progname = cargs->progname;
 	machtab = cargs->machtab;
+	host = cargs->host;
 	port = cargs->port;
+	app = dbenv->app_private;
 
 	/*
 	 * Loop forever, accepting connections from new machines,
 	 * and forking off a thread to handle each.
 	 */
-	if ((fd = listen_socket_init(progname, port)) < 0) {
+	if ((fd = listen_socket_init(progname, host, port, machtab)) < 0) {
 		ret = errno;
 		goto err;
 	}
@@ -271,7 +294,10 @@ connect_thread(args)
 	for (i = 0; i < MAX_THREADS; i++) {
 		if ((ns = listen_socket_accept(machtab,
 		    progname, fd, &eid)) == SOCKET_CREATION_FAILURE) {
-			ret = errno;
+			if (app->shared_data.app_finished)
+				ret = 0;
+			else
+				ret = errno;
 			goto err;
 		}
 		if ((ha = calloc(sizeof(hm_loop_args), 1)) == NULL) {
@@ -285,7 +311,7 @@ connect_thread(args)
 		ha->eid = eid;
 		ha->tab = machtab;
 		ha->dbenv = dbenv;
-		if ((ret = thread_create(&hm_thrs[i++], NULL,
+		if ((ret = thread_create(&hm_thrs[i], NULL,
 		    hm_loop, (void *)ha)) != 0) {
 			dbenv->errx(dbenv, "can't create thread for site");
 			goto err;
@@ -297,12 +323,13 @@ connect_thread(args)
 	dbenv->errx(dbenv, "Too many threads");
 	ret = ENOMEM;
 
+err:
 	/* Do not return until all threads have exited. */
 	while (--i >= 0)
 		if (thread_join(hm_thrs[i], &status) != 0)
 			dbenv->errx(dbenv, "can't join site thread");
 
-err:	return (ret == 0 ? (void *)EXIT_SUCCESS : (void *)EXIT_FAILURE);
+	return (ret == 0 ? (void *)EXIT_SUCCESS : (void *)EXIT_FAILURE);
 }
 
 /*
@@ -314,22 +341,26 @@ connect_all(args)
 	void *args;
 {
 	DB_ENV *dbenv;
+	APP_DATA *app;
 	all_args *aa;
 	const char *home, *progname;
-	hm_loop_args *ha;
 	int failed, i, nsites, open, ret, *success;
 	machtab_t *machtab;
-	thread_t *hm_thr;
+	thread_t empty_id, *hm_thr;
 	repsite_t *sites;
+	void *status;
 
-	ha = NULL;
 	aa = (all_args *)args;
 	dbenv = aa->dbenv;
 	progname = aa->progname;
-	home = aa->home;
 	machtab = aa->machtab;
 	nsites = aa->nsites;
 	sites = aa->sites;
+	COMPQUIET(home, aa->home);
+
+	status = NULL;
+	app = dbenv->app_private;
+	memset(&empty_id, 0, sizeof(thread_t));
 
 	ret = 0;
 	hm_thr = NULL;
@@ -352,6 +383,9 @@ connect_all(args)
 		for (i = 0; i < nsites; i++) {
 			if (success[i])
 				continue;
+
+			if (app->shared_data.app_finished)
+				goto err;
 
 			ret = connect_site(dbenv, machtab,
 			    progname, &sites[i], &open, &hm_thr[i]);
@@ -378,7 +412,15 @@ connect_all(args)
 		sleep(1);
 	}
 
-err:	if (success != NULL)
+err:	
+	for (i = 0; i < nsites; i++) {
+		if (!success[i] || 
+		    memcmp(&hm_thr[i], &empty_id, sizeof(thread_t)) == 0)
+			continue;
+		if (thread_join(hm_thr[i], &status) != 0)
+			dbenv->errx(dbenv, "can't join site thread");
+	}
+	if (success != NULL)
 		free(success);
 	if (hm_thr != NULL)
 		free(hm_thr);
@@ -453,12 +495,16 @@ elect_thread(args)
 
 	machtab_parm(machtab, &n, &timeout);
 	(void)dbenv->rep_set_timeout(dbenv, DB_REP_ELECTION_TIMEOUT, timeout);
-	while ((ret = dbenv->rep_elect(dbenv, n, (n/2+1), 0)) != 0)
+	while ((ret = dbenv->rep_elect(dbenv, n, (n/2+1), 0)) != 0) {
+		if (app->shared_data.app_finished)
+			return (NULL);
 		sleep(2);
+	}
 
 	if (app->elected) {
 		app->elected = 0;
-		if ((ret = dbenv->rep_start(dbenv, NULL, DB_REP_MASTER)) != 0)
+		if ((ret = dbenv->rep_start(dbenv, NULL,
+		    DB_REP_MASTER)) != 0 && !app->shared_data.app_finished)
 			dbenv->err(dbenv, ret,
 			    "can't start as master in election thread");
 	}

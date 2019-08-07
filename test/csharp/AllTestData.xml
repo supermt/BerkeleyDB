@@ -395,9 +395,10 @@
 			<FileMode>755</FileMode>
 			<ForceSync>True</ForceSync>
 			<InMemory>True</InMemory>
-			<LogBlobContent>True</LogBlobContent>
+			<LogExternalFileContent>True</LogExternalFileContent>
 			<MaxFileSize>1048576</MaxFileSize>
 			<NoBuffer>True</NoBuffer>
+			<NoSync>True</NoSync>
 			<RegionSize>30720</RegionSize>
 			<ZeroOnCreate>True</ZeroOnCreate>
 		</Test>
@@ -639,9 +640,10 @@
 			<FileMode>755</FileMode>
 			<ForceSync>True</ForceSync>
 			<InMemory>True</InMemory>
-			<LogBlobContent>True</LogBlobContent>
+			<LogExternalFileContent>True</LogExternalFileContent>
 			<MaxFileSize>1048576</MaxFileSize>
 			<NoBuffer>True</NoBuffer>
+			<NoSync>True</NoSync>
 			<RegionSize>20480</RegionSize>
 			<ZeroOnCreate>True</ZeroOnCreate>
 		</Test>
@@ -668,7 +670,7 @@
 			<Priority>1</Priority>
 			<RepMgrAckPolicy>ALL</RepMgrAckPolicy>
 			<RepMgrLocalSite>
-				<Host>127.0.0.0</Host>
+				<Host>::1</Host>
 				<Port>11111</Port>
 			</RepMgrLocalSite>
 			<Strict2Site>True</Strict2Site>
@@ -760,9 +762,10 @@
 				<FileMode>755</FileMode>
 				<ForceSync>True</ForceSync>
 				<InMemory>False</InMemory>
-				<LogBlobContent>False</LogBlobContent>
+				<LogExternalFileContent>False</LogExternalFileContent>
 				<MaxFileSize>1048576</MaxFileSize>
 				<NoBuffer>False</NoBuffer>
+				<NoSync>True</NoSync>
 				<RegionSize>204800</RegionSize>
 				<ZeroOnCreate>True</ZeroOnCreate>
 			</LogConfig>
@@ -810,7 +813,7 @@
 				<Priority>1</Priority>
 				<RepMgrAckPolicy>ALL</RepMgrAckPolicy>
 				<RepMgrLocalSite>
-					<Host>127.0.0.0</Host>
+					<Host>::1</Host>
 					<Port>11111</Port>
 				</RepMgrLocalSite>
 				<Strict2Site>True</Strict2Site>
@@ -844,7 +847,7 @@
 			<Priority>1</Priority>
 			<RepMgrAckPolicy>ALL</RepMgrAckPolicy>
 			<RepMgrLocalSite>
-				<Host>127.0.0.0</Host>
+				<Host>::1</Host>
 				<Port>11111</Port>
 			</RepMgrLocalSite>
 			<Strict2Site>True</Strict2Site>

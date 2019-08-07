@@ -1,6 +1,6 @@
-# See the file LICENSE for redistribution information.
+# Copyright (c) 2005, 2019 Oracle and/or its affiliates.  All rights reserved.
 #
-# Copyright (c) 2005, 2013 Oracle and/or its affiliates.  All rights reserved.
+# See the file LICENSE for license information.
 #
 # $Id$
 #
@@ -12,6 +12,9 @@
 # TEST	and make sure we still have the same contents.
 # TEST	Add back some entries, delete more entries (this time by
 # TEST	cursor), dump, compact, and do the before/after check again.
+# TEST	
+# TEST	The input keys are made into overflow keys in the "overflow"
+# TEST	loop for raising coverage purpose.
 
 proc test114 { method {nentries 10000} {tnum "114"} args } {
 	source ./include.tcl
@@ -158,7 +161,7 @@ proc test114 { method {nentries 10000} {tnum "114"} args } {
 			# For overflow case, repeat the string 100 times to get
 			# a big data and then insert it in to the database
 			# so that overflow pages are created. For duplicate
-			# case, insert 10 duplicates of each key in order to
+			# case, insert 20 duplicates of each key in order to
 			# have off-page duplicates.
 			#
 			if { $pgt == "overflow" } {
@@ -166,7 +169,7 @@ proc test114 { method {nentries 10000} {tnum "114"} args } {
 				set end 100
 			} else {
 				set start 1
-				set end 10
+				set end 20
 			}
 			set count 0
 			set keycnt 0
@@ -175,6 +178,9 @@ proc test114 { method {nentries 10000} {tnum "114"} args } {
 					set key [expr $keycnt + 1]
 				} else {
 					set key $str
+					if { $pgt == "overflow" } {
+						append key [repeat $alphabet 100]
+					}
 				}
 				for { set i $start } \
 				    { $i <= $end && $count < $nentries } \
@@ -240,6 +246,9 @@ proc test114 { method {nentries 10000} {tnum "114"} args } {
 					set key [expr $count + 1]
 				} else {
 					set key $str
+					if { $pgt == "overflow" } {
+						append key [repeat $alphabet 100]
+					}
 				}
 
 				if { [expr $count % $n] != 0 } {
@@ -274,45 +283,11 @@ proc test114 { method {nentries 10000} {tnum "114"} args } {
 				    [stat_field $db stat "Pages on freelist"]
 			}
 
-			puts "\tTest$tnum.c: Do a dump_file on contents."
-			if { $txnenv == 1 } {
-				set t [$env txn]
-				error_check_good txn \
-				    [is_valid_txn $t $env] TRUE
-				set txn "-txn $t"
-			}
-			dump_file $db $txn $t1
-			if { $txnenv == 1 } {
-				error_check_good txn_commit [$t commit] 0
-			}
+			puts "\tTest$tnum.c: Save contents."
+			dump_file_env $env $db $t1
 
 			puts "\tTest$tnum.d: Compact and verify database."
-			for {set commit 0} {$commit <= $txnenv} {incr commit} {
-				if { $txnenv == 1 } {
-					set t [$env txn]
-					error_check_good txn \
-					    [is_valid_txn $t $env] TRUE
-					set txn "-txn $t"
-				}
-				if { [catch {eval {$db compact} \
-				    $txn {-freespace}} ret] } {
-					error "FAIL: db compact: $ret"
-				}
-				if { $txnenv == 1 } {
-					if { $commit == 0 } {
-						puts "\tTest$tnum.d: Aborting."
-						error_check_good \
-						    txn_abort [$t abort] 0
-					} else {
-						puts "\tTest$tnum.d: Committing."
-						error_check_good \
-						    txn_commit [$t commit] 0
-					}
-				}
-				error_check_good db_sync [$db sync] 0
-				error_check_good verify_dir \
-				    [ verify_dir $testdir "" 0 0 $nodump] 0
-			}
+			compact_and_verify $env $db $tnum $nodump
 
 			set size2 [file size $filename]
 			if { $npart != 0 } {
@@ -349,16 +324,7 @@ proc test114 { method {nentries 10000} {tnum "114"} args } {
 
 			puts "\tTest$tnum.e:\
 			    Contents are the same after compaction."
-			if { $txnenv == 1 } {
-				set t [$env txn]
-				error_check_good txn \
-				    [is_valid_txn $t $env] TRUE
-				set txn "-txn $t"
-			}
-			dump_file $db $txn $t2
-			if { $txnenv == 1 } {
-				error_check_good txn_commit [$t commit] 0
-			}
+			dump_file_env $env $db $t2
 
 			if { [is_hash $method]  != 0 } {
 				filesort $t1 $t1.sort
@@ -457,45 +423,11 @@ proc test114 { method {nentries 10000} {tnum "114"} args } {
 			}
 
 			puts "\tTest$tnum.h: Save contents."
-			if { $txnenv == 1 } {
-				set t [$env txn]
-				error_check_good txn \
-				    [is_valid_txn $t $env] TRUE
-				set txn "-txn $t"
-			}
-			dump_file $db $txn $t1
-			if { $txnenv == 1 } {
-				error_check_good t_commit [$t commit] 0
-			}
+			dump_file_env $env $db $t1
 
 			puts "\tTest$tnum.i:\
 			    Compact and verify database again."
-			for {set commit 0} {$commit <= $txnenv} {incr commit} {
-				if { $txnenv == 1 } {
-					set t [$env txn]
-					error_check_good txn \
-					    [is_valid_txn $t $env] TRUE
-					set txn "-txn $t"
-				}
-				if { [catch {eval \
-				    {$db compact} $txn {-freespace}} ret] } {
-					error "FAIL: db compact: $ret"
-				}
-				if { $txnenv == 1 } {
-					if { $commit == 0 } {
-						puts "\tTest$tnum.i: Aborting."
-						error_check_good \
-						    txn_abort [$t abort] 0
-					} else {
-						puts "\tTest$tnum.i: Committing."
-						error_check_good \
-						    txn_commit [$t commit] 0
-					}
-				}
-				error_check_good db_sync [$db sync] 0
-				error_check_good verify_dir \
-				    [ verify_dir $testdir "" 0 0 $nodump] 0
-			}
+			compact_and_verify $env $db $tnum $nodump
 
 			set size4 [file size $filename]
 			if { $npart != 0 } {
@@ -524,16 +456,7 @@ proc test114 { method {nentries 10000} {tnum "114"} args } {
 
 			puts "\tTest$tnum.j:\
 			    Contents are the same after compaction."
-			if { $txnenv == 1 } {
-				set t [$env txn]
-				error_check_good txn \
-				    [is_valid_txn $t $env] TRUE
-				set txn "-txn $t"
-			}
-			dump_file $db $txn $t2
-			if { $txnenv == 1 } {
-				error_check_good t_commit [$t commit] 0
-			}
+			dump_file_env $env $db $t2
 			if { [is_hash $method]  != 0 } {
 				filesort $t1 $t1.sort
 				filesort $t2 $t2.sort

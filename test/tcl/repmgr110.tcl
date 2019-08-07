@@ -1,6 +1,6 @@
-# See the file LICENSE for redistribution information.
+# Copyright (c) 2009, 2019 Oracle and/or its affiliates.  All rights reserved.
 #
-# Copyright (c) 2009, 2013 Oracle and/or its affiliates.  All rights reserved.
+# See the file LICENSE for license information.
 #
 # TEST	repmgr110
 # TEST  Multi-process repmgr start-up policies.
@@ -8,6 +8,7 @@
 
 proc repmgr110 { } {
 	source ./include.tcl
+	global ipversion
 
 	set tnum "110"
 	puts "Repmgr$tnum: repmgr multi-process start policies."
@@ -24,12 +25,18 @@ proc repmgr110 { } {
 	make_dbconfig $dira $conf
 	make_dbconfig $dirb $conf
 	make_dbconfig $dirc $conf
+
+	setup_repmgr_ssl $dira
+	setup_repmgr_ssl $dirb
+	setup_repmgr_ssl $dirc
+
 	foreach {aport bport cport} [available_ports 3] {}
+	set hoststr [get_hoststr $ipversion]
 
 	puts "\tRepmgr$tnum.a: Create a master and client."
 	set cmds {
 		"home $dira"
-		"local $aport"
+		"local $hoststr $aport"
 		"output $testdir/a1output1"
 		"open_env"
 		"start master"
@@ -38,9 +45,9 @@ proc repmgr110 { } {
 
 	set cmds {
 		"home $dirb"
-		"local $bport"
+		"local $hoststr $bport"
 		"output $testdir/boutput1"
-		"remote 127.0.0.1 $aport"
+		"remote $hoststr $aport"
 		"open_env"
 		"start client"
 	}
@@ -68,9 +75,9 @@ proc repmgr110 { } {
 	close $b
 	set cmds {
 		"home $dirb"
-		"local $bport"
+		"local $hoststr $bport"
 		"output $testdir/boutput1"
-		"remote 127.0.0.1 $aport"
+		"remote $hoststr $aport"
 		"open_env"
 		"start election"
 	}
@@ -96,7 +103,7 @@ proc repmgr110 { } {
 	puts "\tRepmgr$tnum.e: Second master process accepts existing role"
 	set cmds {
 		"home $dira"
-		"local $aport"
+		"local $hoststr $aport"
 		"output $testdir/a2output1"
 		"open_env"
 		"start election"
@@ -132,9 +139,9 @@ proc repmgr110 { } {
 	set initial_gen [stat_field $aenv rep_stat "Generation number"]
 	set cmds {
 		"home $dira"
-		"local $aport"
+		"local $hoststr $aport"
 		"output $testdir/a2output2"
-		"remote 127.0.0.1 $bport"
+		"remote $hoststr $bport"
 		"open_env"
 		"start master"
 	}
@@ -157,7 +164,7 @@ proc repmgr110 { } {
 	# Note that site A is not running at this point.
 	set cmds {
 		"home $dirb"
-		"local $bport"
+		"local $hoststr $bport"
 		"output $testdir/boutput3"
 		"open_env"
 		"start master"
@@ -181,7 +188,7 @@ proc repmgr110 { } {
 	set initial_value [stat_field $aenv rep_stat "Elections held"]
 	set cmds {
 		"home $dira"
-		"local $aport"
+		"local $hoststr $aport"
 		"output $testdir/aoutput4"
 		"open_env"
 		"start election"

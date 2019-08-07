@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -219,17 +219,6 @@ __bam_stat_print(dbc, flags)
 	DBC *dbc;
 	u_int32_t flags;
 {
-	static const FN fn[] = {
-		{ BTM_DUP,	"duplicates" },
-		{ BTM_RECNO,	"recno" },
-		{ BTM_RECNUM,	"record-numbers" },
-		{ BTM_FIXEDLEN,	"fixed-length" },
-		{ BTM_RENUMBER,	"renumber" },
-		{ BTM_SUBDB,	"multiple-databases" },
-		{ BTM_DUPSORT,	"sorted duplicates" },
-		{ BTM_COMPRESS,	"compressed" },
-		{ 0,		NULL }
-	};
 	DB *dbp;
 	DB_BTREE_STAT *sp;
 	ENV *env;
@@ -268,7 +257,8 @@ __bam_stat_print(dbc, flags)
 		break;
 	}
 	__db_msg(env, "%s\tByte order", s);
-	__db_prflags(env, NULL, sp->bt_metaflags, fn, NULL, "\tFlags");
+	__db_prflags(env,
+	    NULL, sp->bt_metaflags, __db_get_bmeta_fn(), NULL, "\tFlags");
 	if (dbp->type == DB_BTREE)
 		__db_dl(env, "Minimum keys per-page", (u_long)sp->bt_minkey);
 	if (dbp->type == DB_RECNO) {
@@ -277,6 +267,8 @@ __bam_stat_print(dbc, flags)
 		__db_msg(env,
 		    "%#x\tFixed-length record pad", (u_int)sp->bt_re_pad);
 	}
+	__db_dl(env,
+	    "Number of pages in the database", (u_long)sp->bt_pagecnt);
 	__db_dl(env,
 	    "Underlying database page size", (u_long)sp->bt_pagesize);
 	if (dbp->type == DB_BTREE)
@@ -290,7 +282,8 @@ __bam_stat_print(dbc, flags)
 	    "Number of data items in the tree", (u_long)sp->bt_ndata);
 	if (dbp->type == DB_BTREE) {
 		__db_dl(env,
-		    "Number of blobs in the tree", (u_long)sp->bt_nblobs);
+		    "Number of external files in the tree",
+		    (u_long)sp->bt_ext_files);
 	}
 
 	__db_dl(env,
@@ -378,8 +371,10 @@ __bam_stat_callback(dbc, h, cookie, putp)
 				++sp->bt_ndata;
 
 			/* Count blobs. */
-			if (B_TYPE(type) == B_BLOB)
+			if (B_TYPE(type) == B_BLOB) {
 				++sp->bt_nblobs;
+				++sp->bt_ext_files;
+			}
 		}
 
 		++sp->bt_leaf_pg;
@@ -525,10 +520,18 @@ __bam_key_range(dbc, dbt, kp, flags)
 
 	factor = 1.0;
 
+	/* If the first page has no entries, then the database is empty. */
+	if (cp->sp->entries == 0) {
+		kp->equal = 0;
+		goto end;
+	}
+
 	/* Correct the leaf page. */
 	cp->csp->entries /= 2;
 	cp->csp->indx /= 2;
 	for (sp = cp->sp; sp <= cp->csp; ++sp) {
+		if (sp->entries == 0)
+			return (__db_pgfmt(dbc->env, cp->pgno));
 		/*
 		 * At each level we know that pages greater than indx contain
 		 * keys greater than what we are looking for and those less
@@ -562,7 +565,7 @@ __bam_key_range(dbc, dbt, kp, flags)
 		kp->equal = 0;
 	}
 
-	if ((ret = __bam_stkrel(dbc, 0)) != 0)
+ end:	if ((ret = __bam_stkrel(dbc, 0)) != 0)
 		return (ret);
 
 	return (0);

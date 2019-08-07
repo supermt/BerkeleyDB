@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1998, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1998, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -121,7 +121,7 @@ extern "C" {
 #define	DB_REGION_PREFIX	"__db"		/* DB file name prefix. */
 #define	DB_REGION_FMT		"__db.%03d"	/* Region file name format. */
 #define	DB_REGION_ENV		"__db.001"	/* Primary environment name. */
-#define IS_DB_FILE(name)	(strncmp(name, DB_REGION_PREFIX,	\
+#define	IS_DB_FILE(name)	(strncmp(name, DB_REGION_PREFIX,	\
 				    sizeof(DB_REGION_PREFIX) - 1) == 0)
 
 #define	INVALID_REGION_ID	0	/* Out-of-band region ID. */
@@ -134,7 +134,10 @@ typedef enum {
 	REGION_TYPE_LOG,
 	REGION_TYPE_MPOOL,
 	REGION_TYPE_MUTEX,
-	REGION_TYPE_TXN } reg_type_t;
+	REGION_TYPE_TXN,
+	/* This enum always must be the last, and is the largest valid type. */
+	REGION_TYPE_MAX = REGION_TYPE_TXN
+} reg_type_t;
 
 #define	INVALID_REGION_SEGID	-1	/* Segment IDs are either shmget(2) or
 					 * Win16 segment identifiers.  They are
@@ -160,22 +163,34 @@ typedef struct __db_reg_env { /* SHARED */
 	/*
 	 * !!!
 	 * The magic, panic, version, envid and signature fields of the region
-	 * are fixed in size, the timestamp field is the first field which is
-	 * variable length.  These fields must never change in order, to
-	 * guarantee we can always read them, no matter what release we have.
+	 * are fixed in size and position, to guarantee we can always read them,
+	 * no matter what release we have.  The timestamp field is the first
+	 * field which might change size between systems or releases.
 	 *
 	 * !!!
 	 * The magic and panic fields are NOT protected by any mutex, and for
 	 * this reason cannot be anything more complicated than zero/non-zero.
 	 */
 	u_int32_t magic;		/* Valid region magic number. */
-	u_int32_t panic;		/* Environment is dead. */
+	u_int32_t defunct_panic;	/* Environment is dead. (Defunct) */
 
 	u_int32_t majver;		/* Major DB version number. */
 	u_int32_t minver;		/* Minor DB version number. */
 	u_int32_t patchver;		/* Patch DB version number. */
 
-	u_int32_t envid;		/* Unique environment ID. */
+	/*
+	 * The environment ID is assigned during environment creation.  If it is
+	 * ENVID_UNKNOWN (0) then the creation is still in progress, and the
+	 * shared (on-disk or in shared memory) environment is not yet valid.
+	 * If it is ENVID_PANIC then a fatal error has been detected; either
+	 * environment recovery is (DB_ENV->open(DB_RECOVER)) is needed or 
+	 * the environment need to be removed and any active database files
+	 * must be removed or restored from backups.  If this envid does not
+	 * match ENV->envid, then the environment has been recreated "out from
+	 * underneath" that (now stale) ENV handle; the ENV must be closed and,
+	 * if the process continues running, reopened, perhaps with DB_RECOVER.
+	 */
+	u_int32_t envid;
 
 	u_int32_t signature;		/* Structure signatures. */
 
@@ -194,7 +209,6 @@ typedef struct __db_reg_env { /* SHARED */
 #define	DB_INITENV_REP		0x0020	/* DB_INIT_REP */
 #define	DB_INITENV_TXN		0x0040	/* DB_INIT_TXN */
 
-
 	/*
 	 * The mtx_regenv mutex protects the environment reference count,
 	 * blob threshold and memory allocation from the primary shared region
@@ -210,6 +224,14 @@ typedef struct __db_reg_env { /* SHARED */
 	db_mutex_t mtx_regenv;		/* Refcnt, region allocation mutex. */
 	u_int32_t  refcnt;		/* References to the environment. */
 	u_int32_t  blob_threshold;	/* Environment wide blob threshold. */
+
+	/* Database-related configuration items from set_memory_init(). */
+	u_int32_t initdatabases;	/* Number of databases. */
+	u_int32_t initdblen;		/* Database name length. */
+	u_int32_t initextfiledbs;	/*
+					 * Number of addition external file
+					 * metadata databases.
+					 */
 
 	u_int32_t region_cnt;		/* Number of REGIONs. */
 	roff_t	  region_off;		/* Offset of region array */
@@ -228,12 +250,17 @@ typedef struct __db_reg_env { /* SHARED */
 	time_t	  op_timestamp;		/* Timestamp for operations. */
 	time_t	  rep_timestamp;	/* Timestamp for rep db handles. */
 	u_int32_t reg_panic;		/* DB_REGISTER triggered panic */
+	u_int32_t failure_panic;	/* Failchk or mutex lock saw a crash. */
+	char	  failure_symptom[DB_FAILURE_SYMPTOM_SIZE];
 	uintmax_t unused;		/* The ALLOC_LAYOUT structure follows
 					 * the REGENV structure in memory and
 					 * contains uintmax_t fields.  Force
 					 * proper alignment of that structure.
 					 */
 } REGENV;
+
+#define	ENVID_UNKNOWN	0		/* Envid has not yet been assigned. */
+#define	ENVID_PANIC	((u_int32_t)~0)	/* Indicate a panic. */
 
 /* Per-region shared region information. */
 typedef struct __db_region { /* SHARED */
@@ -253,7 +280,7 @@ typedef struct __db_region { /* SHARED */
  */
 
 /*
- * Structure used for tracking allocations in DB_PRIVATE regions. 
+ * Structure used for tracking allocations in DB_PRIVATE regions.
  */
 struct __db_region_mem_t;	typedef struct __db_region_mem_t REGION_MEM;
 struct __db_region_mem_t {
@@ -309,18 +336,23 @@ struct __db_reginfo_t {		/* __env_region_attach IN parameters. */
 
 /*
  * PANIC_ISSET, PANIC_CHECK:
- *	Check to see if the DB environment is dead.
+ *	Check to see if the DB environment is dead. If the environment is still
+ *	attached to its regions, look in the REGENV: on a panic the envid is
+ *	complemented so that any attached handles fail.  If not attached, check
+ *	whether the env had detected a panic state before the detach.
  */
-#define	PANIC_ISSET(env)						\
-	((env) != NULL && (env)->reginfo != NULL &&			\
-	    ((REGENV *)(env)->reginfo->primary)->panic != 0 &&		\
-	    !F_ISSET((env)->dbenv, DB_ENV_NOPANIC))
+#define	PANIC_ISSET(env)						   \
+	((env) != NULL && ((env)->reginfo != NULL ?			   \
+	    (((REGENV *)(env)->reginfo->primary)->envid != (env)->envid && \
+	    env->envid != ENVID_UNKNOWN) :				   \
+	    F_ISSET(env, ENV_REMEMBER_PANIC)) &&			   \
+	    !F_ISSET(env->dbenv, DB_ENV_NOPANIC))
 
 #define	PANIC_CHECK(env)						\
 	if (PANIC_ISSET(env))						\
 		return (__env_panic_msg(env));
 
-#define	PANIC_CHECK_RET(env, ret)			       		\
+#define	PANIC_CHECK_RET(env, ret)					\
 	if (PANIC_ISSET(env))						\
 		ret = (__env_panic_msg(env));
 

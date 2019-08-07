@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1999, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1999, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -442,9 +442,12 @@ retry:	pg = NULL;
 					if (ret != 0)
 						goto err;
 				}
+				F_CLR(dbc, C_ROOT_COLLAPSED);
 				if ((ret =
 				    __bam_dpages(dbc, 0, BTD_RELINK)) != 0)
 					goto err;
+				if (F_ISSET(dbc, C_ROOT_COLLAPSED))
+					npgno = PGNO_INVALID;
 				c_data->compact_pages_free++;
 				if ((ret = __TLPUT(dbc, prev_lock)) != 0)
 					goto err;
@@ -926,7 +929,7 @@ next_page:
 	pg = NULL;
 	if ((ret = __bam_stkrel(dbc, STK_PGONLY)) != 0)
 		goto err;
-	if (npgno != PGNO_INVALID &&
+	if (npgno != PGNO_INVALID && !do_commit &&
 	    (ret = __db_lget(dbc, 0, npgno, DB_LOCK_READ, 0, &next_lock)) != 0)
 		goto err;
 	if ((ret = __bam_stkrel(dbc, pgs_done == 0 ? STK_NOLOCK : 0)) != 0)
@@ -1004,9 +1007,6 @@ err:	/*
 	if ((t_ret = __bam_stkrel(dbc, sflag)) != 0 && ret == 0)
 		ret = t_ret;
 
-	if ((t_ret = __TLPUT(dbc, metalock)) != 0 && ret == 0)
-		ret = t_ret;
-
 	if (pg != NULL && (t_ret =
 	     __memp_fput(dbmp,
 		  dbc->thread_info, pg, dbc->priority) != 0) && ret == 0)
@@ -1016,7 +1016,11 @@ err:	/*
 		  dbc->thread_info, npg, dbc->priority) != 0) && ret == 0)
 		ret = t_ret;
 
-out:	*isdonep = isdone;
+out:
+	if ((t_ret = __TLPUT(dbc, metalock)) != 0 && ret == 0)
+		ret = t_ret;
+
+	*isdonep = isdone;
 
 	/* For OPD trees return if we did anything in the span variable. */
 	if (F_ISSET(dbc, DBC_OPD))
@@ -1240,7 +1244,7 @@ __bam_merge_records(dbc, ndbc, factor, c_data, pgs_donep)
 	    ((B_TYPE(bk->type) == B_BLOB) ? BBLOB_DSIZE : BOVERFLOW_SIZE);
 	if (indx != 0 && BINTERNAL_SIZE(len) >= pfree) {
 		if (F_ISSET(dbc, DBC_OPD)) {
-			if (dbp->dup_compare == __bam_defcmp)
+			if (dbp->dup_compare == __dbt_defcmp)
 				func = __bam_defpfx;
 			else
 				func = NULL;
@@ -1355,10 +1359,10 @@ no_check: is_dup = first_dup = next_dup = 0;
 				goto err;
 			break;
 		default:
+			ret = USR_ERR(env, EINVAL);
 			__db_errx(env, DB_STR_A("1022",
 			    "Unknown record format, page %lu, indx 0",
 			    "%lu"), (u_long)PGNO(pg));
-			ret = EINVAL;
 			goto err;
 		}
 		pind++;
@@ -1792,7 +1796,8 @@ fits:	memset(&bi, 0, sizeof(bi));
 		if ((ret = __db_pitem(dbc, pg, pind, size, &hdr, &data)) != 0)
 			goto err;
 		pind++;
-		if (fip != NULL) {
+		/* add bip test so fortify does not complain */
+		if (fip != NULL && bip != NULL) {
 			if (B_TYPE(bip->type) == B_OVERFLOW &&
 			    (ret = __db_doff(dbc,
 			    ((BOVERFLOW *)bip->data)->pgno)) != 0)
@@ -1942,7 +1947,7 @@ __bam_compact_dups(dbc, ppg, factor, have_lock, c_data, pgs_donep)
 	DB_ASSERT(NULL, dbc != NULL);
 	dbp = dbc->dbp;
 	dbmp = dbp->mpf;
-	/* XXX Don't reserve any free bytes (Force 100% fillfactor) in OPD trees
+	/* !!! Don't reserve any free bytes (Force 100% fillfactor) in OPD trees
 	 * to ensure forward progress.
 	 */
 	factor = 0;
@@ -1981,8 +1986,6 @@ __bam_compact_dups(dbc, ppg, factor, have_lock, c_data, pgs_donep)
 				goto err;
 			/* Just in case it should move.  Could it? */
 			bo = GET_BOVERFLOW(dbp, *ppg, i);
-			/* if (bo->pgno != pgno)
-				(*pgs_donep)++; */
 		}
 
 		if (B_TYPE(bo->type) == B_OVERFLOW) {
@@ -2236,9 +2239,8 @@ __bam_lock_tree(dbc, sp, csp, start, stop)
 		return (ret);
 
 	/*
-	 * Then recurse on the other records on the page if needed.
-	 * If the page is in the stack then its already locked or
-	 * was processed above.
+	 * Then recurse on the other records on the page if needed. If the page
+	 * is in the stack then it is already locked or it was processed above.
 	 */
 	if (start == 0 && pgno == PGNO(cpage))
 		start = 1;
@@ -2320,7 +2322,7 @@ __bam_savekey(dbc, next, start)
 	db_pgno_t pgno, saved_pgno;
 	int ret, t_ret;
 	u_int32_t len;
-	u_int8_t *data;
+	u_int8_t *data, type;
 	int level;
 
 	dbp = dbc->dbp;
@@ -2328,6 +2330,7 @@ __bam_savekey(dbc, next, start)
 	cp = (BTREE_CURSOR *)dbc->internal;
 	pg = cp->csp->page;
 	ret = 0;
+	bo = NULL;
 
 	if (dbc->dbtype == DB_RECNO) {
 		if (next)
@@ -2343,6 +2346,7 @@ __bam_savekey(dbc, next, start)
 	bi = GET_BINTERNAL(dbp, pg, NUM_ENT(pg) - 1);
 	data = bi->data;
 	len = bi->len;
+	type = bi->type;
 	LOCK_INIT(lock);
 	saved_pgno = PGNO_INVALID;
 	/* If there is single record on the page it may have an empty key. */
@@ -2379,22 +2383,31 @@ __bam_savekey(dbc, next, start)
 		 */
 		if (pg->level == LEAFLEVEL) {
 			bk = GET_BKEYDATA(dbp, pg, NUM_ENT(pg) - 2);
-			data = bk->data;
-			len = bk->len;
+			if (B_TYPE(bk->type) == B_OVERFLOW) {
+				bo = (BOVERFLOW *)bk;
+				len = bo->tlen;
+				type = bo->type;
+			} else {
+				data = bk->data;
+				len = bk->len;
+				type = bk->type;
+			}
 			if (len == 0) {
 no_key:				__db_errx(env, DB_STR("1023",
 				    "Compact cannot handle zero length key"));
-				ret = DB_NOTFOUND;
+				ret = DBC_ERR(dbc, DB_NOTFOUND);
 				goto err;
 			}
 		} else {
 			bi = GET_BINTERNAL(dbp, pg, NUM_ENT(pg) - 1);
 			data = bi->data;
 			len = bi->len;
+			type = bi->type;
 		}
 	}
-	if (B_TYPE(bi->type) == B_OVERFLOW) {
-		bo = (BOVERFLOW *)(data);
+	if (B_TYPE(type) == B_OVERFLOW) {
+		if (bo == NULL)
+			bo = (BOVERFLOW *)(data);
 		ret = __db_goff(dbc, start, bo->tlen, bo->pgno,
 		    &start->data, &start->ulen);
 	}
@@ -2564,6 +2577,8 @@ new_txn:
 
 	if ((ret = __LPUT(dbc, root_lock)) != 0)
 		goto err;
+	if ((ret = __LPUT(dbc, meta_lock)) != 0)
+		goto err;
 	if ((ret = __dbc_close(dbc)) != 0)
 		goto err;
 	dbc = NULL;
@@ -2667,6 +2682,8 @@ again:	if (F_ISSET(dbp, DB_AM_SUBDB) &&
 		if ((ret = __memp_fput(dbp->mpf, ip, meta, dbp->priority)) != 0)
 			goto err;
 		meta = NULL;
+		if (txn == NULL && (ret = __LPUT(dbc, meta_lock)) != 0)
+			goto err;
 		if ((ret = __dbc_close(dbc)) != 0)
 			goto err;
 		dbc = NULL;

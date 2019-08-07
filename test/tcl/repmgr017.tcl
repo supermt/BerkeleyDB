@@ -1,6 +1,6 @@
-# See the file LICENSE for redistribution information.
+# Copyright (c) 2007, 2019 Oracle and/or its affiliates.  All rights reserved.
 #
-# Copyright (c) 2007, 2013 Oracle and/or its affiliates.  All rights reserved.
+# See the file LICENSE for license information.
 #
 # $Id$
 #
@@ -36,6 +36,7 @@ proc repmgr017_sub { method niter tnum largs } {
 	global rep_verbose 
 	global verbose_type 
 	global databases_in_memory
+	global ipversion
 
 	# Force databases in-memory for this test but preserve original
 	# value to restore later so that other tests aren't affected.
@@ -46,6 +47,7 @@ proc repmgr017_sub { method niter tnum largs } {
 
 	set nsites 2
 	set ports [available_ports $nsites]
+	set hoststr [get_hoststr $ipversion]
 	set omethod [convert_method $method]
 
 	set verbargs ""
@@ -56,25 +58,27 @@ proc repmgr017_sub { method niter tnum largs } {
 	# In-memory logs cannot be used with -txn nosync.
 	set logargs [adjust_logargs "in-memory"]
 	set txnargs [adjust_txnargs "in-memory"]
+	set sslargs [setup_repmgr_sslargs]
 
 	# Open a master with a very small cache.
 	puts "\tRepmgr$tnum.a: Start a master with a very small cache."
 	set cacheargs "-cachesize {0 32768 1}"
-	set ma_envcmd "berkdb_env_noerr -create $logargs $txnargs $verbargs \
+	set ma_envcmd "berkdb_env_noerr -create $logargs $txnargs $verbargs $sslargs \
 	   -errpfx MASTER -rep -thread -rep_inmem_files -private $cacheargs"
+
 	set masterenv [eval $ma_envcmd]
 	$masterenv repmgr -ack all \
-	    -local [list 127.0.0.1 [lindex $ports 0]] \
+	    -local [list $hoststr [lindex $ports 0]] \
 	    -start master
 
 	# Open a client
 	puts "\tRepmgr$tnum.b: Start a client."
-	set cl_envcmd "berkdb_env_noerr -create $logargs $txnargs $verbargs \
+	set cl_envcmd "berkdb_env_noerr -create $logargs $txnargs $verbargs $sslargs\
 	    -errpfx CLIENT -rep -thread -rep_inmem_files -private"
 	set clientenv [eval $cl_envcmd]
 	$clientenv repmgr -ack all \
-	    -local [list 127.0.0.1 [lindex $ports 1]] \
-	    -remote [list 127.0.0.1 [lindex $ports 0]] \
+	    -local [list $hoststr [lindex $ports 1]] \
+	    -remote [list $hoststr [lindex $ports 0]] \
 	    -start client
 	await_startup_done $clientenv
 
@@ -101,14 +105,14 @@ proc repmgr017_sub { method niter tnum largs } {
 	set cacheargs ""
 	set masterenv [eval $ma_envcmd -recover]
 	$masterenv repmgr -ack all \
-	    -local [list 127.0.0.1 [lindex $ports 0]] \
+	    -local [list $hoststr [lindex $ports 0]] \
 	    -start master
 
 	# Open -recover to clear env region, including startup_done value.
 	set clientenv [eval $cl_envcmd -recover]
 	$clientenv repmgr -ack all \
-	    -local [list 127.0.0.1 [lindex $ports 1]] \
-	    -remote [list 127.0.0.1 [lindex $ports 0]] \
+	    -local [list $hoststr [lindex $ports 1]] \
+	    -remote [list $hoststr [lindex $ports 0]] \
 	    -start client
 	await_startup_done $clientenv
 

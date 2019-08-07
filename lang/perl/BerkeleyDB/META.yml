@@ -1,5 +1,5 @@
 ---
-abstract: 'Perl extension for Berkeley DB version 2, 3, 4 or 5'
+abstract: 'Perl extension for Berkeley DB version 2, 3, 4, 5 or 6'
 author:
   - 'Paul Marquess <pmqs@cpan.org>'
 build_requires:
@@ -18,4 +18,4 @@ no_index:
     - t
     - inc
 requires: {}
-version: 0.52
+version: 0.57

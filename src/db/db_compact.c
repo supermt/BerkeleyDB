@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1999, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1999, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -68,15 +68,18 @@ __db_compact_int(dbp, ip, txn, start, stop, c_data, flags, end)
 	DB_COMPACT save_data;
 	DB_TXN *txn_orig;
 	ENV *env;
-	u_int32_t empty_buckets, factor, retry;
+	u_int32_t factor, retry;
 	int deadlock, have_freelist, isdone, ret, span, t_ret, txn_local;
+
+#ifdef HAVE_HASH
+	u_int32_t empty_buckets;
+#endif
 
 #ifdef HAVE_FTRUNCATE
 	db_pglist_t *list;
 	db_pgno_t last_pgno;
 	u_int32_t nelems, truncated;
 #endif
-
 	env = dbp->env;
 
 	memset(&current, 0, sizeof(current));
@@ -102,8 +105,9 @@ __db_compact_int(dbp, ip, txn, start, stop, c_data, flags, end)
 	     &current, start->data, start->size,
 	     &current.data, &current.ulen)) != 0)
 		return (ret);
-
+#ifdef HAVE_HASH
 	empty_buckets = c_data->compact_empty_buckets;
+#endif
 
 	if (IS_DB_AUTO_COMMIT(dbp, txn)) {
 		txn_local = 1;
@@ -421,6 +425,8 @@ __db_exchange_page(dbc, pgp, opg, newpgno, flags, pgs_donep)
 	db_pgno_t oldpgno, *pgnop;
 	int ret;
 
+	COMPQUIET(oldpgno, 0);
+	
 	DB_ASSERT(NULL, dbc != NULL);
 	dbp = dbc->dbp;
 	LOCK_INIT(lock);
@@ -458,8 +464,8 @@ __db_exchange_page(dbc, pgp, opg, newpgno, flags, pgs_donep)
 	 */
 	if (PGNO(newpage) > PGNO(*pgp)) {
 		/* It is unfortunate but you can't just free a new overflow. */
-		/* XXX Is the above comment still true? */
-		/* XXX Should __db_new(OVERFLOW) zero OV_LEN()? */
+		/* !!! Is the above comment still true? */
+		/* !!! Should __db_new(OVERFLOW) zero OV_LEN()? */
 		if (TYPE(newpage) == P_OVERFLOW)
 			OV_LEN(newpage) = 0;
 		if ((ret = __LPUT(dbc, lock)) != 0)
@@ -798,13 +804,13 @@ __db_find_free(dbc, type, size, bstart, freep)
 		goto err;
 
 	if (nelems == 0) {
-		ret = DB_NOTFOUND;
+		ret = DBC_ERR(dbc, DB_NOTFOUND);
 		goto err;
 	}
 
 	for (i = 0; i < nelems; i++) {
 		if (list[i] > bstart) {
-			ret = DB_NOTFOUND;
+			ret = DBC_ERR(dbc, DB_NOTFOUND);
 			goto err;
 		}
 		start = i;
@@ -830,7 +836,7 @@ __db_find_free(dbc, type, size, bstart, freep)
 			goto found;
 		}
 	}
-	ret = DB_NOTFOUND;
+	ret = DBC_ERR(dbc, DB_NOTFOUND);
 	goto err;
 
 found:	/* We have size range of pages.  Remove them. */
@@ -1070,7 +1076,7 @@ __db_move_metadata(dbc, metap, c_data, pgs_donep)
 		 */
 		if (dbp->cur_txn != NULL)
 			__txn_remlock(dbp->env,
-			    dbp->cur_txn, &dbp->handle_lock, DB_LOCK_INVALIDID);
+			    dbp->cur_txn, &dbp->handle_lock, dbp->locker);
 
 		handle_lock = dbp->handle_lock;
 		if ((ret = __fop_lock_handle(dbp->env, dbp,

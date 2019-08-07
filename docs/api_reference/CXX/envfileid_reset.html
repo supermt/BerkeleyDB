@@ -14,11 +14,14 @@
   <body>
     <div xmlns="" class="navheader">
       <div class="libver">
-        <p>Library Version 12.1.6.0</p>
+        <p>Library Version 18.1.32</p>
       </div>
       <table width="100%" summary="Navigation header">
         <tr>
-          <th colspan="3" align="center">DbEnv::fileid_reset()</th>
+          <th colspan="3" align="center">
+        
+        <span xmlns="http://www.w3.org/1999/xhtml">DbEnv::fileid_reset()</span>
+    </th>
         </tr>
         <tr>
           <td width="20%" align="left"><a accesskey="p" href="envfailchk.html">Prev</a> </td>
@@ -34,7 +37,10 @@
       <div class="titlepage">
         <div>
           <div>
-            <h2 class="title" style="clear: both"><a id="envfileid_reset"></a>DbEnv::fileid_reset()</h2>
+            <h2 class="title" style="clear: both"><a id="envfileid_reset"></a>
+        
+        <span>DbEnv::fileid_reset()</span>
+    </h2>
           </div>
         </div>
       </div>
@@ -64,6 +70,11 @@ DbEnv::fileid_reset(const char *file, u_int32_t flags);</pre>
          the life of the application.
     </p>
       <p>
+         The <code class="methodname">DbEnv::fileid_reset()</code> method is a
+         non-atomic operation. If the operation fails, it is possible for the
+         copied database to be in an inconsistent state.
+    </p>
+      <p>
          The <code class="methodname">DbEnv::fileid_reset()</code> <span>
             
             <span>
@@ -77,7 +88,7 @@ DbEnv::fileid_reset(const char *file, u_int32_t flags);</pre>
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp59865328"></a>Parameters</h3>
+              <h3 class="title"><a id="idm140176770401760"></a>Parameters</h3>
             </div>
           </div>
         </div>
@@ -85,7 +96,7 @@ DbEnv::fileid_reset(const char *file, u_int32_t flags);</pre>
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp59864680"></a>file</h4>
+                <h4 class="title"><a id="idm140176770403008"></a>file</h4>
               </div>
             </div>
           </div>
@@ -97,7 +108,7 @@ DbEnv::fileid_reset(const char *file, u_int32_t flags);</pre>
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp59870136"></a>flags</h4>
+                <h4 class="title"><a id="idm140176770393248"></a>flags</h4>
               </div>
             </div>
           </div>
@@ -123,7 +134,7 @@ DbEnv::fileid_reset(const char *file, u_int32_t flags);</pre>
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp59871320"></a>Errors</h3>
+              <h3 class="title"><a id="idm140176770424976"></a>Errors</h3>
             </div>
           </div>
         </div>
@@ -141,7 +152,7 @@ DbEnv::fileid_reset(const char *file, u_int32_t flags);</pre>
           <div class="titlepage">
             <div>
               <div>
-                <h4 class="title"><a id="idp59879368"></a>EINVAL</h4>
+                <h4 class="title"><a id="idm140176770374960"></a>EINVAL</h4>
               </div>
             </div>
           </div>
@@ -154,7 +165,7 @@ DbEnv::fileid_reset(const char *file, u_int32_t flags);</pre>
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp59878072"></a>Class</h3>
+              <h3 class="title"><a id="idm140176770377040"></a>Class</h3>
             </div>
           </div>
         </div>
@@ -166,7 +177,7 @@ DbEnv::fileid_reset(const char *file, u_int32_t flags);</pre>
         <div class="titlepage">
           <div>
             <div>
-              <h3 class="title"><a id="idp59874272"></a>See Also</h3>
+              <h3 class="title"><a id="idm140176770383120"></a>See Also</h3>
             </div>
           </div>
         </div>
@@ -186,11 +197,17 @@ DbEnv::fileid_reset(const char *file, u_int32_t flags);</pre>
           <td width="40%" align="right"> <a accesskey="n" href="envfullversion.html">Next</a></td>
         </tr>
         <tr>
-          <td width="40%" align="left" valign="top">DbEnv::failchk() </td>
+          <td width="40%" align="left" valign="top">
+        
+        <span>DbEnv::failchk()</span>
+     </td>
           <td width="20%" align="center">
             <a accesskey="h" href="index.html">Home</a>
           </td>
-          <td width="40%" align="right" valign="top"> DbEnv::full_version()</td>
+          <td width="40%" align="right" valign="top"> 
+        
+        <span>DbEnv::full_version()</span>
+    </td>
         </tr>
       </table>
     </div>

@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2005, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2005, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -57,6 +57,7 @@ struct sending_msg {
  * whether the PERM message should be considered durable.
  */
 struct repmgr_permanence {
+	u_int32_t gen;		/* Master generation for LSN. */
 	DB_LSN lsn;		/* LSN whose ack this thread is waiting for. */
 	u_int threshold;	/* Number of client acks to wait for. */
 	u_int quorum;		/* Durability threshold for QUORUM policy. */
@@ -72,6 +73,7 @@ static int flatten __P((ENV *, struct sending_msg *));
 static int got_acks __P((ENV *, void *));
 static int __repmgr_finish_connect
     __P((ENV *, socket_t s, REPMGR_CONNECTION **));
+static void __repmgr_print_addrlist __P((ENV *, const char *, ADDRINFO *));
 static int __repmgr_propose_version __P((ENV *, REPMGR_CONNECTION *));
 static int __repmgr_start_connect __P((ENV*, socket_t *, ADDRINFO *, int *));
 static void setup_sending_msg __P((ENV *,
@@ -84,6 +86,18 @@ static REPMGR_SITE *connected_site __P((ENV *, int));
 static REPMGR_SITE *__repmgr_find_available_peer __P((ENV *));
 static int send_connection __P((ENV *, u_int,
     REPMGR_CONNECTION *, struct sending_msg *, int *));
+
+#ifdef DB_WIN32
+/*
+ * InetNtop is available for desktop apps on Windows Vista+ and Windows
+ * Server 2008+. InetNtop is NOT available for Windows mobile, Windows CE,
+ * Windows Store apps or Windows Phone Store apps. We leave the support for
+ * them in future when customers request them.
+ */
+#define	__os_inet_ntop InetNtop
+#else
+#define	__os_inet_ntop inet_ntop
+#endif
 
 /*
  * Connects to the given network address, using blocking operations.  Any thread
@@ -102,10 +116,12 @@ __repmgr_connect(env, netaddr, connp, errp)
 	REPMGR_CONNECTION *conn;
 	ADDRINFO *ai0, *ai;
 	socket_t sock;
-	int err, ret;
+	int err, ipversion, ret;
+	int ssl_conn_retry;
 	u_int port;
 
 	COMPQUIET(err, 0);
+	ssl_conn_retry = 0;
 #ifdef	CONFIG_TEST
 	port = fake_port(env, netaddr->port);
 #else
@@ -113,26 +129,70 @@ __repmgr_connect(env, netaddr, connp, errp)
 #endif
 	if ((ret = __repmgr_getaddr(env, netaddr->host, port, 0, &ai0)) != 0)
 		return (ret);
+	__repmgr_print_addrlist(env, "repmgr_connect", ai0);
 
 	/*
 	 * Try each address on the list, until success.  Note that if several
 	 * addresses on the list produce retryable error, we can only pass back
 	 * to our caller the last one.
+	 *
+	 * We make one or two passes through this loop.  The first pass
+	 * tries any IPv6 addresses in the list.  If there are no successful
+	 * IPv6 connections after the first pass, we make a second pass to
+	 * try any IPv4 addresses in the list.  This helps us avoid use of
+	 * IPv4 mapped addresses if IPv6 addresses are available on both
+	 * sides of a connection.
 	 */
+	ipversion = AF_INET6;
+retry:
 	for (ai = ai0; ai != NULL; ai = ai->ai_next) {
+		if (ai->ai_family != ipversion)
+			continue;
 		switch ((ret = __repmgr_start_connect(env, &sock, ai, &err))) {
 		case 0:
 			if ((ret = __repmgr_finish_connect(env,
-			    sock, &conn)) == 0)
+			    sock, &conn)) == 0) {
 				*connp = conn;
+				goto out;
+			}
 			else
 				(void)closesocket(sock);
-			goto out;
+
+			/*
+			 * If the socket connection was established but the 
+			 * SSL connection failed, then we should retry to 
+			 * check if the peer went down.
+			 * If the peer is offline, we would get DB_REP_UNAVAIL
+			 * in the next attempt. If not, then ECONNRESET(104) 
+			 * means it was a transient error in SSL layer and 
+			 * connection would succeed on the next attempt. 
+			 */
+			if (IS_REPMGR_SSL_ENABLED(env)
+			    && (errno == ECONNRESET)) {
+				/* Declare peer unreachable after 5 retries */
+				if (ssl_conn_retry >= 3) {
+					ret = DB_REP_UNAVAIL;
+					continue;
+				} else {
+					ssl_conn_retry++;
+					goto retry;
+				}
+			}
+			else
+				continue;
 		case DB_REP_UNAVAIL:
 			continue;
 		default:
 			goto out;
 		}
+	}
+	/*
+	 * If the first pass reaches here, it did not make a successful IPv6
+	 * connection.  Make the second pass to try IPv4.
+	 */
+	if (ipversion == AF_INET6) {
+		ipversion = AF_INET;
+		goto retry;
 	}
 
 out:
@@ -151,8 +211,11 @@ __repmgr_start_connect(env, socket_result, ai, err)
 	ADDRINFO *ai;
 	int *err;
 {
+	DB_REP *db_rep;
 	socket_t s;
-	int ret;
+	int ret, sock_approved;
+
+	db_rep = env->rep_handle;
 
 	if ((s = socket(ai->ai_family,
 		    ai->ai_socktype, ai->ai_protocol)) == SOCKET_ERROR) {
@@ -161,12 +224,33 @@ __repmgr_start_connect(env, socket_result, ai, err)
 		return (ret);
 	}
 
+	/*
+	 * Invoke any application-supplied socket approval function just
+	 * before actually making the connection.  If the function rejects
+	 * this socket, return DB_REP_UNAVAIL so that the caller will try
+	 * any additional addresses in its list.
+	 */
+	sock_approved = 1;
+	if (db_rep->approval != NULL &&
+	    (ret = db_rep->approval(env->dbenv, s, &sock_approved, 0)) != 0) {
+		VPRINT(env, (env, DB_VERB_REP_SYNC,
+		    "repmgr_start_connect: approval callback error %d for:",
+		    ret));
+		__repmgr_print_addr(env, ai->ai_addr, "", 1, 0);
+		return (ret);
+	}
+	if (!sock_approved)
+		return (DB_REP_UNAVAIL);
+
 	if (connect(s, ai->ai_addr, (socklen_t)ai->ai_addrlen) != 0) {
 		*err = net_errno;
 		(void)closesocket(s);
 		return (DB_REP_UNAVAIL);
 	}
-	RPRINT(env, (env, DB_VERB_REPMGR_MISC, "connection established"));
+	__repmgr_print_addr(env, ai->ai_addr,
+	    "connection established", 1, 0);
+
+	SSL_DEBUG_CONNECT(env, "Socket connection established for fd=%d.", s);
 
 	*socket_result = s;
 	return (0);
@@ -181,11 +265,20 @@ __repmgr_finish_connect(env, s, connp)
 	REPMGR_CONNECTION *conn;
 	int ret;
 
-	if ((ret = __repmgr_new_connection(env, &conn, s, CONN_CONNECTED)) != 0)
+	if ((ret = __repmgr_new_connection(env,
+	    &conn, s, CONN_CONNECTED)) != 0 ||
+	    (ret = __repmgr_set_keepalive(env, conn)) != 0)
 		return (ret);
 
-	if ((ret = __repmgr_set_keepalive(env, conn)) == 0 &&
-	    (ret = __repmgr_propose_version(env, conn)) == 0)
+#if defined(HAVE_REPMGR_SSL)
+	if (IS_REPMGR_SSL_ENABLED(env))
+		if ((ret = __repmgr_ssl_connect(env, s, conn)) != 0) {
+			(void)__repmgr_destroy_conn(env, conn);
+			return (ret);
+		}
+#endif
+
+	if ((ret = __repmgr_propose_version(env, conn)) == 0)
 		*connp = conn;
 	else
 		(void)__repmgr_destroy_conn(env, conn);
@@ -226,6 +319,10 @@ __repmgr_propose_version(env, conn)
 	 *  +-----------------+----+------------------+------+
 	 *
 	 * The "extra info" contains the version parameters, in marshaled form.
+	 *
+	 * While we no longer support 4.6/V1, the repmgr protocol still uses
+	 * the simpler V1 handshake as the initial message sent for version
+	 * negotiation on a new connection.
 	 */
 
 	hostname_len = strlen(my_addr->host);
@@ -504,9 +601,16 @@ __repmgr_send(dbenv, control, rec, lsnp, eid, flags)
 			if (nclients > 1 ||
 			    FLD_ISSET(db_rep->region->config,
 			    REP_C_2SITE_STRICT) ||
-			    db_rep->active_gmdb_update == gmdb_primary)
+			    db_rep->active_gmdb_update == gmdb_primary) {
 				quorum = nclients / 2;
-			else
+				/*
+				 * An unelectable master can't be part of the
+				 * QUORUM policy quorum.
+				 */
+				if (rep->priority == 0 &&
+				    policy == DB_REPMGR_ACKS_QUORUM)
+					quorum++;
+			} else
 				quorum = nclients;
 
 			if (policy == DB_REPMGR_ACKS_ALL_AVAILABLE) {
@@ -566,6 +670,7 @@ __repmgr_send(dbenv, control, rec, lsnp, eid, flags)
 		/* In ALL_PEERS case, display of "needed" might be confusing. */
 		VPRINT(env, (env, DB_VERB_REPMGR_MISC,
 		    "will await acknowledgement: need %u", needed));
+		perm.gen = rep->gen;
 		perm.lsn = *lsnp;
 		perm.threshold = needed;
 		perm.policy = policy;
@@ -814,7 +919,9 @@ send_connection(env, type, conn, msg, sent)
 		REPMGR_MAX_V2_MSG_TYPE,
 		REPMGR_MAX_V3_MSG_TYPE,
 		REPMGR_MAX_V4_MSG_TYPE,
-		REPMGR_MAX_V5_MSG_TYPE
+		REPMGR_MAX_V5_MSG_TYPE,
+		REPMGR_MAX_V6_MSG_TYPE,
+		REPMGR_MAX_V7_MSG_TYPE
 	};
 
 	db_rep = env->rep_handle;
@@ -1078,6 +1185,14 @@ __repmgr_write_iovecs(env, conn, iovecs, writtenp)
 	REPMGR_IOVECS iovec_buf, *v;
 	size_t nw, sz, total_written;
 	int ret;
+	int use_ssl_api;
+
+	use_ssl_api = 0;
+
+#if defined(HAVE_REPMGR_SSL)
+	if (IS_REPMGR_SSL_ENABLED(env))
+		use_ssl_api = 1;
+#endif
 
 	/*
 	 * Send as much data to the site as we can, without blocking.  Keep
@@ -1100,12 +1215,25 @@ __repmgr_write_iovecs(env, conn, iovecs, writtenp)
 	memcpy(v, iovecs, sz);
 
 	total_written = 0;
-	while ((ret = __repmgr_writev(conn->fd, &v->vectors[v->offset],
-	    v->count-v->offset, &nw)) == 0) {
-		total_written += nw;
-		if (__repmgr_update_consumed(v, nw)) /* all written */
-			break;
+
+	if (use_ssl_api) {
+#if defined(HAVE_REPMGR_SSL)
+		while ((ret = __repmgr_ssl_writev(conn, &v->vectors[v->offset],
+		    v->count-v->offset, &nw)) == 0) {
+			total_written += nw;
+			if (__repmgr_update_consumed(v, nw)) /* all written */
+				break;
+		}
+#endif
+	} else {
+		while ((ret = __repmgr_writev(conn->fd, &v->vectors[v->offset],
+		    v->count-v->offset, &nw)) == 0) {
+			total_written += nw;
+			if (__repmgr_update_consumed(v, nw)) /* all written */
+				break;
+		}
 	}
+
 	*writtenp = total_written;
 	if (v != &iovec_buf)
 		__os_free(env, v);
@@ -1148,19 +1276,20 @@ got_acks(env, context)
 		 * Do not count an ack from a view because a view cannot
 		 * contribute to durability.
 		 */
-		if (site->membership != SITE_PRESENT ||
-		    FLD_ISSET(site->gmdb_flags, SITE_VIEW))
+		if (FLD_ISSET(site->gmdb_flags, SITE_VIEW))
 			continue;
 		if (!F_ISSET(site, SITE_HAS_PRIO)) {
 			/*
-			 * Never connected to this site: since we can't know
-			 * whether it's a peer, assume the worst.
+			 * We have not reconnected to this site since the last
+			 * recovery.  Since we don't yet know whether it's a
+			 * peer, assume the worst.
 			 */
 			has_unacked_peer = TRUE;
 			continue;
 		}
 
-		if (LOG_COMPARE(&site->max_ack, &perm->lsn) >= 0) {
+		if (site->max_ack_gen == perm->gen &&
+		    LOG_COMPARE(&site->max_ack, &perm->lsn) >= 0) {
 			sites_acked++;
 			if (F_ISSET(site, SITE_ELECTABLE))
 				peers_acked++;
@@ -1277,7 +1406,9 @@ __repmgr_bust_connection(env, conn)
 	} else			/* Subordinate connection. */
 		goto out;
 
-	if ((ret = __repmgr_schedule_connection_attempt(env, eid, FALSE)) != 0)
+	/* Defer connection attempt if rejoining 2SITE_STRICT=off repgroup. */
+	if (!db_rep->rejoin_pending &&
+	    (ret = __repmgr_schedule_connection_attempt(env, eid, FALSE)) != 0)
 		goto out;
 
 	/*
@@ -1319,6 +1450,13 @@ __repmgr_bust_connection(env, conn)
 			}
 		}
 
+		/* Defer election if rejoining 2SITE_STRICT=off repgroup. */
+		if (db_rep->rejoin_pending) {
+			RPRINT(env, (env, DB_VERB_REPMGR_MISC,
+			    "Deferring election after rejoin rejection"));
+			goto out;
+		}
+
 		/*
 		 * Even if we're not doing elections, defer the event
 		 * notification to later execution in the election
@@ -1331,6 +1469,17 @@ __repmgr_bust_connection(env, conn)
 		else
 			RPRINT(env, (env, DB_VERB_REPMGR_MISC,
 			    "Master failure, but no elections"));
+
+		/*
+		 * In preferred master mode, a client that has lost its
+		 * connection to the master uses an election thread to
+		 * restart as master.
+		 */
+		if (IS_PREFMAS_MODE(env)) {
+			RPRINT(env, (env, DB_VERB_REPMGR_MISC,
+"bust_connection setting preferred master temp master"));
+			db_rep->prefmas_pending = start_temp_master;
+		}
 
 		if ((ret = __repmgr_init_election(env, flags)) != 0)
 			goto out;
@@ -1427,7 +1576,15 @@ __repmgr_disable_connection(env, conn)
 			if (site->state == SITE_CONNECTED && !is_subord &&
 			    (orig_state == CONN_READY ||
 			    orig_state == CONN_CONGESTED)) {
-				rep->sites_avail--;
+				/*
+				 * Some thread orderings can cause a brief
+				 * dip into a negative sites_avail value.
+				 * Once it goes negative it stays negative,
+				 * so avoid this.  Future connections will
+				 * be counted correctly.
+				 */
+				if (rep->sites_avail > 0)
+					rep->sites_avail--;
 				RPRINT(env, (env, DB_VERB_REPMGR_MISC,
 	    "disable_conn: EID %lu disabled.  sites_avail %lu",
 				    (u_long)eid, (u_long)rep->sites_avail));
@@ -1490,6 +1647,23 @@ __repmgr_close_connection(env, conn)
 #endif
 
 	ret = 0;
+
+#if defined(HAVE_REPMGR_SSL)
+	/* Cleanup and shutdown the SSL connection first. */
+	if (IS_REPMGR_SSL_ENABLED(env))
+		__repmgr_ssl_shutdown(env, conn);
+#endif
+	/* 
+	 * Lets send FIN right away to peer if we intend to close this
+	 * connection.
+	 */
+	if (conn->fd == INVALID_SOCKET) {
+		/* Added braces to avoid ambiguous else */
+		SSL_DEBUG_SHUTDOWN(env, "Connection has been already closed for fd = %d",
+		    conn->fd);
+	} else
+		shutdown(conn->fd, 2);
+
 	if (conn->fd != INVALID_SOCKET &&
 	    closesocket(conn->fd) == SOCKET_ERROR) {
 		ret = net_errno;
@@ -1553,6 +1727,12 @@ __repmgr_destroy_conn(env, conn)
 	ret = 0;
 
 	DB_ASSERT(env, conn->ref_count == 0);
+
+#if defined(HAVE_REPMGR_SSL)
+	if (IS_REPMGR_SSL_ENABLED(env))
+		if (conn && conn->repmgr_ssl_info && conn->repmgr_ssl_info->ssl)
+			__repmgr_ssl_shutdown(env, conn);
+#endif
 	/*
 	 * Deallocate any input and output buffers we may have.
 	 */
@@ -1829,11 +2009,11 @@ int
 __repmgr_listen(env)
 	ENV *env;
 {
-	ADDRINFO *ai;
+	ADDRINFO *ai, *ai0;
 	DB_REP *db_rep;
 	repmgr_netaddr_t *addrp;
 	char *why;
-	int sockopt, ret;
+	int ipversion, sockopt, ret;
 	socket_t s;
 
 	db_rep = env->rep_handle;
@@ -1843,8 +2023,9 @@ __repmgr_listen(env)
 
 	addrp = &SITE_FROM_EID(db_rep->self_eid)->net_addr;
 	if ((ret = __repmgr_getaddr(env,
-	    addrp->host, addrp->port, AI_PASSIVE, &ai)) != 0)
+	    addrp->host, addrp->port, AI_PASSIVE, &ai0)) != 0)
 		return (ret);
+	__repmgr_print_addrlist(env, "repmgr_listen", ai0);
 
 	/*
 	 * Given the assert is correct, we execute the loop at least once, which
@@ -1852,8 +2033,21 @@ __repmgr_listen(env)
 	 * course lint doesn't know about DB_ASSERT.
 	 */
 	COMPQUIET(why, "");
-	DB_ASSERT(env, ai != NULL);
-	for (; ai != NULL; ai = ai->ai_next) {
+	DB_ASSERT(env, ai0 != NULL);
+
+	/*
+	 * We make one or two passes through this loop.  The first pass
+	 * tries any IPv6 addresses in the list.  If there are no successful
+	 * IPv6 connections after the first pass, we make a second pass to
+	 * try any IPv4 addresses in the list.  This helps us avoid use of
+	 * IPv4 mapped addresses if IPv6 addresses are available on both
+	 * sides of a connection.
+	 */
+	ipversion = AF_INET6;
+retry:
+	for (ai = ai0; ai != NULL; ai = ai->ai_next) {
+		if (ai->ai_family != ipversion)
+			continue;
 
 		if ((s = socket(ai->ai_family,
 		    ai->ai_socktype, ai->ai_protocol)) == INVALID_SOCKET) {
@@ -1871,7 +2065,7 @@ __repmgr_listen(env)
 		    sizeof(sockopt)) != 0) {
 			why = DB_STR("3585",
 			    "can't set REUSEADDR socket option");
-			break;
+			goto err;
 		}
 
 		if (bind(s, ai->ai_addr, (socklen_t)ai->ai_addrlen) != 0) {
@@ -1885,7 +2079,7 @@ __repmgr_listen(env)
 
 		if (listen(s, 5) != 0) {
 			why = DB_STR("3587", "listen()");
-			break;
+			goto err;
 		}
 
 		if ((ret = __repmgr_set_nonblocking(s)) != 0) {
@@ -1898,13 +2092,23 @@ __repmgr_listen(env)
 		goto out;
 	}
 
-	if (ret == 0)
+	/*
+	 * If the first pass reaches here, it did not make a successful IPv6
+	 * connection.  Make the second pass to try IPv4.
+	 */
+	if (ipversion == AF_INET6) {
+		ipversion = AF_INET;
+		goto retry;
+	}
+	goto out;
+
+err:	if (ret == 0)
 		ret = net_errno;
 	__db_err(env, ret, "%s", why);
 clean:	if (s != INVALID_SOCKET)
 		(void)closesocket(s);
 out:
-	__os_freeaddrinfo(env, ai);
+	__os_freeaddrinfo(env, ai0);
 	return (ret);
 }
 
@@ -1932,6 +2136,7 @@ __repmgr_net_close(env)
 			site->ref.conn.out = NULL;
 		}
 	}
+	rep->sites_avail = 0;
 
 	if (db_rep->listen_fd != INVALID_SOCKET) {
 		if (closesocket(db_rep->listen_fd) == SOCKET_ERROR && ret == 0)
@@ -2127,3 +2332,1570 @@ err:
 	return (port);
 }
 #endif
+
+/*
+ * Print a single IP address in IPv6 or IPv4 format as needed.  Use
+ * idstring to supply information to help identify the caller.  Set
+ * single to 1 if only printing a single IP address.  Use index
+ * to supply an index value if printing out a list of IP addresses
+ * (in this case single should be 0).
+ *
+ * PUBLIC: void __repmgr_print_addr __P((ENV *,
+ * PUBLIC:    struct sockaddr *, const char *, int, int));
+ */
+void
+__repmgr_print_addr(env, addr, idstring, single, idx)
+	ENV *env;
+	struct sockaddr *addr;
+	const char *idstring;
+	int single;
+	int idx;
+{
+	struct sockaddr_in6 *saddr6;
+	struct sockaddr_in *saddr4;
+	char host[MAXHOSTNAMELEN];
+#ifdef DB_WIN32
+	TCHAR addrstr6[INET6_ADDRSTRLEN];
+	TCHAR addrstr4[INET_ADDRSTRLEN];
+	const TCHAR *p;
+#else
+	char addrstr6[INET6_ADDRSTRLEN];
+	char addrstr4[INET_ADDRSTRLEN];
+	const char *p;
+#endif
+	p = NULL;
+	if (addr->sa_family == AF_INET6) {
+		saddr6 = (struct sockaddr_in6 *)(addr);
+		if (getnameinfo((struct sockaddr *)saddr6,
+		    sizeof(struct sockaddr_in6), host, sizeof(host),
+		    0, 0, 0) != 0)
+			return;
+		p = __os_inet_ntop(saddr6->sin6_family, &saddr6->sin6_addr,
+		    addrstr6, sizeof(addrstr6));
+	} else if (addr->sa_family == AF_INET) {
+		saddr4 = (struct sockaddr_in *)(addr);
+		if (getnameinfo((struct sockaddr *)saddr4,
+		    sizeof(struct sockaddr_in), host, sizeof(host),
+		    0, 0, 0) != 0)
+			return;
+		p = __os_inet_ntop(saddr4->sin_family, &saddr4->sin_addr,
+		    addrstr4, sizeof(addrstr4));
+	} else {
+		VPRINT(env, (env, DB_VERB_REPMGR_MISC,
+		    "repmgr_print_addr: address family not recognized"));
+		return;
+	}
+
+	if (single)
+		VPRINT(env, (env, DB_VERB_REPMGR_MISC,
+		    "%s IPv%s host %s address %s", idstring,
+		    addr->sa_family == AF_INET6 ? "6" : "4", host, p));
+	else
+		VPRINT(env, (env, DB_VERB_REPMGR_MISC,
+		    "%s addrlist[%d] IPv%s host %s address %s",
+		    idstring, idx,
+		    addr->sa_family == AF_INET6 ? "6" : "4", host, p));
+}
+
+/*
+ * Print a list of IP addresses in IPv6 or IPv4 format as needed.
+ */
+static void
+__repmgr_print_addrlist(env, idstring, ai0)
+	ENV *env;
+	const char *idstring;
+	ADDRINFO *ai0;
+{
+	ADDRINFO *ai;
+	int i;
+
+	if (env->dbenv->verbose == 0)
+		return;
+	for (ai = ai0, i = 0; ai != NULL; ai = ai->ai_next, i++)
+		__repmgr_print_addr(env, ai->ai_addr, idstring, 0, i);
+}
+
+#if defined(HAVE_REPMGR_SSL)
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+/* Static locks for Openssl */
+static mgr_mutex_t **repmgr_ssl_mutex_arr = NULL;
+
+/*
+ * repmgr_ssl_locking_callback --
+ *
+ * locking callback for registered with Openssl.
+ */
+static void
+repmgr_ssl_locking_callback(mode, type, file, line)
+	int mode;
+	int type;
+	const char *file;
+	int line;
+{
+	COMPQUIET(file, NULL);
+	COMPQUIET(line, 0);
+
+	if (mode & CRYPTO_LOCK)
+		__repmgr_lock_mutex(repmgr_ssl_mutex_arr[type]);
+	else
+		__repmgr_unlock_mutex(repmgr_ssl_mutex_arr[type]);
+}
+#endif
+
+/*
+ * __repmgr_print_ssl_conf_values --
+ *
+ * Routine to print SSL configuration values. This is called when a
+ * missing or invalid configuration is detected.
+ */
+static int
+__repmgr_print_ssl_conf_values(env)
+	ENV *env;
+{
+	DB_REP *db_rep;
+	REPMGR_SSL_CONFIG *rmgr_ssl_conf;
+
+	db_rep = env->rep_handle;
+	rmgr_ssl_conf = &db_rep->repmgr_ssl_conf;
+
+	DB_ASSERT(env, IS_REPMGR_SSL_ENABLED(env));
+
+	RPRINT(env, (env, DB_VERB_REPMGR_MISC, "repmgr_ca_cert_file = %s",
+	    rmgr_ssl_conf->repmgr_ca_cert_file));
+	RPRINT(env, (env, DB_VERB_REPMGR_MISC, "repmgr_ca_dir = %s",
+	    rmgr_ssl_conf->repmgr_ca_dir));
+	RPRINT(env, (env, DB_VERB_REPMGR_MISC, "repmgr_cert_file = %s",
+	    rmgr_ssl_conf->repmgr_cert_file));
+	RPRINT(env, (env, DB_VERB_REPMGR_MISC, "repmgr_key_file = %s",
+	    rmgr_ssl_conf->repmgr_key_file));
+	RPRINT(env, (env, DB_VERB_REPMGR_MISC, "repmgr_key_file_passwd = %s",
+	    rmgr_ssl_conf->repmgr_key_file_passwd));
+	RPRINT(env, (env, DB_VERB_REPMGR_MISC, "repmgr_ssl_verify_depth = %d",
+	    rmgr_ssl_conf->repmgr_ssl_verify_depth));
+
+	return (0);
+}
+
+/*
+ * __repmgr_check_ssl_conf_values
+ *
+ * Validates the supplied SSL config for missing values.
+ */
+static int
+__repmgr_check_ssl_conf_values(env)
+	ENV *env;
+{
+	DB_REP *db_rep;
+	REPMGR_SSL_CONFIG *rmgr_ssl_conf;
+	int conf_parm_missing;
+	const char *msg;
+
+	db_rep = env->rep_handle;
+	rmgr_ssl_conf = &db_rep->repmgr_ssl_conf;
+	conf_parm_missing = 0;
+
+	DB_ASSERT(env, IS_REPMGR_SSL_ENABLED(env));
+
+	if (rmgr_ssl_conf->repmgr_cert_file == NULL ||
+	    !strlen(rmgr_ssl_conf->repmgr_cert_file)) {
+		msg = "Certificate File for replication node";
+		conf_parm_missing = 1;
+	}
+
+	if (rmgr_ssl_conf->repmgr_key_file == NULL ||
+	    !strlen(rmgr_ssl_conf->repmgr_key_file)) {
+		msg = "Private key file for replication node";
+		conf_parm_missing = 1;
+	}
+
+	if ((rmgr_ssl_conf->repmgr_ca_cert_file == NULL ||
+	    !strlen(rmgr_ssl_conf->repmgr_ca_cert_file))
+	    && (rmgr_ssl_conf->repmgr_ca_dir == NULL ||
+	    !strlen(rmgr_ssl_conf->repmgr_ca_dir))) {
+		msg = "CA Certificate file and CA Certificate directory for replication node";
+		conf_parm_missing = 1;
+	}
+
+	if (conf_parm_missing == 1) {
+		__repmgr_print_ssl_conf_values(env);
+
+		__db_errx(env, DB_STR_A("5514",
+		    "SSL configuration parameter '%s' is missing.",
+		    "%s"), msg);
+	}
+
+	return (conf_parm_missing);
+}
+
+/*
+ * __repmgr_load_ssl_certificates
+ *
+ * Load SSL certificates, Private key file, verify private key and
+ * load CA certificate(s) or CA certificate directory. SSL_CTX is
+ * freed up in caller on error.
+ */
+static int
+__repmgr_load_ssl_certificates(env, ssl_ctx)
+	ENV *env;
+	SSL_CTX *ssl_ctx;
+{
+	DB_REP *db_rep;
+	REPMGR_SSL_CONFIG *rmgr_ssl_conf;
+	int ret;
+	const char *passwd = "";
+
+	db_rep = env->rep_handle;
+	rmgr_ssl_conf = &db_rep->repmgr_ssl_conf;
+
+	DB_ASSERT(env, IS_REPMGR_SSL_ENABLED(env));
+
+	/* Check if all mandatory config values are present. */
+	if (__repmgr_check_ssl_conf_values(env) == 1)
+		return (1);
+
+	/* Set the local certificate from cert_file. */
+	if (SSL_CTX_use_certificate_file(ssl_ctx,
+	    rmgr_ssl_conf->repmgr_cert_file, SSL_FILETYPE_PEM) <= 0) {
+		__db_errx(env, DB_STR("5515",
+		    "Unable to obtain certificate from supplied certificate file."));
+
+		return (1);
+	}
+
+	/*
+	 * Avoid a prompt for Private Key password by supplyng empty string
+	 * instead of NULL.
+	 */
+	if (rmgr_ssl_conf->repmgr_key_file_passwd == NULL ||
+	    !strlen(rmgr_ssl_conf->repmgr_key_file_passwd)) {
+		if ((ret = __os_malloc(env, 10,
+		    &rmgr_ssl_conf->repmgr_key_file_passwd)) != 0)
+			__db_errx(env, DB_STR("5516",
+			    "Unable to allocate temporary space for "
+			    "SSL Private Key Password."));
+
+		memset(rmgr_ssl_conf->repmgr_key_file_passwd, 0, 10);
+		memcpy(rmgr_ssl_conf->repmgr_key_file_passwd, passwd,
+		    sizeof(passwd) + 1);
+	}
+
+	SSL_CTX_set_default_passwd_cb_userdata(
+	    ssl_ctx, rmgr_ssl_conf->repmgr_key_file_passwd);
+
+	/* Set the private key from key_file (may be the same as cert_file). */
+	if (SSL_CTX_use_PrivateKey_file(ssl_ctx, rmgr_ssl_conf->repmgr_key_file,
+	    SSL_FILETYPE_PEM) <= 0) {
+		__db_errx(env, DB_STR("5517",
+		    "Unable to get private key from supplied key file. "
+		    "Check the Key file and the corresponding password."));
+
+		return (1);
+	}
+
+	/* Verify private key against certificate set above. */
+	if (!SSL_CTX_check_private_key(ssl_ctx)) {
+		__db_errx(env, DB_STR("5518",
+		    "Private key does not match the public certificate."));
+
+		return (1);
+	}
+
+	/*
+	 * Load CA certificate(s). It could be a single certificate or a chain
+	 * file. If ca_cert_file is not present then load certs from ca_dir.
+	 */
+	if (SSL_CTX_load_verify_locations(ssl_ctx,
+	    rmgr_ssl_conf->repmgr_ca_cert_file,
+	    rmgr_ssl_conf->repmgr_ca_dir) != 1) {
+		__db_errx(env, DB_STR("5519",
+		    "Error loading CA certificate file and/or directory."));
+
+		return (1);
+	}
+
+	if (SSL_CTX_set_default_verify_paths(ssl_ctx) != 1) {
+		__db_errx(env, DB_STR("5519",
+		    "Error loading CA certificate file and/or directory."));
+
+		return (1);
+	}
+
+	return (0);
+}
+
+/*
+ * __repmgr_ssl_verify_callback --
+ *
+ * Sole purpose is application specfic checks and error printing during
+ * certificate verification done by openssl as part SSL_accept() or
+ * SSL_connect(). In our case helps identify cert whose verification
+ * failed.
+ */
+static int
+__repmgr_ssl_verify_callback(verify_succes, store)
+	int verify_succes;
+	X509_STORE_CTX *store;
+{
+	char data[256];
+
+	/*
+	 * Variable 'verify_succes' is 0 only if openssl cert verification for
+	 * this level failed.
+	 */
+	if (!verify_succes) {
+		X509 *cert = X509_STORE_CTX_get_current_cert(store);
+		int depth = X509_STORE_CTX_get_error_depth(store);
+		int err = X509_STORE_CTX_get_error(store);
+
+		fprintf(stderr,
+		    "-Error during peer certificate verification at depth : %d \n",
+		    depth);
+		X509_NAME_oneline(X509_get_issuer_name(cert), data, 256);
+		fprintf(stderr, "  issuer   = %s\n", data);
+		X509_NAME_oneline(X509_get_subject_name(cert), data, 256);
+		fprintf(stderr, "  subject  = %s\n", data);
+		fprintf(stderr, "  err %i:%s\n", err,
+		    X509_verify_cert_error_string(err));
+	}
+
+	return (verify_succes);
+}
+
+/*
+ * __repmgr_init_ssl_ctx
+ *
+ * Initialize SSL context structure for this node. This would be used
+ * to create all SSL connections to other nodes in the replication group.
+ *
+ * Certificates are loaded later. Returns NULL on failure.
+ */
+static SSL_CTX *
+__repmgr_init_ssl_ctx(env)
+	ENV *env;
+{
+	const SSL_METHOD *method;
+	SSL_CTX *ctx;
+	DB_REP *db_rep;
+	REPMGR_SSL_CONFIG *rmgr_ssl_conf;
+
+	db_rep = env->rep_handle;
+	rmgr_ssl_conf = &db_rep->repmgr_ssl_conf;
+
+	DB_ASSERT(env, IS_REPMGR_SSL_ENABLED(env));
+
+	/*
+	 * Create new client-method instance.
+	 * TLSv1_2_method() is deprecated after Openssl 1.1.0.
+	 * TLS_method() is available only after Openssl 1.1.0.
+	 * TLSv1_2_method() is used for Openssl 1.0.2(LTS) series.
+	 */
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+	method = TLS_method();
+#else
+	method = TLSv1_2_method();
+#endif
+
+	/* Create new context */
+	ctx = SSL_CTX_new(method);
+
+	if (ctx == NULL) {
+		__db_errx(env, DB_STR("5521",
+		    "Failed to create SSL context for Replication Manager Messaging."));
+
+		return (NULL);
+	}
+
+	/*
+	 * Following function returns nothing.
+	 * SSL_VERIFY_PEER and SSL_VERIFY_FAIL_IF_NO_PEER_CERT make sure of
+	 * following for us
+	 * 1) Certificates of both parties are verified by each other.
+	 * 2) Verification fails if one of the parties fails to present a valid
+	 *    certificate.
+	 *
+	 * Verify callback is for any app specific verification. Presently
+	 * using it for getting details about verification failure, if any.
+	 */
+	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER |
+	    SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+	    __repmgr_ssl_verify_callback);
+
+	/* Following function returns nothing. Default depth is 9. */
+	if (rmgr_ssl_conf->repmgr_ssl_verify_depth > 0)
+		SSL_CTX_set_verify_depth(ctx,
+		    rmgr_ssl_conf->repmgr_ssl_verify_depth);
+
+	/*
+	 * Following returns 1 if any cipher could be selected else 0.
+	 * Following is used to specify the characteristics of ciphers
+	 * that can be used.
+	 *
+	 * For a list of allowed ciphers, following command can be run
+	 *      openssl ciphers -v 'DEFAULT:!EXPORT:HIGH:!aNULL:!eNULL:!LOW:!SHA:!DES:!3DES:!SSLv2:!SSLv3@STRENGTH'
+	 *
+	 * Most of these options are aimed at avoiding selection of ciphers
+	 * a) that are weak(EXPORT,LOW,SHA,DES,3DES) or
+	 * b) don't have authentication(aNULL) or encryption(eNULL)
+	 * c) or use older or obsolete protocol versions(SSLv2, SSLv3).
+	 */
+	if (SSL_CTX_set_cipher_list(ctx,
+	    "DEFAULT:!EXPORT:HIGH:!aNULL:!eNULL:!LOW:!SHA:!DES:!3DES:!SSLv2:!SSLv3")
+	    != 1) {
+		__db_errx(env,
+		    DB_STR("5522",
+		    "Failed to find a suitable cipher for SSL support for Replication Manager Messaging."));
+		SSL_CTX_free(ctx);
+		return (NULL);
+	}
+
+	return (ctx);
+}
+
+/*
+ * __repmgr_ssl_init_done --
+ *
+ * Checks and tells if ssl libraries have been loaded and required
+ * mutexes have been initialized or not.
+ */
+static int
+__repmgr_ssl_init_done(env)
+	ENV *env;
+{
+	int i;
+	DB_REP *db_rep;
+
+	db_rep = env->rep_handle;
+
+	if (db_rep->repmgr_ssl_ctx == NULL)
+		return (1);
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+	if (repmgr_ssl_mutex_arr == NULL)
+		return (1);
+
+	for (i = 0; i < CRYPTO_num_locks(); i++)
+		if (repmgr_ssl_mutex_arr[i] == 0)
+			return (1);
+#endif
+
+	return (0);
+}
+
+/*
+ * __repmgr_set_ssl_ctx --
+ *
+ * Create and set the repmgr_ssl_ctx. This data structure serves as the
+ * template for all future SSL coonections with peers.
+ *
+ * NOTE:
+ * returns 0 on success and other values on failure
+ *
+ * PUBLIC: int __repmgr_set_ssl_ctx __P((ENV *));
+ */
+int
+__repmgr_set_ssl_ctx(env)
+	ENV *env;
+{
+	DB_REP *db_rep;
+	SSL_CTX *ssl_ctx;
+	int ret;
+	int i;
+
+	db_rep = env->rep_handle;
+
+	LOCK_MUTEX(db_rep->mutex);
+
+	/*
+	 * For some tests, we have seen the selector(poll()/epoll()) thread
+	 * start earlier and find this empty while connecting. So we init
+	 * SSL_CTX in __repmgr_ssl_connect()/__repmgr_ssl_accept() if we
+	 * find it empty. To avoid duplication and provide protection, we
+	 * use a combination of mutex and following check.
+	 */
+	if (db_rep->repmgr_ssl_ctx != NULL) {
+		UNLOCK_MUTEX(db_rep->mutex);
+		return (0);
+	}
+
+	DB_ASSERT(env, IS_REPMGR_SSL_ENABLED(env));
+
+	/*
+	 * First we take care of all openssl related initialization tasks.
+	 * Note, from Openssl version 1.1.0 this is no longer necessary.
+	 */
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+	/*
+	 * SSL_library_init() always returns "1",
+	 * so it is safe to discard the return value.
+	 */
+	SSL_library_init();
+#else
+	OPENSSL_init_ssl(0, NULL);
+#endif
+
+	/* Bring in and register error messages */
+	SSL_load_error_strings();
+
+	OpenSSL_add_all_algorithms();
+
+	if ((ssl_ctx = __repmgr_init_ssl_ctx(env)) == NULL) {
+		__db_errx(env,
+		    DB_STR("5523",
+		    "Failed to initialize SSL context for Replication Manager Messaging."));
+		goto err_cleanup;
+	}
+
+	if ((ret = __repmgr_load_ssl_certificates(env, ssl_ctx)) != 0) 
+		goto err_cleanup;
+
+#if defined(OPENSSL_THREADS) && OPENSSL_VERSION_NUMBER < 0x10100000L
+
+	/* Setup the required OpenSSL multi-threaded enviroment. */
+
+	if (repmgr_ssl_mutex_arr == NULL) {
+
+		ret = __os_malloc(env,
+		    CRYPTO_num_locks() * sizeof(mgr_mutex_t *), &repmgr_ssl_mutex_arr);
+
+		if (repmgr_ssl_mutex_arr == NULL) {
+			__db_errx(env,
+			    DB_STR("5530",
+			    "Failed to allocate memory for locks for Replication Manager SSL Support."));
+			goto err_cleanup;
+		}
+
+		/* Create the mutexes for use by openssl. */
+		for (i = 0; i < CRYPTO_num_locks(); i++) {
+			ret = __repmgr_create_mutex(env, &repmgr_ssl_mutex_arr[i]);
+
+			if (ret != 0) {
+				__db_errx(env,
+				    DB_STR("5531",
+				    "Failed to create mutexes for locking for Replication Manager SSL Support."));
+				goto err_cleanup;
+			}
+		}
+	}
+
+	CRYPTO_set_locking_callback(repmgr_ssl_locking_callback);
+#endif
+	db_rep->repmgr_ssl_ctx = ssl_ctx;
+
+	UNLOCK_MUTEX(db_rep->mutex);
+
+	return (0);
+
+err_cleanup:
+
+	UNLOCK_MUTEX(db_rep->mutex);
+
+	if (ssl_ctx)
+		SSL_CTX_free(ssl_ctx);
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+	if (repmgr_ssl_mutex_arr != NULL) {
+		for (i = 0; i < CRYPTO_num_locks(); i++) {
+			if (repmgr_ssl_mutex_arr[i] != NULL)
+				__repmgr_destroy_mutex(env, repmgr_ssl_mutex_arr[i]);
+		}
+		
+		repmgr_ssl_mutex_arr = NULL;
+	}
+#endif
+
+	return (1);
+}
+
+/*
+ * __repmgr_ssl_conn_info_setup --
+ *
+ * This function creates the mutexes and other in-memory structures
+ * to maintain the state of an SSL connection. Note, one of these
+ * structures(REPMGR_SSL_CONN_INFO) exists per SSL connection.
+ */
+static int
+__repmgr_ssl_conn_info_setup(env, conn, ssl)
+	ENV *env;
+	REPMGR_CONNECTION *conn;
+	SSL *ssl;
+{
+	int ret;
+	REPMGR_SSL_CONN_INFO *rmgr_ssl_info;
+	REPMGR_SSL_WRITE_INFO *rmgr_wrinfo;
+
+	rmgr_wrinfo = NULL;
+	rmgr_ssl_info = NULL;
+
+	if ((ret = __os_malloc(env, sizeof(REPMGR_SSL_CONN_INFO),
+	    &rmgr_ssl_info)) != 0) {
+		__db_errx(env,
+		    DB_STR("5532",
+		    "Failed to allocate memory for SSL connection information."));
+
+		goto err_cleanup;
+	}
+
+	if ((ret = __repmgr_create_mutex(env,
+	    &rmgr_ssl_info->repmgr_ssl_conn_mutex)) != 0) {
+		__db_errx(env,
+		    DB_STR("5533",
+		    "Failed to create mutex for controlling access to SSL connection object."));
+		goto err_cleanup;
+	}
+
+	rmgr_ssl_info->ssl = ssl;
+	rmgr_ssl_info->ssl_io_state = 0;
+
+	if ((ret = __os_malloc(env, sizeof(REPMGR_SSL_WRITE_INFO),
+	    &rmgr_wrinfo)) != 0) {
+		__db_errx(env,
+		    DB_STR("5534",
+		    "Failed to allocate memory for SSL write information."));
+		goto err_cleanup;
+	}
+
+	rmgr_wrinfo->rmgr_ssl_wbuf_ptr = NULL;
+	rmgr_wrinfo->rmgr_ssl_wbuf_length = 0;
+	rmgr_wrinfo->rmgr_ssl_write_pending = 0;
+
+	if ((ret = __repmgr_create_mutex(env,
+	    &rmgr_wrinfo->rmgr_ssl_write_mutex)) != 0) {
+		__db_errx(env,
+		    DB_STR("5535",
+		    "Failed to create mutex for synchronizing SSL writes."));
+		goto err_cleanup;
+	}
+
+	rmgr_ssl_info->rmgr_ssl_wrinfo = rmgr_wrinfo;
+	conn->repmgr_ssl_info = rmgr_ssl_info;
+
+	return (ret);
+
+err_cleanup:
+
+	/* Cleanup write_info first */
+	if (rmgr_wrinfo != NULL)
+		__os_free(env, rmgr_wrinfo);
+
+	/* Cleanup the overall ssl_info including the SSL */
+	if (rmgr_ssl_info != NULL) {
+		if (rmgr_ssl_info->repmgr_ssl_conn_mutex != NULL)
+			__repmgr_destroy_mutex(
+			    env, rmgr_ssl_info->repmgr_ssl_conn_mutex);
+
+		SSL_free(ssl);
+
+		__os_free(env, rmgr_ssl_info);
+	}
+
+	return (1);
+}
+
+/*
+ * __repmgr_ssl_accept --
+ *
+ * This function is responsible for accepting an incoming SSL connection from
+ * a remote peer. This is invoked only after a successful socket connection
+ * has been established with the peer.
+ *
+ * PUBLIC: int __repmgr_ssl_accept __P((ENV *, REPMGR_CONNECTION *, socket_t));
+ */
+int
+__repmgr_ssl_accept(env, conn, s)
+	ENV *env;
+	REPMGR_CONNECTION *conn;
+	socket_t s;
+{
+	SSL *ssl;
+	int ret;
+	DB_REP *db_rep;
+	const char *msg;
+
+	ret = 0;
+	db_rep = env->rep_handle;
+	ssl = NULL;
+
+	DB_ASSERT(env, IS_REPMGR_SSL_ENABLED(env));
+
+	if (__repmgr_ssl_init_done(env)) {
+		SSL_DEBUG_ACCEPT(env,
+		    "SSL connection context not initialized.");
+		__repmgr_set_ssl_ctx(env);
+	}
+
+	ssl = SSL_new(db_rep->repmgr_ssl_ctx);
+
+	if (ssl == NULL) {
+		__db_err(env, ret,
+		    DB_STR_A("5528", "Failed to create SSL structure for new"
+		    " SSL connection in %s.", "%s"), "SSL_accept()");
+
+		return (1);
+	}
+
+	SSL_set_fd(ssl, s);
+
+	if (conn->env != env)
+		conn->env = env;
+
+retry_accept:
+	ERR_clear_error();
+	/*
+	 * Following accept is blocking and involves handshake
+	 * Note that Peer Certificate authentication happens as part of
+	 * SSL_accept() and SSL_connect().
+	 */
+
+	if ((ret = SSL_accept(ssl)) <= 0) {
+		ERR_print_errors_fp(stderr);
+
+		switch (SSL_get_error(ssl, ret)) {
+		case SSL_ERROR_WANT_READ:
+			msg = "SSL_ERROR_WANT_READ";
+			SSL_DEBUG_ACCEPT(env, "SSL_accept() failed with %s",
+			    msg);
+			/*
+			 * We may have to retry several times before SSL_accept
+			 * succeeds. We only retry if we see SSL_ERROR_WANT_READ
+			 * SSL_ERROR_WANT_WRITE.
+			 */
+			goto retry_accept;
+			break;
+		case SSL_ERROR_WANT_WRITE:
+			msg = "SSL_ERROR_WANT_WRITE";
+			SSL_DEBUG_ACCEPT(env, "SSL_accept() failed with %s",
+			    msg);
+			goto retry_accept;
+			break;
+		case SSL_ERROR_ZERO_RETURN:
+			msg = "SSL_ERROR_ZERO_RETURN";
+			break;
+		case SSL_ERROR_WANT_CONNECT:
+			msg = "SSL_ERROR_WANT_CONNECT";
+			break;
+		case SSL_ERROR_WANT_ACCEPT:
+			msg = "SSL_ERROR_WANT_ACCEPT";
+			break;
+		case SSL_ERROR_WANT_X509_LOOKUP:
+			msg = "SSL_ERROR_WANT_X509_LOOKUP";
+			break;
+		case SSL_ERROR_SYSCALL:
+			msg = "SSL_ERROR_SYSCALL";
+			break;
+		case SSL_ERROR_SSL:
+			msg = "SSL_ERROR_SSL";
+			break;
+		default:
+			msg = "unknown error";
+			SSL_DEBUG_ACCEPT(env,
+			    "SSL_accept() failed with unkonwn error : %d",
+			    errno);
+			break;
+		}
+
+		SSL_DEBUG_ACCEPT(env,
+		    "SSL_accept() failed with %s. ret = %d Errno = %d.",
+		    msg, ret, errno);
+
+		__db_err(env, ret,
+		    DB_STR_A("5524", "Failed to complete SSL accept(). "
+		    "SSL_accept() failed with %s.", "%s"), msg);
+
+		SSL_free(ssl);
+
+		ERR_clear_error();
+
+		return (1);
+	} else {
+		SSL_DEBUG_ACCEPT(env, "SSL_accept() successful.");
+
+		if ((ret = __repmgr_ssl_conn_info_setup(env, conn,
+		    ssl)) != 0) {
+			SSL_DEBUG_ACCEPT(env,
+			    "SSL_accept() failed with %s. ",
+			    "SSL-Info-Setup");
+
+			return (1);
+		}
+
+		if (SSL_is_init_finished(ssl) != 1)
+			goto retry_accept;
+	}
+
+	return (0);
+}
+
+/*
+ * __repmgr_ssl_connect --
+ *
+ * This function is responsible for establishing the SSL connection with
+ * remote peer. It Returns 0 on success and 1 on failure. On failure we
+ * must destroy the socket connection as well and retry if possible.
+ *
+ * PUBLIC: int __repmgr_ssl_connect __P((ENV *, socket_t, REPMGR_CONNECTION *));
+ */
+int
+__repmgr_ssl_connect(env, s, conn)
+	ENV *env;
+	socket_t s;
+	REPMGR_CONNECTION *conn;
+{
+	DB_REP *db_rep;
+	SSL *ssl;
+	const char *msg;
+	int ret;
+
+	db_rep = env->rep_handle;
+	ssl = NULL;
+	ret = 0;
+
+	DB_ASSERT(env, IS_REPMGR_SSL_ENABLED(env));
+
+	SSL_DEBUG_CONNECT(env, "SSL_connect() started.");
+
+	if (__repmgr_ssl_init_done(env))
+		__repmgr_set_ssl_ctx(env);
+
+	if (db_rep->repmgr_ssl_ctx == NULL) {
+		SSL_DEBUG_CONNECT(env,
+		    "SSL connection context not initialized.");
+		__repmgr_set_ssl_ctx(env);
+	}
+
+	/*
+	 * After successful socket connection, make ssl
+	 * connection.
+	 */
+	ssl = SSL_new(db_rep->repmgr_ssl_ctx);
+
+	if (ssl == NULL) {
+		__db_err(env, ret,
+		    DB_STR_A("5528", "Failed to create SSL structure for new "
+		    "SSL connection in %s.", "%s"), "SSL_connect()");
+
+		return (1);
+	}
+
+	SSL_set_fd(ssl, (int)s);
+
+retry_connect:
+	ERR_clear_error();
+
+	if ((ret = SSL_connect(ssl)) == 1) {
+		SSL_DEBUG_CONNECT(env, "SSL_connect() successful.");
+
+		if ((ret = __repmgr_ssl_conn_info_setup(env, conn, ssl)) != 0) {
+			SSL_DEBUG_CONNECT(env,
+			    "__repmgr_ssl_conn_info_setup failed().");
+
+			return (1);
+		}
+
+		if (SSL_is_init_finished(ssl) != 1)
+			goto retry_connect;
+	} else {
+		ERR_print_errors_fp(stderr);
+
+		switch (SSL_get_error(ssl, ret)) {
+		case SSL_ERROR_WANT_READ:
+			msg = "SSL_ERROR_WANT_READ";
+			SSL_DEBUG_CONNECT(env,
+			    "SSL_connect() failed with %s.",
+			    msg);
+			/*
+			 * We may have to retry several times before SSL_connect
+			 * succeeds. We only retry if we see SSL_ERROR_WANT_READ
+			 * or SSL_ERROR_WANT_WRITE.
+			 */
+			goto retry_connect;
+			break;
+		case SSL_ERROR_WANT_WRITE:
+			msg = "SSL_ERROR_WANT_WRITE";
+			SSL_DEBUG_CONNECT(env,
+			    "SSL_connect() failed with %s.",
+			    msg);
+			goto retry_connect;
+			break;
+		case SSL_ERROR_ZERO_RETURN:
+			msg = "SSL_ERROR_ZERO_RETURN";
+			break;
+		case SSL_ERROR_WANT_CONNECT:
+			msg = "SSL_ERROR_WANT_CONNECT";
+			break;
+		case SSL_ERROR_WANT_ACCEPT:
+			msg = "SSL_ERROR_WANT_ACCEPT";
+			break;
+		case SSL_ERROR_WANT_X509_LOOKUP:
+			msg = "SSL_ERROR_WANT_X509_LOOKUP";
+			break;
+		case SSL_ERROR_SYSCALL:
+			msg = "SSL_ERROR_SYSCALL";
+			break;
+		case SSL_ERROR_SSL:
+			msg = "SSL_ERROR_SSL";
+			break;
+		default:
+			msg = "unknown error";
+			SSL_DEBUG_CONNECT(env,
+			    "SSL_connect() failed with %s. Errno = %d.",
+			    msg, errno);
+			break;
+		}
+
+		SSL_DEBUG_CONNECT(env,
+		    "SSL_connect() failed with %s. ret = %d Errno = %d.",
+		    msg, ret, errno);
+
+		__db_err(env, ret,
+		    DB_STR_A("5525", "Failed to complete SSL connect(). "
+		    "SSL_connect() failed with %s.", "%s"), msg);
+
+		SSL_free(ssl);
+
+		return (1);
+	}
+
+	return (0);
+}
+
+/*
+ * __repmgr_ssl_shutdown
+ *
+ * This method is responsible for initiating an SSL shutdown and/or cleaning
+ * up an aborted or closed ssl connection.
+ *
+ * PUBLIC: int __repmgr_ssl_shutdown __P ((ENV *, REPMGR_CONNECTION *));
+ */
+int
+__repmgr_ssl_shutdown(env, conn)
+	ENV *env;
+	REPMGR_CONNECTION *conn;
+{
+	int ret;
+	REPMGR_SSL_CONN_INFO *rmgr_ssl_conn_info;
+	SSL *conn_ssl;
+	mgr_mutex_t *conn_ssl_mutex;
+
+	DB_ASSERT(env, IS_REPMGR_SSL_ENABLED(env));
+
+	/* We might have taken care of this already. */
+	if (conn == NULL || conn->repmgr_ssl_info == NULL ||
+	    conn->repmgr_ssl_info->ssl == NULL)
+		return (0);
+
+	rmgr_ssl_conn_info = conn->repmgr_ssl_info;
+	conn_ssl = rmgr_ssl_conn_info->ssl;
+	conn_ssl_mutex = rmgr_ssl_conn_info->repmgr_ssl_conn_mutex;
+
+	LOCK_MUTEX(conn_ssl_mutex);
+
+	conn->repmgr_ssl_info = NULL;
+
+	SSL_DEBUG_SHUTDOWN(env, "SSL close connection attempt.");
+
+	/*
+	 * if the socket is still open, then close the SSL connection first
+	 * If the socket has been closed then free up the ssl state.
+	 *
+	 * Note: we try to be nice and close the SSL connection properly
+	 * first. We even retry if it looks that our attempt is successfully
+	 * underway.
+	 *
+	 * But at the end whether the SSL shutdown has succeeded or failed,
+	 * we will get rid of the SSL structure and close the socket in the
+	 * caller. This will initiate a SSL shutdown and cleanup on the peer.
+	 */
+	if (conn_ssl) {
+		ERR_clear_error();
+		ret = SSL_shutdown(conn_ssl);
+
+		if (ret == 0) {
+			SSL_DEBUG_SHUTDOWN(env,
+			    "SSL Shutdown retry for ssl=%p", conn_ssl);
+			/* If shutdown notify is not received then try again */
+			SSL_shutdown(conn_ssl);
+		} else if (ret < 0) {
+			SSL_DEBUG_SHUTDOWN(env,
+			    "SSL Shutdown error for ssl=%p", conn_ssl);
+			ERR_print_errors_fp(stderr);
+		} else
+			SSL_DEBUG_SHUTDOWN(env,
+			    "SSL Shutdown success for ssl=%p", conn_ssl);
+	}
+
+	/* Regardless of the outcome above, cleanup the SSL connection. */
+	if (conn_ssl) {
+		SSL_free(conn_ssl);
+		rmgr_ssl_conn_info->ssl = NULL;
+	}
+
+	UNLOCK_MUTEX(conn_ssl_mutex);
+
+	if (rmgr_ssl_conn_info != NULL)
+		__os_free(env, rmgr_ssl_conn_info);
+
+	return (0);
+}
+
+/*
+ * __repmgr_ssl_write --
+ *
+ * This method is a wrapper for SSL_write(). It translates correpsonding error
+ * messages into ones that repmgr understands and sets state to indicate when
+ * a retry is warrented after a particular condition is met(like a socket is
+ * ready for read/write).
+ *
+ * PUBLIC: int __repmgr_ssl_write __P((REPMGR_CONNECTION *, char *, size_t,
+ * PUBLIC:  int *));
+ */
+int
+__repmgr_ssl_write(conn, buffer, bytes, error_code)
+	REPMGR_CONNECTION *conn;
+	char *buffer;
+	size_t bytes;
+	int *error_code;
+{
+	int nbytes;
+	int ssl_error;
+	int ret;
+	ENV *env;
+	REPMGR_SSL_CONN_INFO *rmgr_ssl_conn_info;
+	SSL *conn_ssl;
+	mgr_mutex_t *conn_ssl_mutex;
+
+	/* No point in writing if the connection has died. */
+	if (conn == NULL || conn->repmgr_ssl_info == NULL ||
+	    conn->repmgr_ssl_info->ssl == NULL)	{
+		*error_code = DB_REP_UNAVAIL;
+		return (-1);
+	}
+
+	env = conn->env;
+	rmgr_ssl_conn_info = conn->repmgr_ssl_info;
+	conn_ssl = rmgr_ssl_conn_info->ssl;
+	conn_ssl_mutex = rmgr_ssl_conn_info->repmgr_ssl_conn_mutex;
+
+	DB_ASSERT(conn->env, IS_REPMGR_SSL_ENABLED(conn->env));
+
+	LOCK_MUTEX(conn_ssl_mutex);
+
+	/*
+	 * If writes were blocked earlier, waiting on read or write, now that
+	 * we are retrying(maybe because poll() says read/write is possible),
+	 * we will clear these states.
+	 */
+	rmgr_ssl_conn_info->ssl_io_state &=
+	    ~(REPMGR_SSL_WRITE_PENDING_ON_READ |
+	    REPMGR_SSL_WRITE_PENDING_ON_WRITE);
+
+	ERR_clear_error();
+
+	nbytes = SSL_write(conn_ssl, buffer, bytes);
+
+	if (nbytes <= 0) {
+		ERR_print_errors_fp(stderr);
+
+		switch (ssl_error = SSL_get_error(conn_ssl, nbytes)) {
+		case SSL_ERROR_NONE:
+			SSL_DEBUG_WRITE(env, "SSL_ERROR_NONE");
+			ret = 0;
+			break;
+
+		case SSL_ERROR_ZERO_RETURN:
+			SSL_DEBUG_WRITE(env, "SSL_ERROR_ZERO_RETURN");
+			/* Connection terminated by the peer. */
+			*error_code = DB_REP_UNAVAIL;
+			ret = -1;
+			break;
+
+		case SSL_ERROR_WANT_READ:
+			/* retry after socket is ready for read */
+			SSL_DEBUG_WRITE(env, "SSL_ERROR_WANT_READ");
+			rmgr_ssl_conn_info->ssl_io_state |=
+			    REPMGR_SSL_WRITE_PENDING_ON_READ;
+			*error_code = WOULDBLOCK;
+			ret = -1;
+			break;
+
+		case SSL_ERROR_WANT_WRITE:
+			/* retry after socket is ready for write */
+			SSL_DEBUG_WRITE(env, "SSL_ERROR_WANT_WRITE");
+			rmgr_ssl_conn_info->ssl_io_state |=
+			    REPMGR_SSL_WRITE_PENDING_ON_WRITE;
+			*error_code = WOULDBLOCK;
+			ret = -1;
+			break;
+
+		case SSL_ERROR_SYSCALL:
+			/*
+			 * Some error happened(mostly because connection
+			 * terminated), so ignore, return and retry.
+			 */
+			SSL_DEBUG_WRITE(env,
+			    "write error:: SSL_ERROR_SYSCALL");
+			*error_code = WOULDBLOCK;
+			ret = -1;
+			break;
+
+		default:
+			/* Unknown error from ssl, Best to return and retry. */
+			SSL_DEBUG_WRITE(env,
+			    "unknown write error:default=%d",
+			    ssl_error);
+			*error_code = WOULDBLOCK;
+			ret = -1;
+		}
+	} else {
+		SSL_DEBUG_WRITE(env, "write success nw=%d ssl=%p", nbytes,
+		    conn_ssl);
+		ret = nbytes;
+	}
+
+	UNLOCK_MUTEX(conn_ssl_mutex);
+
+	return (ret);
+}
+
+/*
+ * __repmgr_ssl_writemsg --
+ *
+ * Co-ordinates writes to SSL layer.
+ * SSL layer has this weird requirement that if an SSL_write fails with
+ * WANT_READ or WANT_WRITE, then the next call should be with the same
+ * buffer ptr with same length.
+ *
+ * For us (in the multithreaded world), the following function helps
+ * achieve that inspite of errors and retries.
+ *
+ * Note: For sync requests, the retries have to be in higher layer.
+ *	 Having a separate mutex here improves performance.
+ *	 This returns 0 on success and -1 on failure.
+ *	 Error codes are set in *error_code.
+ *	 Write specific mutex is released before return.
+ *
+ * PUBLIC: ssize_t __repmgr_ssl_writemsg __P((REPMGR_CONNECTION *,
+ * PUBLIC:  char *, size_t, int *));
+ */
+ssize_t
+__repmgr_ssl_writemsg(conn, buffer, length, error_code)
+	REPMGR_CONNECTION *conn;
+	char *buffer;
+	size_t length;
+	int *error_code;
+{
+	int bytes_remaining;
+	int bytes_written;
+	int ret;
+	REPMGR_SSL_WRITE_INFO *write_info;
+	REPMGR_SSL_CONN_INFO *rmgr_ssl_conn_info;
+	mgr_mutex_t *conn_write_mutex;
+
+	if (!(conn && conn->env)) {
+		fprintf(stderr,"Invalid connection or ENV setting\n");
+		return (-1);
+	}
+
+	/* No point in writing if the connection has died. */
+	if (conn == NULL || conn->repmgr_ssl_info == NULL ||
+	    conn->repmgr_ssl_info->ssl == NULL) {
+		*error_code = DB_REP_UNAVAIL;
+		return (-1);
+	}
+
+	rmgr_ssl_conn_info = conn->repmgr_ssl_info;
+	write_info = rmgr_ssl_conn_info->rmgr_ssl_wrinfo;
+	conn_write_mutex = write_info->rmgr_ssl_write_mutex;
+
+	bytes_remaining = length;
+
+	/* 
+	 * Better to use a separate mutex for this. This has nothing to 
+	 * do with protecting the sanctity of SSL connection object.
+	 */
+	LOCK_MUTEX(conn_write_mutex);
+
+	/* This is some other parallel write to this connection */
+	if (write_info->rmgr_ssl_wbuf_ptr != NULL &&
+	    (write_info->rmgr_ssl_wbuf_ptr != buffer
+	            || (size_t)write_info->rmgr_ssl_wbuf_length != length)) {
+		*error_code = WOULDBLOCK;
+		UNLOCK_MUTEX(conn_write_mutex);
+		return (-1);
+	}
+
+	if (write_info->rmgr_ssl_wbuf_ptr == NULL) {
+		write_info->rmgr_ssl_wbuf_ptr = buffer;
+		write_info->rmgr_ssl_wbuf_length = length;
+	}
+
+	UNLOCK_MUTEX(conn_write_mutex);
+
+retry_io:
+	/* 
+	 * Some of the calls dont come from multiplexor code(select,poll).
+	 * So in case of WANT_WRITE or WANT_READ its better to retry here.
+	 */
+	if ((bytes_written = __repmgr_ssl_write(conn, buffer, length,
+	    error_code)) == -1) {
+		if (rmgr_ssl_conn_info->ssl_io_state &
+		    (REPMGR_SSL_WRITE_PENDING_ON_READ |
+		    REPMGR_SSL_WRITE_PENDING_ON_WRITE))
+			goto retry_io;
+
+		ret = -1;
+		goto cleanup_ssl_write;
+	} else {
+		bytes_remaining -= bytes_written;
+
+		/* Keep writing as long as we are making progress. */
+		if (bytes_remaining > 0) {
+			buffer += bytes_written;
+			write_info->rmgr_ssl_wbuf_ptr = buffer;
+			write_info->rmgr_ssl_wbuf_length = bytes_remaining;
+			goto retry_io;
+		} else
+			ret = bytes_written;
+	}
+
+	LOCK_MUTEX(conn_write_mutex);
+
+	if (bytes_written > 0 && (size_t)bytes_written == length) {
+		write_info->rmgr_ssl_wbuf_ptr = NULL;
+		write_info->rmgr_ssl_wbuf_length = 0;
+	}
+
+	UNLOCK_MUTEX(conn_write_mutex);
+
+cleanup_ssl_write:
+	/* The call to __repmgr_ssl_write() sets the error code. */
+	if (ret < 0)
+		return (-1);
+
+	return (bytes_written);
+}
+
+
+/*
+ * __repmgr_ssl_writev --
+ *
+ * Copies the data for the supplied vector in a buffer and initiates
+ * SSL_write for that buffer.
+ * Note: Since there is no vector api for ssl and retries require us
+ * to use/retain data at a specific buffer-ptr, we have chosen to
+ * create a buffer per request below.
+ *
+ * PUBLIC: ssize_t __repmgr_ssl_writev __P((REPMGR_CONNECTION *, db_iovec_t *,
+ * PUBLIC:  int, size_t *));
+ */
+ssize_t
+__repmgr_ssl_writev(conn, vector, count, nw)
+	REPMGR_CONNECTION *conn;
+	db_iovec_t *vector;
+	int count;
+	size_t *nw;
+{
+	char *buffer;
+	char *bp;
+	size_t bytes, to_copy;
+	int i;
+	int ret;
+	int bytes_written;
+	int error_code;
+
+	DB_ASSERT(conn->env, IS_REPMGR_SSL_ENABLED(conn->env));
+
+	/* Find the total number of bytes to be written. */
+	bytes = 0;
+
+	for (i = 0; i < count; ++i)
+		bytes += vector[i].iov_len;
+
+	/* Allocate a temporary buffer to hold the data. */
+	if ((ret = __os_malloc(conn->env, bytes, &buffer)) != 0)
+		return (-1);
+
+	/* Copy the data into buffer. */
+	to_copy = bytes;
+	bp = buffer;
+
+	for (i = 0; i < count; ++i) {
+#define minNum(a, b) ((a) > (b) ? (b) : (a))
+		size_t copy = minNum(vector[i].iov_len, to_copy);
+
+		memcpy((void *)bp, (void *)vector[i].iov_base, copy);
+		bp += copy;
+
+		to_copy -= copy;
+
+		if (to_copy == 0)
+			break;
+	}
+
+	if ((bytes_written = __repmgr_ssl_writemsg(conn, buffer, bytes,
+	    &error_code)) == -1) 
+		ret = -1;
+	else
+		*nw = bytes_written;
+
+	__os_free(conn->env, buffer);
+
+	return (ret);
+}
+
+/*
+ * __repmgr_ssl_readv --
+ *
+ * Reads decrypted data from SSL_read() into supplied vector.
+ *
+ * PUBLIC: int __repmgr_ssl_readv __P((REPMGR_CONNECTION *, db_iovec_t *, int,
+ * PUBLIC:  size_t *));
+ */
+int
+__repmgr_ssl_readv(conn, v, ent, nw)
+	REPMGR_CONNECTION *conn;
+	db_iovec_t *v;
+	int ent;
+	size_t *nw;
+{
+	int x, i, n, len;
+	/*
+	 * The TLSv1 RFC2246 states that the maximum record length is 16,383
+	 * bytes.
+	 */
+	char buf[16*1024];
+	int ssl_error;
+	int ret;
+	int ret_read; /* output of SSL_read() */
+	ENV *env;
+	REPMGR_SSL_CONN_INFO *rmgr_ssl_conn_info;
+	SSL *conn_ssl;
+	mgr_mutex_t *conn_ssl_mutex;
+
+	ret = 0;
+
+	/* No point in attempting read if connection has been closed. */
+	if (conn == NULL || conn->repmgr_ssl_info == NULL ||
+	    conn->repmgr_ssl_info->ssl == NULL) {
+		*nw = 0;
+		return (DB_REP_UNAVAIL);
+	}
+
+	env = conn->env;
+	rmgr_ssl_conn_info = conn->repmgr_ssl_info;
+	conn_ssl = rmgr_ssl_conn_info->ssl;
+	conn_ssl_mutex = rmgr_ssl_conn_info->repmgr_ssl_conn_mutex;
+
+	DB_ASSERT(conn->env, IS_REPMGR_SSL_ENABLED(conn->env));
+
+	for (len = i = 0; i < ent; i++)
+		len += v[i].iov_len;
+
+	if (len > 0 && (size_t)len > sizeof(buf))
+		len = sizeof(buf);
+
+	LOCK_MUTEX(conn_ssl_mutex);
+
+	ERR_clear_error();
+	rmgr_ssl_conn_info->ssl_io_state &=
+	    ~(REPMGR_SSL_READ_PENDING_ON_READ |
+	    REPMGR_SSL_READ_PENDING_ON_WRITE);
+
+	SSL_DEBUG_READ(env, "Started SSL read for ssl=%p pending_bytes=%d total_length=%d",
+	    conn_ssl, SSL_pending(conn_ssl), len);
+
+	ret_read = SSL_read(conn_ssl, buf, len);
+
+	ERR_print_errors_fp(stderr);
+
+	switch(ssl_error = SSL_get_error(conn_ssl, ret_read)) {
+	case SSL_ERROR_NONE:
+		break;
+
+	case SSL_ERROR_ZERO_RETURN:
+		/* connection closed by client, clean up */
+		if (conn_ssl)
+			/* 
+			 * We just attempt a shutdown. Even if it fails, SSL
+			 * connection will be cleaned up later.
+			 */
+			if (!SSL_shutdown(conn_ssl))
+				SSL_shutdown(conn_ssl);
+
+		SSL_DEBUG_READ(env,
+		    "Attempted ssl connection shutdown after getting SSL_ERROR_ZERO_RETURN ret_read=%d read_len=%d ssl_error=%d ssl=%p",
+		    ret_read, len, ssl_error, conn_ssl);
+		*nw = 0;
+		ret = DB_REP_UNAVAIL;
+		break;
+
+	case SSL_ERROR_WANT_READ:
+		/*
+		 * the operation blocked waiting for read, so mark the flag
+		 * for retry and return.
+		 */
+		rmgr_ssl_conn_info->ssl_io_state |=
+		    REPMGR_SSL_READ_PENDING_ON_READ;
+		SSL_DEBUG_READ(env,
+		    "SSL connection read error :: SSL_ERROR_WANT_READ ret_read=%d len=%d ssl_error=%d ssl=%p",
+		    ret_read, len, ssl_error, conn_ssl);
+		ret = WOULDBLOCK;
+		break;
+
+	case SSL_ERROR_WANT_WRITE:
+		/* 
+		 * The operation blocked waiting for write, so mark the flag
+		 * for retry and return.
+		 */
+		rmgr_ssl_conn_info->ssl_io_state |=
+		    REPMGR_SSL_READ_PENDING_ON_WRITE;
+		SSL_DEBUG_READ(env,
+		    "SSL connection read error:: SSL_ERROR_WANT_WRITE ret_read=%d len=%d ssl_error=%d ssl=%p",
+		    ret_read, len, ssl_error, conn_ssl);
+		ret = WOULDBLOCK;
+		break;
+
+	case SSL_ERROR_SYSCALL:
+		/*
+		 * Some I/O error happened(mostly because connection
+		 * terminated), so ignore, return and retry.
+		 */
+		SSL_DEBUG_READ(env,
+		    "SSL connection read error:: SSL_ERROR_SYSCALL ret_read=%d len=%d ssl_error=%d ssl=%p",
+		    ret_read, len, ssl_error, conn_ssl);
+		ret = -1;
+		break;
+
+	default:
+		/* Unknown error from ssl, Best to return and retry. */
+		SSL_DEBUG_READ(env,
+		    "SSL connection read error:: Unknown SSL error ret_read=%d len=%d ssl_error=%d ssl=%p",
+		    ret_read, len, ssl_error, conn_ssl);
+		ret = -1;
+	}
+
+	UNLOCK_MUTEX(conn_ssl_mutex);
+
+	if (ret_read <= 0)
+		return (ret);
+
+	for (n = i = 0; n < ret_read && i < ent; i++) {
+		x = len - n;
+
+		if (x > 0 && (size_t)x > v[i].iov_len)
+			x = v[i].iov_len;
+
+		memmove(v[i].iov_base, buf + n, x);
+		n += x;
+	}
+
+	*nw = ret_read;
+	SSL_DEBUG_READ(env,"SSL read success bytes_read=%d pending=%d ssl=%p ",
+	    len, SSL_pending(conn_ssl), conn_ssl);
+
+	return (ret);
+}
+
+/*
+ * __repmgr_ssl_write_possible --
+ *
+ * This method figures out if a pending write, perhaps blocked on read or
+ * write events is possible.
+ *
+ * PUBLIC: int __repmgr_ssl_write_possible
+ * PUBLIC:  __P ((REPMGR_CONNECTION *, int, int));
+ */
+int
+__repmgr_ssl_write_possible(conn, read_allowed, write_allowed)
+	REPMGR_CONNECTION *conn;
+	int read_allowed;
+	int write_allowed;
+{
+	int ret;
+	int io_wait_on_event;
+	REPMGR_SSL_CONN_INFO *rmgr_ssl_conn_info;
+	SSL *conn_ssl;
+
+	ret = 0;
+	io_wait_on_event = 0;
+	rmgr_ssl_conn_info = conn->repmgr_ssl_info;
+	conn_ssl = rmgr_ssl_conn_info->ssl;
+
+	DB_ASSERT(conn->env, IS_REPMGR_SSL_ENABLED(conn->env));
+
+	if (rmgr_ssl_conn_info->ssl_io_state &
+	    REPMGR_SSL_WRITE_PENDING_ON_READ) {
+		io_wait_on_event |= 1;
+
+		if (read_allowed)
+			ret |= 1;
+	}
+
+	if (rmgr_ssl_conn_info->ssl_io_state &
+	    REPMGR_SSL_WRITE_PENDING_ON_WRITE) {
+		io_wait_on_event |= 1;
+
+		if (write_allowed)
+			ret |= 1;
+	}
+
+	if (!io_wait_on_event && conn_ssl)
+		if (write_allowed)
+			ret |= 1;
+
+	return (ret);
+}
+
+/*
+ * __repmgr_ssl_read_possible --
+ *
+ * This method figures out if a pending read, perhaps blocked on read or write
+ * events is possible.
+ *
+ * PUBLIC: int __repmgr_ssl_read_possible __P ((REPMGR_CONNECTION *, int,
+ * PUBLIC:  int));
+ */
+int
+__repmgr_ssl_read_possible(conn, read_allowed, write_allowed)
+	REPMGR_CONNECTION *conn;
+	int read_allowed;
+	int write_allowed;
+{
+	int ret;
+	int io_wait_on_event;
+	REPMGR_SSL_CONN_INFO *rmgr_ssl_conn_info;
+	SSL *conn_ssl;
+
+	ret = 0;
+	io_wait_on_event = 0;
+	rmgr_ssl_conn_info = conn->repmgr_ssl_info;
+	conn_ssl = rmgr_ssl_conn_info->ssl;
+
+	DB_ASSERT(conn->env, IS_REPMGR_SSL_ENABLED(conn->env));
+
+	if (rmgr_ssl_conn_info->ssl_io_state &
+	    REPMGR_SSL_READ_PENDING_ON_READ) {
+		io_wait_on_event |= 1;
+
+		if (read_allowed)
+			ret |= 1;
+	}
+
+	if (rmgr_ssl_conn_info->ssl_io_state &
+	    REPMGR_SSL_READ_PENDING_ON_WRITE) {
+		io_wait_on_event |= 1;
+
+		if (write_allowed)
+			ret |= 1;
+	}
+
+	if (!io_wait_on_event && conn_ssl)
+		if (read_allowed || SSL_pending(conn_ssl))
+			ret |= 1;
+
+	return (ret);
+}
+
+#endif
+

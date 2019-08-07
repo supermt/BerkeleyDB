@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1997, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1997, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -167,7 +167,7 @@ struct __fh_t {
 #define	VOID_STAR_CAST	(void *)
 #else
 #define	CHAR_STAR_CAST
-#define VOID_STAR_CAST
+#define	VOID_STAR_CAST
 #endif
 
 #if defined(__cplusplus)

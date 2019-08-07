@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2010, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2010, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  */
 using System;
@@ -18,7 +18,7 @@ namespace CsharpAPITest
     {
         private uint masterPort;
         private uint clientPort;
-        private string ip = "127.0.0.1";
+        private string ip = "::1";
 
  	[TestFixtureSetUp]
 	public void SetUpTestFixture()

@@ -7,8 +7,13 @@ backup
 
 	Do all the of the following tests with and without 
 	the -c (checkpoint) option; and with and without the
-	transactional bulk loading optimization.  Make sure
-	that -c and -d (data_dir) are not allowed together. 
+	transactional bulk loading optimization; and with
+	and without BLOB, with and without -deepcopy.
+	Make sure that -c and -d (data_dir)
+	are not allowed together; and backing up with BLOB
+	but without -log_blob is not allowed.  If slices are
+	enabled, run some of the tests with the -sliced
+	database flag.
 
 	(1) Test that plain and simple hotbackup works. 
 	(2) Test with -data_dir (-d). 
@@ -37,18 +42,24 @@ bigfile002
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 bigfile003
-	1. Create a blob database.
-	2. Create an empty blob.
-	3. Append 5 GB data into the blob by database stream.
+	1. Create two databases.  One will hold a very large (5 GB)
+	blob and the other a relatively small one (5 MB) to test some 
+	functionality that is punishingly slow on the 5 GB blob.
+	2. Add empty blobs.
+	3. Append data into the blobs by database stream.
 	4. Verify the blob size and data. For txn env, verify it with
 	txn commit/abort.
 	5. Verify getting the blob by database/cursor get method returns
 	the error DB_BUFFER_SMALL.
-	6. Run verify_dir.
-	7. Run salvage_dir.
+	6. Run verify_dir and a regular db_dump on both databases.
+	7. Run db_dump -r and -R on the small blob only.
 
 	This test requires a platform that supports 5 GB files and
 	64-bit integers.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+db_reptest
+	Wrapper to configure and run the db_reptest program.
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 dbm
@@ -57,10 +68,6 @@ dbm
 	After all are entered, retrieve all; compare output to original.
 	Then reopen the file, re-retrieve everything.  Finally, delete
 	everything.
-
-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-db_reptest
-	Wrapper to configure and run the db_reptest program.
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 dead001
@@ -248,6 +255,9 @@ env014
 	Make sure that the attempt to change subsystems when
 	joining an env fails with the appropriate messages.
 
+	Make sure that full blob logging is enabled when replication
+	is enabled, and that it cannot be disabled.
+
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 env015
 	Rename the underlying directory of an env, make sure everything
@@ -329,6 +339,89 @@ env021
 	In these operations, we only support the following:
 	$txn id
 	$txn commit
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+env022
+	Test db_archive and db_checkpoint with all allowed options.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+env023
+	Test db_deadlock options. For each option, generate a deadlock
+	then call db_deadlock.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+env024
+	Test db_hotbackup with all allowed option combinations.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+env025
+	Test db_recover with all allowed option combinations.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+env026
+	Test reopening an environment after a panic.
+
+	Repeatedly panic the environment, close & reopen it in order to
+	verify that a process is able to reopen the env and there are no
+	major shmem/mmap "leaks"; malloc leaks will occur, and that's ok.
+
+	Since this test leaks memory, it is meant to be run standalone
+	and should not be added to the automated Tcl test suite.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+env027
+	Test recovery of the truncate of a hash db. 
+
+	This is a one-off test of the fix for #23772 --
+	the conditions for reproducing it are so specific 
+	that the test does not generalize well to other 
+	access methods.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+env028
+	Test of SET_REGION_DIR.
+	With an environment path specified using -home, and then again
+	with it specified by the environment variable DB_HOME:
+	1) Make sure that the set_region_dir option is respected
+	a) as a relative pathname.
+	b) as an absolute pathname.
+	2) Make sure that the SET_REGION_DIR db_config argument is respected,
+	again as relative and absolute pathnames.
+	3) Make sure that if -both- db_config and a file are present,
+	only the file is respected (see doc/env/naming.html).
+	4) Check that setting the region dir is incompatible with
+	DB_PRIVATE and DB_SYSTEM_MEM
+	5) Check that MVCC freezer files go into the region dir.        
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+env029
+	Test the behavior of the slice specific functions and flags.
+	There are two versions of this test, one that tests the
+	functions when BDB was built with slices enabled, and one
+	that tests them when they are not enabled.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+env030
+	Test failchk.
+
+	Tests that failchk is able to recover the environment after a crash,
+	or returns RUNRECOVERY when appropriate.
+
+	1. Open environment with is_alive function and failchk.
+	2. Open database and insert a record.
+	3. Test that failchk works when another process: exits cleanly,
+	crashes outside the API, crashes inside the API but holds no
+	latches, and crashes inside the API while holding latches.
+	4. Test that failchk returns RUNRECOVER when another process:
+	crashes while holding an exclusive latch, crashes while holding
+	a mutex, and crashes while performing failchk.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+env031
+	Test utility db_tuner.
+
+	Tests db_tuner with different situations about with/without off-page 
+	duplicate page and with/without overflow page.  
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 fail001
@@ -516,6 +609,15 @@ log009
 	Do this both forward and backward.
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+log010
+	Test of DB_LOG_NOSYNC
+
+	Configure a database with txn_nosync and log_nosync. 
+	Set a very small log size so we'll easily create more 
+	than one.  Verify that we have a small number of writes,
+	and no log syncs at all.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 memp001
 	Randomly updates pages.
 
@@ -553,6 +655,17 @@ memp007
 	(2) set_maxsize, get_maxsize and get_last_pgno.
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+memp008
+	Test for MPOOL multi-process operation.
+
+	This test stress tests MPOOL by creating frozen buckets and 
+	then resizing.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+memp009
+	Dead files and their buffers are removed when the mutex usage is high.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 mut001
 	Exercise the mutex API.
 
@@ -575,6 +688,11 @@ mut002
 mut003
 	Try doing mutex operations out of order.  Make sure 
 	we get appropriate errors.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+mut004
+	Try setting various mutex number configurations. Make sure the
+	mutex region has a reasonable size.
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 plat001
@@ -975,6 +1093,11 @@ rep025
 	processing of messages, the client should get JOIN_FAILURE.
 	Recover with a hot failover.
 
+	Test error handling when a client without encryption tries to
+	join an encrypted repgroup, or vice versa.  Make sure the client
+	gets the expected JOIN_FAILURE error and that the master
+	continues to operate after the error.
+
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 rep026
 	Replication elections - simulate a crash after sending
@@ -1372,7 +1495,7 @@ rep065
 	This capability is introduced with 4.5.
 
 	Start a replication group of 1 master and N sites, all
-	running some historical version greater than or equal to 4.4.
+	running some historical version greater than or equal to 4.7.
 	Take down a client and bring it up again running current.
 	Run some upgrades, make sure everything works.
 
@@ -1788,15 +1911,6 @@ rep108
 	via internal init, recovery or by applying live log records.
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-rep109
-	Test that snapshot isolation cannot be used on HA clients.
-	Master creates a txn with DB_TXN_SNAPSHOT and succeeds.
-	Client gets an error when creating txn with DB_TXN_SNAPSHOT.
-	Master opens a cursor with DB_TXN_SNAPSHOT and succeeds.
-	Client gets and error when opening a cursor with DB_TXN_SNAPSHOT.
-
-
-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 rep110
 	Test of internal initialization, nowait and child processes.
 	This tests a particular code path for handle_cnt management.
@@ -1836,6 +1950,21 @@ rep115
 
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+rep116
+	Test of instant internal initialization, where internal init is started
+	instantly if a file delete is found while walking back through the
+	logs during the verify step.
+
+	One master, one client.
+	Generate several log files.
+	Remove old master and client log files.
+	Create a network partition between the master and client,
+	and restart the client as a master.
+	Delete a database or blob file on the client, then close the client and
+	have it rejoin the master.  Assert that the deleted file is present on
+	the client.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 repmgr001
 	Basic repmgr test.
 
@@ -1858,12 +1987,27 @@ repmgr003
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 repmgr004
-	Test undocumented incoming queue maximum number of messages.
+	Test the repmgr incoming queue limit.
 
-	Test that limiting the number of messages that the repmgr incoming
-	queue can hold has the expected side-effect of causing rerequests.
-	Also test the interface defaults and the associated undocumented
-	stat.
+	Test that setting the repmgr incoming queue limit works.
+	We create a master and a client, and set a small client
+	incoming queue limit.  We verify this limit works on the
+	client side for full and abbreviated internal init and 
+	for regular processing.  In addition to the default case, 
+	we will also test cases using bulk transfer and blob
+	databases.
+
+	Run for btree only because access method shouldn't matter.
+
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+repmgr005
+	Test use of set_memory_init() with replication.
+
+	Tests the set_memory_init() object types that are used to
+	calculate the additional environment region memory needed
+	for replication:  DB_MEM_DATABASE, DB_MEM_DATABASE_LENGTH,
+	DB_MEM_EXTFILE_DATABASE, DB_MEM_REP_SITE.
 
 	Run for btree only because access method shouldn't matter.
 
@@ -1875,6 +2019,8 @@ repmgr007
 	Start an appointed master site and two clients. Shut down and
 	restart each client, processing transactions after each restart.
 	Verify all expected transactions are replicated.
+
+	Test flag -R of utility db_printlog.
 
 	Run for btree only because access method shouldn't matter.
 
@@ -1898,6 +2044,9 @@ repmgr010
 	nsites running. Verify that "all" acknowledgement policy results in 
 	ack failures with fewer than nsites running.  Make sure the presence
 	of more views than participants doesn't cause incorrect ack behavior.
+	Make sure unelectable master requires more acks for "quorum" policy.
+	Test that an unelectable client joining the group doesn't cause
+	PERM_FAILs.
 
 	Run for btree only because access method shouldn't matter.
 
@@ -1906,10 +2055,13 @@ repmgr010
 repmgr011
 	repmgr two site strict majority test.
 
-	Start an appointed master and one client with 2 site strict
-	majority set. Shut down the master site, wait and verify that
-	the client site was not elected master. Start up master site
-	and verify that transactions are processed as expected.
+	Test each 2site_strict option's behavior for master loss and for
+	client site removal.  With 2site_strict=on, make sure remaining
+	site does not take over as master and that the client site can be
+	removed and rejoin the group.  With 2site_strict=off, make sure
+	remaining site does take over as master and make sure the deferred
+	election logic prevents the rejoining site from immediately taking
+	over as master before fully rejoining the repgroup. 
 
 	Run for btree only because access method shouldn't matter.
 
@@ -2076,9 +2228,10 @@ repmgr036
 
 	Start an appointed master site and one view.  Ensure replication
 	is occurring to the view.  Shut down master, ensure view does not
-	take over as master.  Restart master and make sure further master
-	changes are replicated to view.  Test view-related stats and
-	flag indicator in repmgr_site_list output.
+	take over as master.  Restart master, add an empty view to the
+	replication group, and make sure further master changes are
+	replicated to the view and the empty view is empty.  Test
+	view-related stats and flag indicator in repmgr_site_list output.
 
 	Run for btree only because access method shouldn't matter.
 
@@ -2104,6 +2257,147 @@ repmgr038
 	apply and election behavior for demoted view.
 
 	Run for btree only because access method shouldn't matter.
+
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+repmgr039
+	repmgr duplicate master test.
+
+	This test verifies repmgr's automatic dupmaster resolution.  It
+	uses the repmgr test hook to prevent sending heartbeats and
+	2SITE_STRICT=off to enable the client to become a master in
+	parallel with the already-established master.  After rescinding
+	the test hook, it makes sure repmgr performs its dupmaster resolution
+	process resulting in the expected winner.
+
+	This test runs in the following configurations:
+	Default elections where master generation helps determine winner
+	The undocumented DB_REP_CONF_ELECT_LOGLENGTH election option
+	A Preferred Master replication group
+
+	Run for btree only because access method shouldn't matter.
+
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+repmgr040
+	repmgr preferred master basic configuration test.
+
+	This test verifies repmgr's preferred master mode, including
+	basic operation and configuration errors.
+
+	Run for btree only because access method shouldn't matter.
+
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+repmgr041
+	repmgr preferred master basic resync and take over test.
+
+	Creates a preferred master replication group and shuts down the master
+	site so that the client site takes over as temporary master.  Then
+	it restarts the preferred master site, which synchronizes with the
+	temporary master and takes over as preferred master again.  Verifies
+	that temporary master transactions are retained.
+
+	Run for btree only because access method shouldn't matter.
+
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+repmgr042
+	repmgr preferred master client startup test.
+
+	Test various preferred master client start up and shut down cases.
+	Verify replication group continued operation without a client.
+	Verify client site's startup as the temporary master and the
+	ability of the preferred master site to resync and take over
+	afterwards.
+
+	Run for btree only because access method shouldn't matter.
+
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+repmgr043
+	repmgr preferred master transaction retention test.
+
+	Test various cases that create continuous or conflicting sets of
+	transactions across the two sites.  Verify that unique preferred
+	master transactions are never rolled back and that unique temporary
+	master transactions are kept when possible.
+
+	Run for btree only because access method shouldn't matter.
+
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+repmgr044
+	repmgr preferred master replication group size test.
+
+	Test preferred master behavior when sites are removed from or added
+	to the replication group.  Also test permanent transfer of preferred
+	mastership to the client site.
+
+	Run for btree only because access method shouldn't matter.
+
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+repmgr045
+	IPv6/IPv4 interoperability test.
+
+	This test ensures that a single IPv4 site can function as an
+	appointed master, an elected master or a client in a replication
+	group where the other sites use IPv6.
+
+	Run for btree only because access method shouldn't matter.
+
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+repmgr046
+	repmgr singleton write forwarding test.
+
+	The initial basic test has several purposes: test general use
+	of repmgr write forwarding API options (config, timeout, stats),
+	test basic forwarded put and del operations, test that expected
+	errors are returned from most simple error scenarios.
+
+	The 3-site test makes sure that write forwarding continues to
+	operate as expected during replication group changes such as
+	a change of master and a former master rejoining as a client.
+
+	The other tests include cases for blobs, subdatabases,
+	various duplicate options, and additional error cases.
+	Run for btree only because access method shouldn't matter.
+
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+repmgr047
+	Environment-level MVCC on a replication client.
+
+	Ensure that DB_MULTIVERSION creates the extra page copies
+	for MVCC and that DB_TXN_SNAPSHOT operates as expected on
+	a replication client.
+
+	The basic test ensures the expected operation visibility
+	with snapshot transactions.  There are also test cases
+	for cursor position, freezing/thawing, and to make sure
+	a client operates correctly when it gets the environment-
+	level DB_MULTIVERSION setting from the DB_CONFIG file.
+
+	Run for btree only because access method shouldn't matter.
+
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+repmgr048
+	Repmgr Poll/Epoll/Select Test.
+
+	Test if
+	a) EPOLL, POLL and SELECT work as expected.
+
+	Poll, epoll and select all do the same thing.(with difference
+	in implementation and performance). So to test if they are
+	working we create a group with three sites, with each site
+	employing a different method. Then we verify that we get to the
+	same expected end-state (which would have been reached had only
+	select() been employed on all sites).
+
+	b) Flags for ENABLE_EPOLL and DISABLE_EPOLL work as expected.
 
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -2535,8 +2829,44 @@ si008
 	one native, one swapped.
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+si009
+	Secondary index put/delete with lorder test
+
+	This test is the same as si001 except we use 
+	partial put to update entries.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 sijointest: Secondary index and join test.
 	This used to be si005.tcl.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+slice001
+	Test of the various environment set_*_dir settings in DB_CONFIG
+	for sliced environments.  The following configs are tested for both
+	relative and absolute paths.
+	1. home
+	2. set_create_dir
+	3. add_data_dir
+	4. set_metadata_dir
+	5. set_blob_dir
+	6. set_tmp_dir
+	7. set_region_dir
+	8. set_lg_dir
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+slice002
+	Test transactional operations on sliced databases.
+	Test that transactions behave as expected when:
+	1. Auto commit is used.
+	2. Transactions cover only a single operation each.
+	3. Transactions cover multiple operations on the same key.
+	4. Transactions cover multiple operations on different keys.
+	5. Transactions cover multiple operations on different slices.
+	Do this when both committing and aborting the transaction.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+slice003
+	Test associate and secondary index handling in a sliced environment.
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 sql001
@@ -3472,6 +3802,9 @@ test114
 	Add back some entries, delete more entries (this time by
 	cursor), dump, compact, and do the before/after check again.
 
+	The input keys are made into overflow keys in the "overflow"
+	loop for raising coverage purpose.
+
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 test115
 	Test database compaction with user-specified btree sort.
@@ -3505,8 +3838,8 @@ test117
 
 	On each compaction, make sure we still have the same contents.
 
-	Unlike the other compaction tests, this one does not
-	use -freespace.
+	This is much like test112, with a large number of entries and a 
+	small page size to make the tree deep. It uses -freespace as well.
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 test119
@@ -3807,16 +4140,69 @@ test149
 	Database stream test.
 	1. Append data to empty / non-empty blobs.
 	2. Update the existing data in the blobs.
-	3. Re-create blob of the same key by deleting the record and
+	3. Check that the blob meta database has the same page size
+	as the database that owns it.
+	4. Re-create blob of the same key by deleting the record and
 	and writing new data to blob by database stream.
-	4. Verify the error is returned when opening a database stream
+	5. Verify the error is returned when opening a database stream
 	on a record that is not a blob.
-	5. Verify database stream can not write in blobs when it is
+	6. Verify database stream can not write in blobs when it is
 	configured to read-only.
-	6. Verify database stream can not write in read-only databases.
+	7. Verify database stream can not write in read-only databases.
 
 	In each test case, verify database stream read/size/write/close
 	operations work as expected with transaction commit/abort.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+test150
+	Test db_verify and db_log_verify with all allowed options.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+test151
+	Test db_dump and db_load with all allowed options.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+test152
+	Test database compaction with blobs.  
+	This is basically test111 with blobs. 
+
+	Populate a database with a mixture of blob and non-blob
+	items. Remove a high proportion of entries.
+	Dump and save contents.  Compact the database, dump again,
+	and make sure we still have the same contents.
+	Add back some entries, delete more entries (this time by
+	cursor), dump, compact, and do the before/after check again.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+test153
+	Test queue consuming on a database having holes.
+
+	Create a database and then do some put operations. We will commit
+	most of the operations and abort some to create holes(A queue
+	database that is missing some consecutive elements). Then we will
+	consume all records in the database to verify it still works, and
+	we will also verify there are no zombie(see below) extents left.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+test154
+	Test of multi-version concurrency control.
+
+	Test basic snapshot functionality, adding volume and
+	multiple iterations to generate freeze/thaw behavior.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+test155
+	Make sure DB_AFTER works properly after DBcursor->next(DB_MULTIPLE_KEY)
+	has returned the last item.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+test156
+	Test byte order conversions.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+test157
+	Test the utility db_upgrade with all combinations of flags
+	except the flag -s.
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 txn001
@@ -3888,3 +4274,10 @@ txn014
 
 	Commit the child, verify that the parent can write again.
 	Check contents of database with a second child.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+txn015
+	Test the thread-switching problem with Go interface.[#26945]
+	Start a multi-thread test to perform cursor operations, 
+	transaction begin, transaction commit and transaction 
+	abort.

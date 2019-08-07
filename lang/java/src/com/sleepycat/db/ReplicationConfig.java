@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2002, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2002, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -59,6 +59,25 @@ public final class ReplicationConfig implements Cloneable {
                               DbConstants.DB_REPMGR_CONF_2SITE_STRICT);
 
     /**
+    This flag  is used to  prevent the use of  poll() as  polling method for
+    networking events on the target site.  This flag guarantees that instead
+    of poll() select or epoll()  would be used  depending on the availablity
+    of these methods on the target platform and additional flags provided to
+    repmgr.
+    **/
+    public static final ReplicationConfig DISABLE_POLL =
+	new ReplicationConfig("DISABLE_POLL",
+				DbConstants.DB_REPMGR_CONF_DISABLE_POLL);
+
+    /**
+    This flag  is used to prevent the use of SSL for securing messages shared
+    between the nodes of a replication group.
+    **/
+    public static final ReplicationConfig DISABLE_SSL =
+	new ReplicationConfig("DISABLE_SSL",
+				DbConstants.DB_REPMGR_CONF_DISABLE_SSL);
+
+    /**
     Replication Manager automatically runs elections to choose a new
     master when the old master appears to have become disconnected.
     This option is turned on by default.
@@ -67,7 +86,19 @@ public final class ReplicationConfig implements Cloneable {
         new ReplicationConfig("ELECTIONS",
                               DbConstants.DB_REPMGR_CONF_ELECTIONS);
 
-    /** 
+    /**
+    This flag is used to force the use of epoll as polling method for
+    networking events instad of poll or select. Use of this flag does
+    not guarantee that epoll will be used though. It depends on the
+    availability of epoll on target platform. Epoll is supposed to be
+    used only when the expected number of connections for repmgr is
+    greater than 1000.
+    **/
+    public static final ReplicationConfig ENABLE_EPOLL =
+	new ReplicationConfig("ENABLE_EPOLL",
+				DbConstants.DB_REPMGR_CONF_ENABLE_EPOLL);
+
+    /**
     Master leases will be used for this site.
     <p>
     Configuring this option may result in the {@link Database#get Database.get()}
@@ -78,7 +109,48 @@ public final class ReplicationConfig implements Cloneable {
     Once this option is turned on, it may never be turned off.
     */
     public static final ReplicationConfig LEASE =
-	new ReplicationConfig("LEASE", DbConstants.DB_REP_CONF_LEASE);
+        new ReplicationConfig("LEASE", DbConstants.DB_REP_CONF_LEASE);
+ 
+    /**
+    This flag is used to specify the preferred master site in a replication
+    group operating in preferred master mode. A preferred master replication
+    group must contain only two sites, with one site specified as the preferred
+    master site and the other site specified as the client site. The preferred
+    master site operates as the master site whenever possible.
+    **/
+    public static final ReplicationConfig PREFMAS_MASTER =
+        new ReplicationConfig("PREFMAS_MASTER", DbConstants.DB_REPMGR_CONF_PREFMAS_MASTER);
+
+    /**
+    This flag is used to specify the client site in a replication group
+    operating in preferred master mode. A preferred master replication group
+    must contain only two sites, with one site specified as the preferred
+    master site and the other site specified as the client site. The client
+    site in a preferred master replication group takes over temporarily as
+    master when the preferred master site is unavailable.
+    **/
+    public static final ReplicationConfig PREFMAS_CLIENT =
+        new ReplicationConfig("PREFMAS_CLIENT", DbConstants.DB_REPMGR_CONF_PREFMAS_CLIENT);
+
+    /**
+    Enable simple write forwarding for this site. This option is turned off by default.
+    <p>
+    By default, write operations cannot be performed on a replication client site.
+    This option enables forwarding of simple client database put and delete operations
+    to the master site for processing. These operations must use an implicit
+    NULL transaction ID to be forwarded. Any other write operation that
+    specifies a non-NULL transaction throws a DatabaseException.
+    </p>
+    <p>
+    The master must have an open database handle for the database on which a forwarded
+    write operation is being performed.
+    </p>
+    <p>
+    All sites in the replication group should have the same value for this configuration option.
+    </p>
+    **/
+    public static final ReplicationConfig FORWARD_WRITES =
+        new ReplicationConfig("FORWARD_WRITES", DbConstants.DB_REPMGR_CONF_FORWARD_WRITES);
 
     /* package */
     static ReplicationConfig fromInt(int which) {
@@ -93,10 +165,22 @@ public final class ReplicationConfig implements Cloneable {
             return NOWAIT;
         case DbConstants.DB_REPMGR_CONF_2SITE_STRICT:
             return STRICT_2SITE;
+	case DbConstants.DB_REPMGR_CONF_DISABLE_POLL:
+	    return DISABLE_POLL;
+        case DbConstants.DB_REPMGR_CONF_DISABLE_SSL:
+	    return DISABLE_SSL;
         case DbConstants.DB_REPMGR_CONF_ELECTIONS:
             return ELECTIONS;
-	case DbConstants.DB_REP_CONF_LEASE:
-	    return LEASE;
+	case DbConstants.DB_REPMGR_CONF_ENABLE_EPOLL:
+	    return ENABLE_EPOLL;
+        case DbConstants.DB_REP_CONF_LEASE:
+            return LEASE;
+        case DbConstants.DB_REPMGR_CONF_PREFMAS_MASTER:
+            return PREFMAS_MASTER;
+        case DbConstants.DB_REPMGR_CONF_PREFMAS_CLIENT:
+            return PREFMAS_CLIENT;
+        case DbConstants.DB_REPMGR_CONF_FORWARD_WRITES:
+            return FORWARD_WRITES;
         default:
             throw new IllegalArgumentException(
                 "Unknown replication config: " + which);

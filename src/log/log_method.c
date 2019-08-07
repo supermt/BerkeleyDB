@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1999, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1999, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -132,12 +132,15 @@ __log_set_lg_filemode(dbenv, lg_mode)
 	DB_ENV *dbenv;
 	int lg_mode;
 {
+	DB_ENV *slice;
 	DB_LOG *dblp;
 	DB_THREAD_INFO *ip;
 	ENV *env;
 	LOG *lp;
+	int i, ret;
 
 	env = dbenv->env;
+	ret = 0;
 
 	ENV_NOT_CONFIGURED(env,
 	    env->lg_handle, "DB_ENV->set_lg_filemode", DB_INIT_LOG);
@@ -153,7 +156,10 @@ __log_set_lg_filemode(dbenv, lg_mode)
 	} else
 		dbenv->lg_filemode = lg_mode;
 
-	return (0);
+	SLICE_FOREACH(dbenv, slice, i)
+		if ((ret = __log_set_lg_filemode(slice, lg_mode)) != 0)
+			break;
+	return (ret);
 }
 
 /*
@@ -197,11 +203,12 @@ __log_set_lg_max(dbenv, lg_max)
 	DB_ENV *dbenv;
 	u_int32_t lg_max;
 {
+	DB_ENV *slice;
 	DB_LOG *dblp;
 	DB_THREAD_INFO *ip;
 	ENV *env;
 	LOG *lp;
-	int ret;
+	int i, ret;
 
 	env = dbenv->env;
 	ret = 0;
@@ -221,6 +228,10 @@ __log_set_lg_max(dbenv, lg_max)
 		ENV_LEAVE(env, ip);
 	} else
 		dbenv->lg_size = lg_max;
+	if (ret == 0)
+		SLICE_FOREACH(dbenv, slice, i)
+		    if ((ret = __log_set_lg_max(slice, lg_max)) != 0)
+			    break;
 
 	return (ret);
 }
@@ -342,6 +353,10 @@ __log_get_flags(dbenv, flagsp)
 		LF_SET(DB_LOG_IN_MEMORY);
 	else
 		LF_CLR(DB_LOG_IN_MEMORY);
+	if (lp->nosync)
+		LF_SET(DB_LOG_NOSYNC);
+	else
+		LF_CLR(DB_LOG_NOSYNC);
 	*flagsp = flags;
 }
 
@@ -369,6 +384,8 @@ __log_set_flags(env, flags, on)
 		lp->db_log_autoremove = on ? 1 : 0;
 	if (LF_ISSET(DB_LOG_IN_MEMORY))
 		lp->db_log_inmemory = on ? 1 : 0;
+	if (LF_ISSET(DB_LOG_NOSYNC))
+		lp->nosync = on ? 1 : 0;
 }
 
 /*
@@ -377,14 +394,17 @@ __log_set_flags(env, flags, on)
  */
 #undef	OK_FLAGS
 #define	OK_FLAGS							\
-    (DB_LOG_AUTO_REMOVE | DB_LOG_BLOB |					\
-     DB_LOG_DIRECT | DB_LOG_DSYNC | DB_LOG_IN_MEMORY | DB_LOG_ZERO)
+    (DB_LOG_AUTO_REMOVE | DB_LOG_BLOB | DB_LOG_DIRECT |	\
+     DB_LOG_DSYNC | DB_LOG_EXT_FILE | DB_LOG_IN_MEMORY |	\
+     DB_LOG_NOSYNC | DB_LOG_ZERO)
 static const FLAG_MAP LogMap[] = {
 	{ DB_LOG_AUTO_REMOVE,	DBLOG_AUTOREMOVE},
 	{ DB_LOG_BLOB,		DBLOG_BLOB},
 	{ DB_LOG_DIRECT,	DBLOG_DIRECT},
 	{ DB_LOG_DSYNC,		DBLOG_DSYNC},
+	{ DB_LOG_EXT_FILE,	DBLOG_BLOB},
 	{ DB_LOG_IN_MEMORY,	DBLOG_INMEMORY},
+	{ DB_LOG_NOSYNC,	DBLOG_NOSYNC},
 	{ DB_LOG_ZERO,		DBLOG_ZERO}
 };
 /*
@@ -425,7 +445,7 @@ __log_get_config(dbenv, which, onp)
 
 /*
  * __log_set_config --
- *	Configure the logging subsystem.
+ *	DB_ENV->log_set_config() API call to configure the logging subsystem.
  *
  * PUBLIC: int __log_set_config __P((DB_ENV *, u_int32_t, int));
  */
@@ -435,8 +455,16 @@ __log_set_config(dbenv, flags, on)
 	u_int32_t flags;
 	int on;
 {
-	return (__log_set_config_int(dbenv, flags, on, 0));
+	DB_ENV *slice;
+	int i, ret;
+
+	if ((ret = __log_set_config_int(dbenv, flags, on, 0)) == 0)
+		SLICE_FOREACH(dbenv, slice, i)
+		    if ((ret = __log_set_config_int(slice, flags, on, 0)) != 0)
+			    break;
+	return (ret);
 }
+
 /*
  * __log_set_config_int --
  *	Configure the logging subsystem.
@@ -464,6 +492,17 @@ __log_set_config_int(dbenv, flags, on, in_open)
 "DB_ENV->log_set_config: direct I/O either not configured or not supported");
 		return (EINVAL);
 	}
+	if (REP_ON(env) && LF_ISSET(DB_LOG_EXT_FILE) && !on) {
+		__db_errx(env,
+"DB_ENV->log_set_config: DB_LOG_EXT_FILE must be enabled with replication.");
+		return (EINVAL);
+	}
+	if (FLD_ISSET(flags, DB_LOG_IN_MEMORY) && on > 0 &&
+	    PREFMAS_IS_SET(env)) {
+		__db_errx(env, DB_STR("2587", "DB_LOG_IN_MEMORY is not "
+		    "supported in Replication Manager preferred master mode"));
+		return (EINVAL);
+	}
 
 	if (LOGGING_ON(env)) {
 		if (!in_open && LF_ISSET(DB_LOG_IN_MEMORY) &&
@@ -472,7 +511,7 @@ __log_set_config_int(dbenv, flags, on, in_open)
 			     "DB_ENV->log_set_config: DB_LOG_IN_MEMORY");
 		__log_set_flags(env, flags, on);
 		mapped_flags = 0;
-		__env_map_flags(LogMap, sizeof(LogMap), &flags, &mapped_flags);
+		__env_map_flags(LogMap, sizeof(LogMap), flags, &mapped_flags);
 		if (on)
 			F_SET(dblp, mapped_flags);
 		else

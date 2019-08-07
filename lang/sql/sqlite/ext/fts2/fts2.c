@@ -23,6 +23,12 @@
 */
 
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2006 Oct 10
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -6844,7 +6850,10 @@ int sqlite3Fts2Init(sqlite3 *db){
 }
 
 #if !SQLITE_CORE
-int sqlite3_extension_init(
+#ifdef _WIN32
+__declspec(dllexport)
+#endif
+int sqlite3_fts2_init(
   sqlite3 *db, 
   char **pzErrMsg,
   const sqlite3_api_routines *pApi

@@ -1,4 +1,10 @@
 /*
+** Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights
+** reserved.
+** 
+** This copyrighted work includes portions of SQLite received 
+** with the following notice:
+** 
 ** 2011 Jan 27
 **
 ** The author disclaims copyright to this source code.  In place of
@@ -81,7 +87,7 @@ static int fts3termConnectMethod(
 
   /* The user should specify a single argument - the name of an fts3 table. */
   if( argc!=4 ){
-    *pzErr = sqlite3_mprintf(
+    sqlite3Fts3ErrMsg(pzErr,
         "wrong number of arguments to fts4term constructor"
     );
     return SQLITE_ERROR;

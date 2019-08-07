@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -268,6 +268,7 @@ __lv_seccbk_fname(secdb, key, data, result)
 	size_t buflen, slen;
 
 	ret = tret = 0;
+	freg = NULL;
 	COMPQUIET(key, NULL);
 	if ((ret = __lv_unpack_filereg(data, &freg)) != 0)
 		goto out;
@@ -460,6 +461,7 @@ __lv_lsn_cmp(db, dbt1, dbt2, locp)
 	memcpy(&lsn1, dbt1->data, sizeof(DB_LSN));
 	memcpy(&lsn2, dbt2->data, sizeof(DB_LSN));
 
+	COMPQUIET(db, NULL);
 	return (LOG_COMPARE(&lsn1, &lsn2));
 }
 
@@ -1685,6 +1687,7 @@ __lv_txnrgns_lsn_cmp (db, d1, d2, locp)
 	memcpy(&r1, d1->data, d1->size);
 	memcpy(&r2, d2->data, d2->size);
 
+	COMPQUIET(db, NULL);
 	return (LOG_COMPARE(&(r1.end), &(r2.end)));
 }
 

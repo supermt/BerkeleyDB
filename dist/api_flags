@@ -4,6 +4,7 @@ db_env_create
 DbEnv.backup
 	# Remove all files from the target directory tree first.
 	DB_BACKUP_CLEAN
+	DB_BACKUP_DEEP_COPY		# Copy databases in sub-directories.
 	DB_BACKUP_FILES			# Copy plain files too.
 	DB_BACKUP_NO_LOGS		# Don't backup log files.
 	DB_BACKUP_SINGLE_DIR		# All files go to a single directory.
@@ -14,6 +15,7 @@ DbEnv.backup
 DbEnv.close
 	# Sync database when automatically closing its db handles.
 	DB_FORCESYNC			
+	DB_FORCESYNCENV			# Sync mmap()ed regions on close
 
 DbEnv.dbremove
 	DB_AUTO_COMMIT			# Implied transaction
@@ -100,11 +102,12 @@ DbEnv.log_put
 	DB_LOG_WRNOSYNC			# UNDOC: Write, don't sync log_put
 
 DbEnv.log_set_config
-	DB_LOG_BLOB			# Full logging of blob files
+	DB_LOG_AUTO_REMOVE		# Automatically remove log files
 	DB_LOG_DIRECT			# Don't buffer log files in the OS
 	DB_LOG_DSYNC			# Set O_DSYNC on the log
-	DB_LOG_AUTO_REMOVE		# Automatically remove log files
+	DB_LOG_EXT_FILE			# Full logging of external files
 	DB_LOG_IN_MEMORY		# Store logs in buffers in memory
+	DB_LOG_NOSYNC			# Don't fsync log files during flush
 	DB_LOG_ZERO			# Zero log file on creation
 
 DbEnv.log_stat
@@ -134,9 +137,10 @@ DbEnv.mutex_alloc
 	DB_MUTEX_ALLOCATED		# UNDOC: Mutex currently allocated
 	DB_MUTEX_LOCKED			# UNDOC: Mutex currently locked
 	DB_MUTEX_LOGICAL_LOCK		# UNDOC: Mutex backs a database lock
+	DB_MUTEX_OWNER_DEAD		# UNDOC: The owning thread has died
 	DB_MUTEX_PROCESS_ONLY		# Mutex private to a process
 	DB_MUTEX_SELF_BLOCK		# Must be able to block self
-	DB_MUTEX_SHARED			# Shared (read/write) mutex
+	DB_MUTEX_SHARED			# Sharable (read/write) latch
 
 DbEnv.mutex_stat
 	DB_STAT_CLEAR			# Clear stats after return
@@ -154,11 +158,18 @@ DbEnv.remove
 
 DbEnv.rep_set_config
 	DB_REPMGR_CONF_2SITE_STRICT	# Don't cheat on election votes
+	DB_REPMGR_CONF_DISABLE_POLL	# Disable use of poll for event polling
+	DB_REPMGR_CONF_DISABLE_SSL	# Disable use of ssl for replication messaging
 	DB_REPMGR_CONF_ELECTIONS	# Manage elections to choose master
+	DB_REPMGR_CONF_ENABLE_EPOLL	# Enable use of epoll for event polling
+	DB_REPMGR_CONF_FORWARD_WRITES	# Enable write forwarding
+	DB_REPMGR_CONF_PREFMAS_CLIENT	# Preferred master client site
+	DB_REPMGR_CONF_PREFMAS_MASTER	# Preferred master site
 	DB_REP_CONF_AUTOINIT		# automatic client init
 	DB_REP_CONF_AUTOROLLBACK	# UNDOC: discard txns to sync w/ master
 	DB_REP_CONF_BULK		# Bulk transfer
 	DB_REP_CONF_DELAYCLIENT		# Delay client synchronization
+	DB_REP_CONF_ELECT_LOGLENGTH	# UNDOC: longest log wins election
 	DB_REP_CONF_INMEM		# In-memory replication
 	DB_REP_CONF_LEASE		# Master leases
 	DB_REP_CONF_NOWAIT		# Don't wait, return error
@@ -237,10 +248,11 @@ DbEnv.set_isalive
 	DB_MUTEX_SELF_BLOCK		# Must be able to block self
 
 DbEnv.set_timeout
+	DB_SET_MUTEX_FAILCHK_TIMEOUT	# Mutex support for failchk broadcasting
 	DB_SET_LOCK_TIMEOUT		# Set lock timeout
+	DB_SET_REG_TIMEOUT		# Set dbregister timeout
 	DB_SET_TXN_NOW			# UNDOC: Timeout lock now
 	DB_SET_TXN_TIMEOUT		# Set transaction timeout
-	DB_SET_REG_TIMEOUT		# Set dbregister timeout
 
 DbEnv.set_verbose
 	DB_VERB_BACKUP			# Backup information
@@ -253,6 +265,9 @@ DbEnv.set_verbose
 	DB_VERB_REPLICATION		# All replication and repmgr output
 	DB_VERB_REPMGR_CONNFAIL		# Repmgr connection failure output
 	DB_VERB_REPMGR_MISC		# Miscellaneous repmgr output
+	DB_VERB_REPMGR_SSL_ALL		# All Repmgr SSL operations
+	DB_VERB_REPMGR_SSL_CONN		# Repmgr SSL connect, accept and shutdown info
+	DB_VERB_REPMGR_SSL_IO		# Repmgr SSL read-write output
 	DB_VERB_REP_ELECT		# Replication election output
 	DB_VERB_REP_LEASE		# Replication master lease output
 	DB_VERB_REP_MISC		# Miscellaneous replication output
@@ -260,6 +275,7 @@ DbEnv.set_verbose
 	DB_VERB_REP_SYNC		# Replication client sync output
 	DB_VERB_REP_SYSTEM		# Replication system messages
 	DB_VERB_REP_TEST		# Replication temporary test output
+	DB_VERB_SLICE			# Slicing information
 	DB_VERB_WAITSFOR		# Dump waits-for table
 
 DbEnv.stat_print
@@ -276,6 +292,7 @@ DbEnv.txn_begin
 	DB_TXN_NOWAIT			# Do not wait for locks
 	DB_TXN_FAMILY			# Cursors and child txns are
 					# independent but lock-compatible
+	DB_TXN_DISPATCH			# UNDOC: rep client calling db_dispatch
 	DB_TXN_SNAPSHOT			# Snapshot isolation
 	DB_TXN_SYNC			# Always sync log on commit
 	DB_TXN_WAIT			# Always wait for locks in this txn
@@ -308,8 +325,9 @@ DbMpoolFile.close
 
 DbMpoolFile.get
 	DB_MPOOL_CREATE			# Create a page
-	DB_MPOOL_DIRTY			# Get page for an update
-	DB_MPOOL_EDIT			# Modify without copying
+	DB_MPOOL_DIRTY			# Get page for an update, making copies
+					# for snapshot txns on multiversion dbs
+	DB_MPOOL_EDIT			# As above, but don't make MVCC copies
 	DB_MPOOL_FREE			# UNDOC: Free page if present
 	DB_MPOOL_LAST			# Return the last page
 	DB_MPOOL_NEW			# Create a new page
@@ -400,9 +418,10 @@ Db.cursor
 	DB_READ_COMMITTED		# Degree 2 isolation
 	DB_READ_UNCOMMITTED		# Degree 1 isolation
 	DB_RECOVER			# Called from recovery (internal)
+	DB_SLICED			# Sliced cursor is desired (internal)
+	DB_TXN_SNAPSHOT			# Snapshot isolation
 	DB_WRITECURSOR			# Cursor can update (CDB)
 	DB_WRITELOCK			# Cursor should get write locks
-	DB_TXN_SNAPSHOT			# Snapshot isolation
 
 Db.del
 	DB_AUTO_COMMIT			# UNDOC: compatibility only
@@ -445,13 +464,14 @@ Db.open
 	DB_RDONLY			# Read-only (O_RDONLY)
 	DB_RDWRMASTER			# UNDOC: allow subdb master open R/W
 	DB_READ_UNCOMMITTED		# Degree 1 isolation
+	DB_SLICED			# Access a sliced db in sliced env
 	DB_THREAD			# Handle is free-threaded
 	DB_TRUNCATE			# Discard existing DB (O_TRUNC)
 
 	# The following flags aren't actually part of the Db.open method
 	# API, but they are accepted by the underlying __db_open function.
 	DB_DURABLE_UNKNOWN		# UNDOC: Durability on open
-	DB_INTERNAL_BLOB_DB		# UNDOC: Open db in blob dir
+	DB_INTERNAL_BLOB_DB		# UNDOC: Open db in ext file dir
 	DB_INTERNAL_PERSISTENT_DB	# UNDOC: Open db in metadata dir
 	DB_INTERNAL_TEMPORARY_DB	# UNDOC: Open db in env home dir
 	DB_NOERROR			# UNDOC: Don't raise errors.
@@ -474,6 +494,7 @@ Db.set_encrypt
 	DB_ENCRYPT_AES			# AES, assumes SHA1 checksum
 
 Db.set_feedback
+	DB_CONVERT			# Converting
 	DB_UPGRADE			# Upgrading
 	DB_VERIFY			# Verifying
 

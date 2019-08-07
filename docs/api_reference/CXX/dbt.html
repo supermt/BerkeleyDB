@@ -14,7 +14,7 @@
   <body>
     <div xmlns="" class="navheader">
       <div class="libver">
-        <p>Library Version 12.1.6.0</p>
+        <p>Library Version 18.1.32</p>
       </div>
       <table width="100%" summary="Navigation header">
         <tr>
@@ -268,16 +268,17 @@ public:
                     </p>
             <span>
     <div class="itemizedlist"><ul type="circle"><li><p><a id="dbt_DB_DBT_BLOB"></a>
-                            <code class="literal">DB_DBT_BLOB</code>
+                            <code class="literal">DB_DBT_EXT_FILE</code>
                     </p><p>
                         Set this flag on a Dbt used for the data
                         portion of a record to indicate that the
                         Dbt stores 
-                        <a class="link" href="blob.html" title="Chapter 14.  Binary Large Objects">BLOB data</a>. 
+                        <a class="link" href="blob.html" title="Chapter 14.  External Files">external file data</a>. 
                         If this flag is set, and if the database otherwise
-                        supports BLOBs, then the data contained by this
-                        Dbt will be stored as a BLOB, regardless of
-                        whether it exceeds the BLOB threshold in size.
+                        supports external files, then the data contained by
+                        this Dbt will be stored as an external file,
+                        regardless of whether it exceeds the external file
+                        threshold in size.
                     </p></li><li><p><a id="dbt_DB_DBT_MALLOC"></a>
                             <code class="literal">DB_DBT_MALLOC</code>
                     </p><p>
@@ -412,11 +413,17 @@ public:
                             will succeed.
                     </p><p>
                             It is an error to attempt a partial put using the
-                            <a class="xref" href="dbput.html" title="Db::put()">Db::put()</a>
+                            <a class="xref" href="dbput.html" title="Db::put()">
+        
+        <span>Db::put()</span>
+    </a>
                             method in a database that supports duplicate
                             records. Partial puts in databases supporting duplicate
                             records must be done using a 
-                            <a class="xref" href="dbcput.html" title="Dbc::put()">Dbc::put()</a>
+                            <a class="xref" href="dbcput.html" title="Dbc::put()">
+        
+        <span>Dbc::put()</span>
+    </a>
                             method.
                     </p><p>
                             It is an error to attempt a partial put with differing
@@ -447,9 +454,15 @@ public:
                     </p><p>
                             After an application-supplied callback routine passed to
                             either 
-                            <a class="xref" href="dbassociate.html" title="Db::associate()">Db::associate()</a>
+                            <a class="xref" href="dbassociate.html" title="Db::associate()">
+        
+        <span>Db::associate()</span>
+    </a>
                             or 
-                            <a class="xref" href="dbset_append_recno.html" title="Db::set_append_recno()">Db::set_append_recno()</a>
+                            <a class="xref" href="dbset_append_recno.html" title="Db::set_append_recno()">
+        
+        <span>Db::set_append_recno()</span>
+    </a>
                             is executed, the 
                             <span class="bold"><strong>data</strong></span> 
                             field of a DBT may refer to memory allocated with 
@@ -469,7 +482,10 @@ public:
                     </p><p>
                             Set in a secondary key creation callback routine passed
                             to 
-                            <a class="xref" href="dbassociate.html" title="Db::associate()">Db::associate()</a>
+                            <a class="xref" href="dbassociate.html" title="Db::associate()">
+        
+        <span>Db::associate()</span>
+    </a>
                             to indicate that multiple secondary
                             keys should be associated with the given primary
                             key/data pair. If set, the 
@@ -518,7 +534,10 @@ public:
             <tbody>
               <tr>
                 <td>
-                  <a class="xref" href="dbsort_multiple.html" title="Db::sort_multiple()">Db::sort_multiple()</a>
+                  <a class="xref" href="dbsort_multiple.html" title="Db::sort_multiple()">
+        
+        <span>Db::sort_multiple()</span>
+    </a>
                 </td>
                 <td>Sort a set of DBTs</td>
               </tr>
@@ -584,7 +603,10 @@ public:
           <td width="40%" align="right"> <a accesskey="n" href="dbmultipleiterator.html">Next</a></td>
         </tr>
         <tr>
-          <td width="40%" align="left" valign="top">Dbc::set_priority() </td>
+          <td width="40%" align="left" valign="top">
+        
+        <span>Dbc::set_priority()</span>
+     </td>
           <td width="20%" align="center">
             <a accesskey="h" href="index.html">Home</a>
           </td>

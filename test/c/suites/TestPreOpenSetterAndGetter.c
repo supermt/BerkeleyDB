@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2012, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2012, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -369,7 +369,7 @@ int TestEnvPreOpenSetterAndGetter(CuTest *ct) {
 	const char **dirs;
 	const u_int8_t *lk_get_conflicts;
 	u_int8_t lk_set_conflicts[] = {1, 0, 0, 0};
-	u_int32_t backup_configs[] = {
+	DB_BACKUP_CONFIG backup_configs[] = {
 		/*
 		 * DB_BACKUP_WRITE_DIRECT is not listed here, since the
 		 * value(only 1/0) for this configuration is different
@@ -413,10 +413,14 @@ int TestEnvPreOpenSetterAndGetter(CuTest *ct) {
 		DB_LOG_ZERO
 	};
 	DB_MEM_CONFIG mem_configs[] = {
+		DB_MEM_DATABASE,
+		DB_MEM_DATABASE_LENGTH,
+		DB_MEM_EXTFILE_DATABASE,
 		DB_MEM_LOCK,
 		DB_MEM_LOCKOBJECT,
 		DB_MEM_LOCKER,
 		DB_MEM_LOGID,
+		DB_MEM_REP_SITE,
 		DB_MEM_TRANSACTION,
 		DB_MEM_THREAD
 	};
@@ -460,6 +464,9 @@ int TestEnvPreOpenSetterAndGetter(CuTest *ct) {
 		DB_VERB_REP_SYSTEM,
 		DB_VERB_REPMGR_CONNFAIL,
 		DB_VERB_REPMGR_MISC,
+		DB_VERB_REPMGR_SSL_ALL,
+		DB_VERB_REPMGR_SSL_CONN,
+		DB_VERB_REPMGR_SSL_IO,
 		DB_VERB_WAITSFOR
 	};
 	u_int32_t encrypt_flags;
@@ -486,7 +493,7 @@ int TestEnvPreOpenSetterAndGetter(CuTest *ct) {
 	CHECK_1_DIGIT_CONFIG_VALUE(dbenv, set_backup_config,
 	    get_backup_config, DB_BACKUP_WRITE_DIRECT, u_int32_t, 0);
 	CHECK_1_DIGIT_CONFIG_VALUES(dbenv, set_backup_config, get_backup_config,
-	    backup_configs, u_int32_t);
+	    backup_configs, DB_BACKUP_CONFIG);
 	
 	/* Test DB_ENV->set_create_dir(), DB_ENV->get_create_dir(). */
 	CHECK_1_STR_VALUE(dbenv, set_create_dir, get_create_dir, data_dirs[1]);

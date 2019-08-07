@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2001, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2001, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -9,13 +9,17 @@
 #include "db_config.h"
 
 #include "db_int.h"
+#include "dbinc/blob.h"
 #include "dbinc/db_page.h"
 #include "dbinc/db_am.h"
 #include "dbinc/lock.h"
 #include "dbinc/mp.h"
 #include "dbinc/txn.h"
 
-static int __rep_collect_txn __P((ENV *, DB_LSN *, LSN_COLLECTION *));
+static int __rep_collect_txn
+    __P((ENV *, DB_LSN *, LSN_COLLECTION *, DELAYED_BLOB_LIST **));
+static int __rep_remove_delayed_blobs
+    __P((ENV *, db_seq_t, u_int32_t ,DELAYED_BLOB_LIST **));
 static int __rep_do_ckp __P((ENV *, DBT *, __rep_control_args *));
 static int __rep_fire_newmaster __P((ENV *, u_int32_t, int));
 static int __rep_fire_startupdone __P((ENV *, u_int32_t, int));
@@ -226,12 +230,10 @@ __rep_process_message_int(env, control, rec, eid, ret_lsnp)
 	REGENV *renv;
 	REGINFO *infop;
 	REP *rep;
-	REP_46_CONTROL *rp46;
-	REP_OLD_CONTROL *orp;
 	__rep_control_args *rp, tmprp;
 	__rep_egen_args egen_arg;
 	size_t len;
-	u_int32_t gen, rep_version;
+	u_int32_t gen;
 	int cmp, do_sync, lockout, master_id, recovering, ret, t_ret;
 	time_t savetime;
 	u_int8_t buf[__REP_MAXMSG_SIZE];
@@ -245,49 +247,10 @@ __rep_process_message_int(env, control, rec, eid, ret_lsnp)
 	lp = dblp->reginfo.primary;
 	infop = env->reginfo;
 	renv = infop->primary;
-	/*
-	 * Casting this to REP_OLD_CONTROL is just kind of stylistic: the
-	 * rep_version field of course has to be in the same offset in all
-	 * versions in order for this to work.
-	 *
-	 * We can look at the rep_version unswapped here because if we're
-	 * talking to an old version, it will always be unswapped.  If
-	 * we're talking to a new version, the only issue is if it is
-	 * swapped and we take one of the old version conditionals
-	 * incorrectly.  The rep_version would need to be very, very
-	 * large for a swapped version to look like a small, older
-	 * version.  There is no problem here looking at it unswapped.
-	 */
-	rep_version = ((REP_OLD_CONTROL *)control->data)->rep_version;
-	if (rep_version <= DB_REPVERSION_45) {
-		orp = (REP_OLD_CONTROL *)control->data;
-		if (rep_version == DB_REPVERSION_45 &&
-		    F_ISSET(orp, REPCTL_INIT_45)) {
-			F_CLR(orp, REPCTL_INIT_45);
-			F_SET(orp, REPCTL_INIT);
-		}
-		tmprp.rep_version = orp->rep_version;
-		tmprp.log_version = orp->log_version;
-		tmprp.lsn = orp->lsn;
-		tmprp.rectype = orp->rectype;
-		tmprp.gen = orp->gen;
-		tmprp.flags = orp->flags;
-		tmprp.msg_sec = 0;
-		tmprp.msg_nsec = 0;
-	} else if (rep_version == DB_REPVERSION_46) {
-		rp46 = (REP_46_CONTROL *)control->data;
-		tmprp.rep_version = rp46->rep_version;
-		tmprp.log_version = rp46->log_version;
-		tmprp.lsn = rp46->lsn;
-		tmprp.rectype = rp46->rectype;
-		tmprp.gen = rp46->gen;
-		tmprp.flags = rp46->flags;
-		tmprp.msg_sec = (u_int32_t)rp46->msg_time.tv_sec;
-		tmprp.msg_nsec = (u_int32_t)rp46->msg_time.tv_nsec;
-	} else
-		if ((ret = __rep_control_unmarshal(env, &tmprp,
-		    control->data, control->size, NULL)) != 0)
-			return (ret);
+
+	if ((ret = __rep_control_unmarshal(env, &tmprp,
+	    control->data, control->size, NULL)) != 0)
+		return (ret);
 	rp = &tmprp;
 	if (ret_lsnp != NULL)
 		ZERO_LSN(*ret_lsnp);
@@ -463,9 +426,14 @@ __rep_process_message_int(env, control, rec, eid, ret_lsnp)
 		 * accept the generation number and participate in future
 		 * elections and communication. Otherwise, I need to hear about
 		 * a new master and sync up.
+		 *
+		 * But do not do any of this if REP_F_HOLD_GEN is set.  In
+		 * this case we keep the site at its current gen until we
+		 * clear this flag.
 		 */
-		if (rp->rectype == REP_ALIVE ||
-		    rp->rectype == REP_VOTE1 || rp->rectype == REP_VOTE2) {
+		if ((rp->rectype == REP_ALIVE ||
+		    rp->rectype == REP_VOTE1 || rp->rectype == REP_VOTE2) &&
+		    !F_ISSET(rep, REP_F_HOLD_GEN)) {
 			REP_SYSTEM_LOCK(env);
 			RPRINT(env, (env, DB_VERB_REP_MSGS,
 			    "Updating gen from %lu to %lu",
@@ -526,9 +494,7 @@ __rep_process_message_int(env, control, rec, eid, ret_lsnp)
 		 * Handle even if we're recovering.
 		 */
 		ANYSITE(rep);
-		if (rp->rep_version < DB_REPVERSION_47)
-			egen_arg.egen = *(u_int32_t *)rec->data;
-		else if ((ret = __rep_egen_unmarshal(env, &egen_arg,
+		if ((ret = __rep_egen_unmarshal(env, &egen_arg,
 		    rec->data, rec->size, NULL)) != 0)
 			return (ret);
 		REP_SYSTEM_LOCK(env);
@@ -573,15 +539,10 @@ __rep_process_message_int(env, control, rec, eid, ret_lsnp)
 		REP_SYSTEM_LOCK(env);
 		egen_arg.egen = rep->egen;
 		REP_SYSTEM_UNLOCK(env);
-		if (rep->version < DB_REPVERSION_47)
-			DB_INIT_DBT(data_dbt, &egen_arg.egen,
-			    sizeof(egen_arg.egen));
-		else {
-			if ((ret = __rep_egen_marshal(env,
-			    &egen_arg, buf, __REP_EGEN_SIZE, &len)) != 0)
-				goto errlock;
-			DB_INIT_DBT(data_dbt, buf, len);
-		}
+		if ((ret = __rep_egen_marshal(env,
+		    &egen_arg, buf, __REP_EGEN_SIZE, &len)) != 0)
+			goto errlock;
+		DB_INIT_DBT(data_dbt, buf, len);
 		(void)__rep_send_message(env,
 		    eid, REP_ALIVE, &lsn, &data_dbt, 0, 0);
 		break;
@@ -590,6 +551,36 @@ __rep_process_message_int(env, control, rec, eid, ret_lsnp)
 		CLIENT_MASTERCHK;
 		ret = __rep_allreq(env, rp, eid);
 		CLIENT_REREQ;
+		break;
+	case REP_BLOB_ALL_REQ:
+		RECOVERING_SKIP;
+		CLIENT_MASTERCHK;
+		MASTER_UPDATE(env, renv);
+		ret = __rep_blob_allreq(env, eid, rec);
+		CLIENT_REREQ;
+		break;
+	case REP_BLOB_CHUNK:
+		/* Handle even if in recovery. */
+		CLIENT_ONLY(rep, rp);
+		ret = __rep_blob_chunk(env, eid, ip, rec);
+		if (ret == DB_REP_PAGEDONE)
+			ret = 0;
+		break;
+	case REP_BLOB_CHUNK_REQ:
+		RECOVERING_SKIP;
+		CLIENT_MASTERCHK;
+		MASTER_UPDATE(env, renv);
+		ret = __rep_blob_chunk_req(env, eid, rec);
+		CLIENT_REREQ;
+		break;
+	case REP_BLOB_UPDATE:
+		CLIENT_ONLY(rep, rp);
+		ret = __rep_blob_update(env, eid, ip, rec);
+		break;
+	case REP_BLOB_UPDATE_REQ:
+		MASTER_ONLY(rep, rp);
+		MASTER_UPDATE(env, renv);
+		ret = __rep_blob_update_req(env, eid, ip, rec);
 		break;
 	case REP_BULK_LOG:
 		RECOVERING_LOG_SKIP;
@@ -661,6 +652,9 @@ __rep_process_message_int(env, control, rec, eid, ret_lsnp)
 				ret = __rep_init_cleanup(env, rep, DB_FORCE);
 				F_CLR(rep, REP_F_ABBREVIATED);
 				CLR_RECOVERY_SETTINGS(rep);
+#ifdef HAVE_REPLICATION_THREADS
+				db_rep->abbrev_init = FALSE;
+#endif
 			}
 			MUTEX_UNLOCK(env, rep->mtx_clientdb);
 			if (ret != 0) {
@@ -791,6 +785,9 @@ __rep_process_message_int(env, control, rec, eid, ret_lsnp)
 					    rep, DB_FORCE);
 					F_CLR(rep, REP_F_ABBREVIATED);
 					CLR_RECOVERY_SETTINGS(rep);
+#ifdef HAVE_REPLICATION_THREADS
+					db_rep->abbrev_init = FALSE;
+#endif
 				}
 				MUTEX_UNLOCK(env, rep->mtx_clientdb);
 				if (t_ret != 0) {
@@ -803,15 +800,10 @@ __rep_process_message_int(env, control, rec, eid, ret_lsnp)
 				lockout = 0;
 			}
 			REP_SYSTEM_UNLOCK(env);
-			if (rep->version < DB_REPVERSION_47)
-				DB_INIT_DBT(data_dbt, &egen_arg.egen,
-				    sizeof(egen_arg.egen));
-			else {
-				if ((ret = __rep_egen_marshal(env, &egen_arg,
-				    buf, __REP_EGEN_SIZE, &len)) != 0)
-					goto errlock;
-				DB_INIT_DBT(data_dbt, buf, len);
-			}
+			if ((ret = __rep_egen_marshal(env, &egen_arg,
+			    buf, __REP_EGEN_SIZE, &len)) != 0)
+				goto errlock;
+			DB_INIT_DBT(data_dbt, buf, len);
 			(void)__rep_send_message(env, DB_EID_BROADCAST,
 			    REP_ALIVE, &rp->lsn, &data_dbt, 0, 0);
 			break;
@@ -840,15 +832,10 @@ __rep_process_message_int(env, control, rec, eid, ret_lsnp)
 			if (eid == rep->master_id)
 				rep->master_id = DB_EID_INVALID;
 			REP_SYSTEM_UNLOCK(env);
-			if (rep->version < DB_REPVERSION_47)
-				DB_INIT_DBT(data_dbt, &egen_arg.egen,
-				    sizeof(egen_arg.egen));
-			else {
-				if ((ret = __rep_egen_marshal(env, &egen_arg,
-				    buf, __REP_EGEN_SIZE, &len)) != 0)
-					goto errlock;
-				DB_INIT_DBT(data_dbt, buf, len);
-			}
+			if ((ret = __rep_egen_marshal(env, &egen_arg,
+			    buf, __REP_EGEN_SIZE, &len)) != 0)
+				goto errlock;
+			DB_INIT_DBT(data_dbt, buf, len);
 			(void)__rep_send_message(env, eid,
 			    REP_ALIVE, &rp->lsn, &data_dbt, 0, 0);
 		}
@@ -1021,7 +1008,7 @@ __rep_process_message_int(env, control, rec, eid, ret_lsnp)
 		/*
 		 * Handle even if we're recovering.
 		 */
-		ret = __rep_vote2(env, rp, rec, eid);
+		ret = __rep_vote2(env, rec, eid);
 		break;
 	default:
 		__db_errx(env, DB_STR_A("3521",
@@ -1531,8 +1518,7 @@ out:
 /*
  * __rep_process_txn --
  *
- * This is the routine that actually gets a transaction ready for
- * processing.
+ * This is the routine that actually applies a transaction's set of updates.
  *
  * PUBLIC: int __rep_process_txn __P((ENV *, DBT *));
  */
@@ -1549,6 +1535,7 @@ __rep_process_txn(env, rec)
 	DB_REP *db_rep;
 	DB_THREAD_INFO *ip;
 	DB_TXNHEAD *txninfo;
+	DELAYED_BLOB_LIST *dblp, *dummy;
 	LSN_COLLECTION lc;
 	REP *rep;
 	__txn_regop_args *txn_args;
@@ -1561,6 +1548,7 @@ __rep_process_txn(env, rec)
 	db_rep = env->rep_handle;
 	rep = db_rep->region;
 	logc = NULL;
+	dblp = dummy = NULL;
 	txn_args = NULL;
 	txn42_args = NULL;
 	prep_args = NULL;
@@ -1586,27 +1574,15 @@ __rep_process_txn(env, rec)
 		 * We're the end of a transaction.  Make sure this is
 		 * really a commit and not an abort!
 		 */
-		if (rep->version >= DB_REPVERSION_44) {
-			if ((ret = __txn_regop_read(
-			    env, rec->data, &txn_args)) != 0)
-				return (ret);
-			if (txn_args->opcode != TXN_COMMIT) {
-				__os_free(env, txn_args);
-				return (0);
-			}
-			prev_lsn = txn_args->prev_lsn;
-			lock_dbt = &txn_args->locks;
-		} else {
-			if ((ret = __txn_regop_42_read(
-			    env, rec->data, &txn42_args)) != 0)
-				return (ret);
-			if (txn42_args->opcode != TXN_COMMIT) {
-				__os_free(env, txn42_args);
-				return (0);
-			}
-			prev_lsn = txn42_args->prev_lsn;
-			lock_dbt = &txn42_args->locks;
+		if ((ret = __txn_regop_read(
+		    env, rec->data, &txn_args)) != 0)
+			return (ret);
+		if (txn_args->opcode != TXN_COMMIT) {
+			__os_free(env, txn_args);
+			return (0);
 		}
+		prev_lsn = txn_args->prev_lsn;
+		lock_dbt = &txn_args->locks;
 	} else {
 		/* We're a prepare. */
 		DB_ASSERT(env, rectype == DB___txn_prepare);
@@ -1630,8 +1606,20 @@ __rep_process_txn(env, rec)
 		goto err;
 
 	/* Phase 1.  Get a list of the LSNs in this transaction, and sort it. */
-	if ((ret = __rep_collect_txn(env, &prev_lsn, &lc)) != 0)
+	if ((ret = __rep_collect_txn(env, &prev_lsn, &lc, &dblp)) != 0)
 		goto err;
+
+	/* Deal with any child transactions that had to be delayed. */
+	while (dblp != NULL) {
+		if ((ret = __rep_collect_txn(
+		    env, &dblp->lsn, &lc, &dummy)) != 0)
+			goto err;
+		DB_ASSERT(env, dummy == NULL);
+		dummy = dblp;
+		dblp = dummy->next;
+		__os_free(env, dummy);
+		dummy = NULL;
+	}
 	qsort(lc.array, lc.nlsns, sizeof(DB_LSN), __rep_lsn_cmp);
 
 	/*
@@ -1641,6 +1629,10 @@ __rep_process_txn(env, rec)
 	 */
 	ENV_GET_THREAD_INFO(env, ip);
 	if ((ret = __db_txnlist_init(env, ip, 0, 0, NULL, &txninfo)) != 0)
+		goto err;
+	/* Replication uses a transaction only when client mvcc is active. */
+	if (F_ISSET(env->dbenv, DB_ENV_MULTIVERSION) && (ret = __txn_begin(env,
+	    ip, NULL, &txninfo->txn, DB_TXN_SNAPSHOT | DB_TXN_DISPATCH)) != 0)
 		goto err;
 
 	/* Phase 2: Apply updates. */
@@ -1655,12 +1647,24 @@ __rep_process_txn(env, rec)
 		}
 		if ((ret = __db_dispatch(env, &env->recover_dtab,
 		    &data_dbt, lsnp, DB_TXN_APPLY, txninfo)) != 0) {
-			__db_errx(env, DB_STR_A("3523",
-			    "transaction failed at [%lu][%lu]", "%lu %lu"),
+			__db_err(env, ret, DB_STR_A("3523",
+			    "transaction %x failed at [%lu][%lu]", "%lu %lu"),
+			    txninfo->txn->txnid,
 			    (u_long)lsnp->file, (u_long)lsnp->offset);
 			goto err;
 		}
 		LOGCOPY_32(env, &rectype, data_dbt.data);
+	}
+	if (txninfo->txn != NULL) {
+		ret = __txn_commit(txninfo->txn, 0);
+		txninfo->txn = NULL;
+		if (ret != 0) {
+			__db_errx(env, DB_STR_A("3715", "%lu %lu",
+			    "rep_process_txn [%lu][%lu] failed to commit"),
+			    (u_long)lc.array[lc.nlsns - 1].file,
+			    (u_long)lc.array[lc.nlsns - 1].offset);
+			goto err;
+		}
 	}
 
 err:	memset(&req, 0, sizeof(req));
@@ -1671,6 +1675,12 @@ err:	memset(&req, 0, sizeof(req));
 
 	if ((t_ret = __lock_id_free(env, locker)) != 0 && ret == 0)
 		ret = t_ret;
+
+	while (dblp != NULL) {
+		dummy = dblp;
+		dblp = dummy->next;
+		__os_free(env, dummy);
+	}
 
 err1:	if (txn_args != NULL)
 		__os_free(env, txn_args);
@@ -1708,10 +1718,11 @@ err1:	if (txn_args != NULL)
  *	the entire transaction family at once.
  */
 static int
-__rep_collect_txn(env, lsnp, lc)
+__rep_collect_txn(env, lsnp, lc, dbl)
 	ENV *env;
 	DB_LSN *lsnp;
 	LSN_COLLECTION *lc;
+	DELAYED_BLOB_LIST **dbl;
 {
 	__dbreg_register_args *dbregargp;
 	__txn_child_args *argp;
@@ -1719,6 +1730,7 @@ __rep_collect_txn(env, lsnp, lc)
 	DB_LSN c_lsn;
 	DB_REP *db_rep;
 	DBT data;
+	db_seq_t blob_file_id;
 	u_int32_t child, rectype, skip_txnid;
 	u_int nalloc;
 	int ret, t_ret, view_partial;
@@ -1763,13 +1775,17 @@ __rep_collect_txn(env, lsnp, lc)
 			*lsnp = argp->prev_lsn;
 			child = argp->child;
 			__os_free(env, argp);
+
+			if (child == skip_txnid && *dbl != NULL &&
+			    (*dbl)->child == child)
+				(*dbl)->lsn = c_lsn;
 			/*
 			 * If skip_txnid is set, it is the id of the child txnid
 			 * that creates a database we should skip.  So, if
 			 * this is that child txn, do not collect it.
 			 */
 			if (skip_txnid == TXN_INVALID || child != skip_txnid)
-				ret = __rep_collect_txn(env, &c_lsn, lc);
+				ret = __rep_collect_txn(env, &c_lsn, lc, dbl);
 		} else if (IS_VIEW_SITE(env) &&
 		    rectype == DB___dbreg_register) {
 			db_rep = env->rep_handle;
@@ -1785,13 +1801,18 @@ __rep_collect_txn(env, lsnp, lc)
 			child = dbregargp->id;
 			name = (char *)dbregargp->name.data;
 			skip_txnid = TXN_INVALID;
-			if (child != TXN_INVALID && !IS_DB_FILE(name)) {
+			if (child != TXN_INVALID &&
+			    (!IS_DB_FILE(name) || IS_BLOB_META(name))) {
 				/*
 				 * The 'id' has a child txn so it is a create.
 				 */
 				DB_ASSERT(env, db_rep->partial != NULL);
-				if ((ret = db_rep->partial(env->dbenv,
-				    name, &view_partial, 0)) != 0) {
+				GET_LO_HI(env, dbregargp->blob_fid_lo,
+				    dbregargp->blob_fid_hi, blob_file_id, ret);
+				if (ret != 0)
+					goto err;
+				if ((ret = __rep_call_partial(env,
+				    name, &view_partial, 0, dbl)) != 0) {
 					VPRINT(env, (env, DB_VERB_REP_MISC,
 		    "rep_collect_txn: partial cb err %d for %s", ret, name));
 					__os_free(env, dbregargp);
@@ -1801,8 +1822,13 @@ __rep_collect_txn(env, lsnp, lc)
 				 * Save the child txnid for when we walk back
 				 * into the txn_child record.
 				 */
-				if (view_partial == 0)
+				if (view_partial == 0) {
 					skip_txnid = child;
+					if ((ret =
+					    __rep_remove_delayed_blobs(env,
+					    blob_file_id, child, dbl)) != 0)
+						goto err;
+				}
 			}
 			__os_free(env, dbregargp);
 		}
@@ -1840,6 +1866,62 @@ err:	if ((t_ret = __logc_close(logc)) != 0 && ret == 0)
 	if (data.data != NULL)
 		__os_ufree(env, data.data);
 	return (ret);
+}
+
+/*
+ * __rep_remove_delayed_blobs --
+ *
+ * If a blob meta database is opened in the same transaction as the database
+ * that owns it, then deciding whether it should be replicated or not needs
+ * to be delayed until after the rest of the transaction is processed.  To do
+ * this, the transaction's information is added to a DELAYED_BLOB_LIST.  When
+ * the owning database is processed, if it is not replicated then remove the
+ * entry of its blob meta database from the delayed list.
+ */
+static int
+__rep_remove_delayed_blobs(env, blob_file_id, child, dbl)
+	ENV *env;
+	db_seq_t blob_file_id;
+	u_int32_t child;
+	DELAYED_BLOB_LIST **dbl;
+{
+	DELAYED_BLOB_LIST *ent, *next, *prev;
+
+	if (*dbl == NULL)
+		return (0);
+
+	/*
+	 * If the child transaction has not been set, then a new entry was just
+	 * added to the list.
+	 */
+	if ((*dbl)->child == 0) {
+		(*dbl)->child = child;
+		return (0);
+	}
+
+	if (blob_file_id == 0)
+		return (0);
+
+	/*
+	 * This blob meta database should not be replicated if its associated
+	 * database is not replicated.  Remove it from the delayed
+	 * list so it will not be processed at a later time.
+	 */
+	for (ent = *dbl; ent != NULL; ent = (DELAYED_BLOB_LIST *)ent->next) {
+		if (ent->blob_file_id == blob_file_id && ent->child != child) {
+			next = (DELAYED_BLOB_LIST *)ent->next;
+			prev = (DELAYED_BLOB_LIST *)ent->prev;
+			if (ent == *dbl)
+				*dbl = next;
+			if (prev != NULL)
+				prev->next = ent->next;
+			if (next != NULL)
+				next->prev = ent->prev;
+			__os_free(env, ent);
+			break;
+		}
+	}
+	return (0);
 }
 
 /*
@@ -1885,14 +1967,7 @@ __rep_newfile(env, rp, rec)
 	if (F_ISSET(rep, REP_F_NEWFILE))
 		return (0);
 	if (rp->lsn.file + 1 > lp->ready_lsn.file) {
-		if (rec == NULL || rec->size == 0) {
-			RPRINT(env, (env, DB_VERB_REP_MISC,
-"rep_newfile: Old-style NEWFILE msg.  Use control msg log version: %lu",
-    (u_long) rp->log_version));
-			nf_args.version = rp->log_version;
-		} else if (rp->rep_version < DB_REPVERSION_47)
-			nf_args.version = *(u_int32_t *)rec->data;
-		else if ((ret = __rep_newfile_unmarshal(env, &nf_args,
+		if ((ret = __rep_newfile_unmarshal(env, &nf_args,
 		    rec->data, rec->size, NULL)) != 0)
 			return (ret);
 		RPRINT(env, (env, DB_VERB_REP_MISC,
@@ -1986,6 +2061,14 @@ __rep_do_ckp(env, rec, rp)
 	}
 
 	MUTEX_LOCK(env, rep->mtx_clientdb);
+#ifdef HAVE_REPLICATION_THREADS
+	if (ret == 0) {
+		REP_SYSTEM_LOCK(env);
+		if (LOG_COMPARE(&ckp_lsn, &rep->last_ckp_lsn) > 0)
+			rep->last_ckp_lsn = ckp_lsn;
+		REP_SYSTEM_UNLOCK(env);
+	}
+#endif
 	return (ret);
 }
 
@@ -2181,8 +2264,8 @@ __rep_process_rec(env, ip, rp, rec, ret_tsp, ret_lsnp)
 		/*
 		 * DB opens occur in the context of a transaction, so we can
 		 * simply handle them when we process the transaction.  Closes,
-		 * however, are not transaction-protected, so we have to handle
-		 * them here.
+		 * checkpoints and other dbreg opcodes are not transaction-
+		 * protected, so we have to handle them here.
 		 *
 		 * It should be unsafe for the master to do a close of a file
 		 * that was opened in an active transaction, so we should be
@@ -2342,7 +2425,7 @@ __rep_resend_req(env, rereq)
 	DB_REP *db_rep;
 	LOG *lp;
 	REP *rep;
-	int master, ret;
+	int blob_sync, master, ret;
 	repsync_t sync_state;
 	u_int32_t gapflags, msgtype, repflags, sendflags;
 
@@ -2357,6 +2440,7 @@ __rep_resend_req(env, rereq)
 
 	repflags = rep->flags;
 	sync_state = rep->sync_state;
+	blob_sync = rep->blob_sync;
 	/*
 	 * If we are delayed we do not rerequest anything.
 	 */
@@ -2379,9 +2463,17 @@ __rep_resend_req(env, rereq)
 		 */
 		msgtype = REP_UPDATE_REQ;
 	} else if (sync_state == SYNC_PAGE) {
-		REP_SYSTEM_LOCK(env);
-		ret = __rep_pggap_req(env, rep, NULL, gapflags);
-		REP_SYSTEM_UNLOCK(env);
+		if (blob_sync == 0) {
+			REP_SYSTEM_LOCK(env);
+			ret = __rep_pggap_req(env, rep, NULL, gapflags);
+			REP_SYSTEM_UNLOCK(env);
+		} else {
+			MUTEX_LOCK(env, rep->mtx_clientdb);
+			REP_SYSTEM_LOCK(env);
+			ret = __rep_blob_rereq(env, rep, gapflags);
+			REP_SYSTEM_UNLOCK(env);
+			MUTEX_UNLOCK(env, rep->mtx_clientdb);
+		}
 	} else {
 		MUTEX_LOCK(env, rep->mtx_clientdb);
 		ret = __rep_loggap_req(env, rep, NULL, gapflags);
@@ -2483,9 +2575,20 @@ __rep_skip_msg(env, rep, eid, rectype)
 		if (rep->master_id == DB_EID_INVALID)	/* Case 1. */
 			(void)__rep_send_message(env,
 			    DB_EID_BROADCAST, REP_MASTER_REQ, NULL, NULL, 0, 0);
-		else if (eid == rep->master_id)		/* Case 2. */
-			ret = __rep_resend_req(env, 0);
-		else if (F_ISSET(rep, REP_F_CLIENT))	/* Case 3. */
+		else if (eid == rep->master_id)	{	/* Case 2. */
+			/*
+			 * When we receive log messages in the SYNC_PAGE stage
+			 * and we decide to rerequest, it often means the pages
+			 * we expect have been dropped.  Send a rerequest with
+			 * gapflags for better performance.
+			 */
+			if ((rectype == REP_LOG || rectype == REP_BULK_LOG ||
+			    rectype == REP_LOG_MORE) &&
+			    rep->sync_state == SYNC_PAGE)
+				ret = __rep_resend_req(env, 1);
+			else
+				ret = __rep_resend_req(env, 0);
+		} else if (F_ISSET(rep, REP_F_CLIENT))	/* Case 3. */
 			(void)__rep_send_message(env,
 			    eid, REP_REREQUEST, NULL, NULL, 0, 0);
 	}

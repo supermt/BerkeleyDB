@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -18,12 +18,45 @@ static int  __env_des_get __P((ENV *, REGINFO *, REGINFO *, REGION **));
 static int  __env_faultmem __P((ENV *, void *, size_t, int));
 static int  __env_sys_attach __P((ENV *, REGINFO *, REGION *));
 static int  __env_sys_detach __P((ENV *, REGINFO *, int));
+static int  __env_check_recreate __P((ENV *, REGENV *, u_int32_t));
 static void __env_des_destroy __P((ENV *, REGION *));
 static void __env_remove_file __P((ENV *));
 
 /*
+ * If the system supports flock()-like file locking, then the primary region
+ * file __db.001 is exclusively locked during creation, and is read-locked while
+ * the environment is open. Most Unix-like systems have flock(), with the
+ * notable exception of Solaris.
+ * Note: fcntl cannot be used for this locking because of the unfortunate
+ * definition of its interaction with close(2): a process's fcntl locks are
+ * released whenever it closes any file descriptor for that file. So, if an
+ * environment is opened more than once, closing one of the DB_ENV handles would
+ * release the read lock that protects the other handle.
+ */
+#ifdef HAVE_FLOCK
+#define	ENV_PRIMARY_LOCK(env, lockmode, async)	\
+	((env)->lockfhp == NULL ? 0 :	\
+	__os_fdlock((env), (env)->lockfhp, -1, lockmode, async))
+#define	ENV_PRIMARY_UNLOCK(env)			\
+	((env)->lockfhp == NULL ? 0 :	\
+	__os_fdlock((env), (env)->lockfhp, -1, DB_LOCK_NG, 0))
+#else
+#define	ENV_PRIMARY_LOCK(env, lockmode, async)	(0)
+#define	ENV_PRIMARY_UNLOCK(env)			(0)
+#endif
+
+/*
  * __env_attach
  *	Join/create the environment
+ *
+ * Safely detecting and managing multiple processes' environment handles:
+ *	BDB uses a shared or exclusive fcntl()-style lock on the first byte
+ *	of the primary region file (__db.001) to detect whether other processes
+ *	have the environment open, and to single-thread attempts to create the
+ *	environment.  If the open includes DB_CREATE, an exclusive lock is
+ *	obtained during the open call.  After the creation is finished, and
+ *	anytime during a non-DB_CREATE env open, the process holds a shared
+ *	lock.
  *
  * PUBLIC: int __env_attach __P((ENV *, u_int32_t *, int, int));
  */
@@ -40,14 +73,15 @@ __env_attach(env, init_flagsp, create_ok, retry_ok)
 	REGION *rp, tregion;
 	size_t max, nrw, size;
 	long segid;
+	time_t create_time;
 	u_int32_t bytes, i, mbytes, nregions, signature;
 	u_int retry_cnt;
 	int majver, minver, patchver, ret;
-	char buf[sizeof(DB_REGION_FMT) + 20];
+	char buf[sizeof(DB_REGION_FMT) + 20], datebuf[CTIME_BUFLEN];
 
-	/* Initialization */
 	dbenv = env->dbenv;
 	retry_cnt = 0;
+	create_time = 0;
 	signature = __env_struct_sig();
 
 	/* Repeated initialization. */
@@ -69,7 +103,7 @@ loop:	renv = NULL;
 		ret = __os_strdup(env, "process-private", &infop->name);
 	else {
 		(void)snprintf(buf, sizeof(buf), "%s", DB_REGION_ENV);
-		ret = __db_appname(env, DB_APP_NONE, buf, NULL, &infop->name);
+		ret = __db_appname(env, DB_APP_REGION, buf, NULL, &infop->name);
 	}
 	if (ret != 0)
 		goto err;
@@ -90,8 +124,11 @@ loop:	renv = NULL;
 	 * it's actually a creation or not, and we'll have to fall-back to a
 	 * join if it's not a create.
 	 */
-	if (F_ISSET(env, ENV_PRIVATE) || DB_GLOBAL(j_region_map) != NULL)
+	if (F_ISSET(env, ENV_PRIVATE) || DB_GLOBAL(j_region_map) != NULL) {
+		DB_DEBUG_MSG(env, "env_attach: creating %s",
+		    F_ISSET(env, ENV_PRIVATE) ? "private" : "user map func");
 		goto creation;
+	}
 
 	/*
 	 * Try to create the file, if we have the authority.  We have to ensure
@@ -122,7 +159,11 @@ loop:	renv = NULL;
 	if ((ret = __os_open(
 	    env, infop->name, 0, DB_OSO_REGION, 0, &env->lockfhp)) != 0)
 		goto err;
-
+	/* Wait to get shared access to the primary region. */
+	if ((ret = ENV_PRIMARY_LOCK(env, DB_LOCK_READ, 0)) != 0) {
+		__db_err(env, ret, "__env_attach: existing: shared lock error");
+		goto err;
+	}
 	/*
 	 * !!!
 	 * The region may be in system memory not backed by the filesystem
@@ -179,14 +220,15 @@ loop:	renv = NULL;
 	 * something in the region file other than meta-data and that
 	 * shouldn't happen.
 	 */
-	if (size < sizeof(ref))
+	if (size < sizeof(ref)) {
+		DB_DEBUG_MSG(env, "region size %d is too small", (int)size);
 		goto retry;
-	else {
+	} else {
 
 		if (size == sizeof(ref))
 			F_SET(env, ENV_SYSTEM_MEM);
 		else if (F_ISSET(env, ENV_SYSTEM_MEM)) {
-			ret = EINVAL;
+			ret = USR_ERR(env, EINVAL);
 			__db_err(env, ret, DB_STR_A("1535",
 		    "%s: existing environment not created in system memory",
 			    "%s"), infop->name);
@@ -197,6 +239,7 @@ loop:	renv = NULL;
 			    nrw < (size_t)sizeof(rbuf) ||
 			    (ret = __os_seek(env,
 			    env->lockfhp, 0, 0, rbuf.region_off)) != 0) {
+				ret = USR_ERR(env, ret);
 				__db_err(env, ret, DB_STR_A("1536",
 				     "%s: unable to read region info", "%s"),
 				     infop->name);
@@ -207,7 +250,8 @@ loop:	renv = NULL;
 		if ((ret = __os_read(env, env->lockfhp, &ref,
 		    sizeof(ref), &nrw)) != 0 || nrw < (size_t)sizeof(ref)) {
 			if (ret == 0)
-				ret = EIO;
+				ret = USR_ERR(env, EIO);
+			(void)USR_ERR(env, ret);
 			__db_err(env, ret, DB_STR_A("1537",
 			    "%s: unable to read system-memory information",
 			    "%s"), infop->name);
@@ -218,11 +262,10 @@ loop:	renv = NULL;
 		segid = ref.segid;
 	}
 
-#ifndef HAVE_MUTEX_FCNTL
+#if !defined(HAVE_FCNTL)
 	/*
-	 * If we're not doing fcntl locking, we can close the file handle.  We
-	 * no longer need it and the less contact between the buffer cache and
-	 * the VM, the better.
+	 * Without fcntl-like support, we no longer need the file handle.  Close
+	 * it to limit interaction between the buffer cache and virtual memory.
 	 */
 	(void)__os_closehandle(env, env->lockfhp);
 	 env->lockfhp = NULL;
@@ -230,9 +273,14 @@ loop:	renv = NULL;
 
 	/* Call the region join routine to acquire the region. */
 	memset(&tregion, 0, sizeof(tregion));
+	tregion.type = REGION_TYPE_ENV;
 	tregion.size = (roff_t)size;
 	tregion.max = (roff_t)max;
 	tregion.segid = segid;
+	/*
+	 * Attach to the existing primary region.  The lockfhp for db.001 is
+	 * opened here, in __os_attach().
+	 */
 	if ((ret = __env_sys_attach(env, infop, &tregion)) != 0)
 		goto err;
 
@@ -246,10 +294,32 @@ user_map_functions:
 	infop->head = (u_int8_t *)infop->addr + sizeof(REGENV);
 	renv = infop->primary;
 
-	/*
-	 * Make sure the region matches our build.  Special case a region
-	 * that's all nul bytes, just treat it like any other corruption.
-	 */
+	ret = __env_check_recreate(env, renv, signature);
+
+	if (ret == DB_OLD_VERSION) {
+		if (create_ok && ENV_PRIMARY_LOCK(env, DB_LOCK_WRITE, 1) == 0) {
+			if (FLD_ISSET(dbenv->verbose, DB_VERB_RECOVERY))
+				__db_msg(env, "Recreating idle environment");
+			F_SET(infop, REGION_CREATE_OK);
+
+			/*
+			 * Detach from the environment region; we need to unmap
+			 * it (and close any file handle) so that we don't leak
+			 * memory or files.
+			 */
+			DB_ASSERT(env, infop->rp == NULL);
+			infop->rp = &tregion;
+			(void)__env_sys_detach(env, infop, 0);
+			goto creation;
+		}
+
+		/* We have an old environment but cannot rebuild it safely. */
+		__db_errx(env, DB_STR("1539",
+		    "Build signature doesn't match environment"));
+		ret = DB_VERSION_MISMATCH;
+		goto err;
+	}
+
 	if (renv->majver != DB_VERSION_MAJOR ||
 	    renv->minver != DB_VERSION_MINOR) {
 		if (renv->majver != 0 || renv->minver != 0) {
@@ -257,15 +327,15 @@ user_map_functions:
 	    "Program version %d.%d doesn't match environment version %d.%d",
 			    "%d %d %d %d"), DB_VERSION_MAJOR, DB_VERSION_MINOR,
 			    renv->majver, renv->minver);
-			ret = DB_VERSION_MISMATCH;
+			ret = USR_ERR(env, DB_VERSION_MISMATCH);
 		} else
-			ret = EINVAL;
+			ret = USR_ERR(env, EINVAL);
 		goto err;
 	}
 	if (renv->signature != signature) {
 		__db_errx(env, DB_STR("1539",
 		    "Build signature doesn't match environment"));
-		ret = DB_VERSION_MISMATCH;
+		ret = USR_ERR(env, DB_VERSION_MISMATCH);
 		goto err;
 	}
 
@@ -283,17 +353,21 @@ user_map_functions:
 	 * I'd rather play permissions games using the underlying file, but I
 	 * can't because Windows/NT filesystems won't open files mode 0.
 	 */
-	if (renv->panic && !F_ISSET(dbenv, DB_ENV_NOPANIC)) {
+	if (renv->envid == ENVID_PANIC && !F_ISSET(dbenv, DB_ENV_NOPANIC)) {
 		ret = __env_panic_msg(env);
 		goto err;
 	}
+	/*
+	 * A bad magic number means that the env is new and not yet available:
+	 * wait a while and try again.
+	 */
 	if (renv->magic != DB_REGION_MAGIC)
-		goto retry;
+		goto retry_bad_magic;
 
 	if (dbenv->blob_threshold != 0 &&
 	    renv->blob_threshold != dbenv->blob_threshold)
 		__db_msg(env, DB_STR("1591",
-"Warning: Ignoring blob_threshold size when joining environment"));
+"Warning: Ignoring ext_file_threshold size when joining environment"));
 
 	/*
 	 * Get a reference to the underlying REGION information for this
@@ -322,6 +396,12 @@ user_map_functions:
 	 */
 	if (DB_GLOBAL(j_region_map) == NULL && rp->size != size)
 		goto retry;
+	/*
+	 * A bad magic number means that the env is new and not yet available:
+	 * wait a while and try again.
+	 */
+	if (renv->magic != DB_REGION_MAGIC)
+		goto retry_bad_magic;
 
 	/*
 	 * Check our callers configuration flags, it's an error to configure
@@ -334,7 +414,7 @@ user_map_functions:
 		if (*init_flagsp != 0) {
 			__db_errx(env, DB_STR("1540",
     "configured environment flags incompatible with existing environment"));
-			ret = EINVAL;
+			ret = USR_ERR(env, EINVAL);
 			goto err;
 		}
 		*init_flagsp = renv->init_flags;
@@ -347,10 +427,17 @@ user_map_functions:
 	(void)__env_faultmem(env, infop->primary, rp->size, 0);
 
 	/* Everything looks good, we're done. */
+	env->envid = renv->envid;
 	env->reginfo = infop;
 	return (0);
 
 creation:
+	/* Should this wait for the lock (passing 0 instead of 1)? */
+	if ((ret = ENV_PRIMARY_LOCK(env, DB_LOCK_WRITE, 1)) != 0) {
+		__db_err(env, ret, "__env_attach: creation could not lock %s",
+		    env->lockfhp->name);
+		goto err;
+	}
 	/* Create the environment region. */
 	F_SET(infop, REGION_CREATE);
 
@@ -361,8 +448,6 @@ creation:
 	nregions = __memp_max_regions(env) + 5;
 	size = nregions * sizeof(REGION);
 	size += dbenv->passwd_len;
-	size += (dbenv->thr_max + dbenv->thr_max / 4) *
-	    __env_alloc_size(sizeof(DB_THREAD_INFO));
 	/* Space for replication buffer. */
 	if (init_flagsp != NULL && FLD_ISSET(*init_flagsp, DB_INITENV_REP))
 		size += MEGABYTE;
@@ -370,12 +455,17 @@ creation:
 	size += __log_region_size(env);
 	size += __env_thread_size(env, size);
 	size += __lock_region_size(env, size);
+	size += __rep_object_size(env);
 
 	tregion.size = (roff_t)size;
 	tregion.segid = INVALID_REGION_SEGID;
 
 	if ((tregion.max = dbenv->memory_max) == 0) {
-		/* Add some slop. */
+		/*
+		 * No maximum memory limit was given. Calculate how large the
+		 * main region could become if all of the explicit configuration
+		 * limits for lock, txn, log, thread are hit, plus some spare.
+		 */
 		size += 16 * 1024;
 		tregion.max = (roff_t)size;
 
@@ -383,11 +473,12 @@ creation:
 		tregion.max += (roff_t)__txn_region_max(env);
 		tregion.max += (roff_t)__log_region_max(env);
 		tregion.max += (roff_t)__env_thread_max(env);
+		tregion.max += (roff_t)__rep_object_max(env);
 	} else if (tregion.size > tregion.max) {
+		ret = USR_ERR(env, EINVAL);
 		__db_errx(env, DB_STR_A("1542",
 	"Minimum environment memory size %ld is bigger than spcified max %ld.",
 		    "%ld %ld"), (u_long)tregion.size, (u_long)tregion.max);
-		ret = EINVAL;
 		goto err;
 	} else if (F_ISSET(env, ENV_PRIVATE))
 		infop->max_alloc = dbenv->memory_max;
@@ -435,16 +526,20 @@ creation:
 	 */
 	renv = infop->primary;
 	renv->magic = 0;
-	renv->panic = 0;
 
 	(void)db_version(&majver, &minver, &patchver);
 	renv->majver = (u_int32_t)majver;
 	renv->minver = (u_int32_t)minver;
 	renv->patchver = (u_int32_t)patchver;
 	renv->signature = signature;
-
+	renv->failure_panic = 0;
+	renv->failure_symptom[0] = '\0';
 	(void)time(&renv->timestamp);
-	__os_unique_id(env, &renv->envid);
+
+	/* Get an envid that isn't one of the reserved envid values. */
+	do {
+		__os_unique_id(env, &renv->envid);
+	} while (renv->envid == ENVID_UNKNOWN || renv->envid == ENVID_PANIC);
 
 	/*
 	 * Initialize init_flags to store the flags that any other environment
@@ -453,6 +548,10 @@ creation:
 	renv->init_flags = (init_flagsp == NULL) ? 0 : *init_flagsp;
 
 	renv->blob_threshold = dbenv->blob_threshold;
+
+	renv->initdatabases = dbenv->db_init_databases;
+	renv->initdblen = dbenv->db_init_db_len;
+	renv->initextfiledbs = dbenv->db_init_extfile_dbs;
 
 	/*
 	 * Set up the region array.  We use an array rather than a linked list
@@ -483,10 +582,10 @@ creation:
 	 * the REGION structure.
 	 */
 	if ((ret = __env_des_get(env, infop, infop, &rp)) != 0) {
-find_err:	__db_errx(env, DB_STR_A("1544",
+find_err:	if (ret == 0)
+			ret = USR_ERR(env, EINVAL);
+		__db_errx(env, DB_STR_A("1544",
 		    "%s: unable to find environment", "%s"), infop->name);
-		if (ret == 0)
-			ret = EINVAL;
 		goto err;
 	}
 	infop->rp = rp;
@@ -501,7 +600,7 @@ find_err:	__db_errx(env, DB_STR_A("1544",
 	 * attach to the shared memory segment.  So, we write the shared memory
 	 * identifier into the file, to be read by those other processes.
 	 *
-	 * XXX
+	 * !!!
 	 * This is really OS-layer information, but I can't see any easy way
 	 * to move it down there without passing down information that it has
 	 * no right to know, e.g., that this is the one-and-only REGENV region
@@ -520,24 +619,58 @@ find_err:	__db_errx(env, DB_STR_A("1544",
 		}
 	}
 
-#ifndef HAVE_MUTEX_FCNTL
+#ifdef HAVE_FCNTL
 	/*
-	 * If we're not doing fcntl locking, we can close the file handle.  We
-	 * no longer need it and the less contact between the buffer cache and
-	 * the VM, the better.
+	 * Downgrade to a shared lock on the primary region file.  Save the
+	 * envid in order to detect whether another process has recreated the
+	 * environment while we were waiting for the shared lock.
+	 */
+	i = renv->envid;
+	if ((ret = ENV_PRIMARY_UNLOCK(env)) != 0) {
+		__db_err(env, ret, "__env_attach: release exclusive lock");
+		goto err;
+	}
+	if ((ret = ENV_PRIMARY_LOCK(env, DB_LOCK_READ, 0)) != 0) {
+		__db_err(env, ret, "__env_attach: new: acquire shared lock");
+		goto err;
+	}
+	/* If it was recreated by someone else, close & try again. */
+	if (i != renv->envid) {
+		retry_cnt = 0;
+		goto retry;
+	}
+#else
+	/*
+	 * Without fcntl-like support, we no longer need the file handle.  Close
+	 * it to limit interaction between the buffer cache and virtual memory.
 	 */
 	if (env->lockfhp != NULL) {
-		 (void)__os_closehandle(env, env->lockfhp);
-		 env->lockfhp = NULL;
+		(void)__os_closehandle(env, env->lockfhp);
+		env->lockfhp = NULL;
 	}
 #endif
 
 	/* Everything looks good, we're done. */
+	env->envid = renv->envid;
 	env->reginfo = infop;
 	return (0);
 
+retry_bad_magic:
+	/*
+	 * If the magic number says recovery is in process, remember the env
+	 * creation time to record that recovery was the reason that the
+	 * open failed.
+	 */
+	if (renv->magic == DB_REGION_MAGIC_RECOVER)
+		create_time = renv->timestamp;
+	else {
+		DB_DEBUG_MSG(env, "attach sees bad region magic 0x%lx",
+		    (u_long)renv->magic);
+		create_time = 0;
+	}
+
+retry:
 err:
-retry:	/* Close any open file handle. */
 	if (env->lockfhp != NULL) {
 		(void)__os_closehandle(env, env->lockfhp);
 		env->lockfhp = NULL;
@@ -566,12 +699,17 @@ retry:	/* Close any open file handle. */
 		__os_free(env, infop->name);
 	__os_free(env, infop);
 
-	/* If we had a temporary error, wait awhile and try again. */
+	/* If we had a temporary error, wait a few seconds and try again. */
 	if (ret == 0) {
 		if (!retry_ok || ++retry_cnt > 3) {
-			__db_errx(env, DB_STR("1546",
-			    "unable to join the environment"));
-			ret = EAGAIN;
+			ret = USR_ERR(env, EAGAIN);
+			if (create_time != 0)
+				__db_errx(env,
+	"Recovery is still running on the newly created (%.24s) environment",
+				    __os_ctime(&create_time, datebuf));
+			else
+				__db_errx(env, DB_STR("1546",
+				    "unable to join the environment"));
 		} else {
 			__os_yield(env, retry_cnt * 3, 0);
 			goto loop;
@@ -579,6 +717,43 @@ retry:	/* Close any open file handle. */
 	}
 
 	return (ret);
+}
+
+/*
+ * __env_check_recreate --
+ *	Determine whether an existing on-disk environment should be recreated
+ *	because it is not compatible with this compiled BDB library.
+ *
+ *	Returns:
+ *	    0 -
+ *		The env was generated by this library. No recreation needed.
+ *	    DB_OLD_VERSION -
+ *		It was created by an earlier BDB version, or by an earlier
+ *		version of libpthreads (on certain Linux systems).  The caller
+ *		will try to recreate it with the currently configured settings.
+ *	    DB_VERSION_MISMATCH -
+ *		It was created by a newer version of BDB.  Do not attempt to
+ *		fix it, something is probably wrong with the application setup.
+ */
+static int
+__env_check_recreate(env, renv, signature)
+	ENV	*env;
+	REGENV	*renv;
+	u_int32_t signature;
+{
+	/* First, bail out if the env is newer than this code can handle. */
+	if (renv->majver > DB_VERSION_MAJOR ||
+	    (renv->majver == DB_VERSION_MAJOR &&
+	    renv->minver > DB_VERSION_MINOR))
+		return (USR_ERR(env, DB_VERSION_MISMATCH));
+
+	if (renv->signature != signature || renv->majver != DB_VERSION_MAJOR ||
+	    renv->minver != DB_VERSION_MINOR) {
+		if (FLD_ISSET(env->dbenv->verbose, DB_VERB_RECOVERY))
+			__db_msg(env, "Signature or version changed");
+		return (USR_ERR(env, DB_OLD_VERSION));
+	}
+	return (0);
 }
 
 /*
@@ -653,10 +828,11 @@ __env_turn_off(env, flags)
 	 * any thread of control attempting to connect (or racing with us) will
 	 * back off and retry, or just die.
 	 */
-	if (renv->refcnt > 0 && !LF_ISSET(DB_FORCE) && !renv->panic)
-		ret = EBUSY;
+	if (renv->refcnt > 0 && !LF_ISSET(DB_FORCE) &&
+	    (renv->envid == env->envid && env->envid != ENVID_UNKNOWN))
+		ret = USR_ERR(env, EBUSY);
 	else
-		renv->panic = 1;
+		renv->envid = ENVID_PANIC;
 
 	/*
 	 * Unlock the environment (nobody should need this lock because
@@ -673,6 +849,10 @@ __env_turn_off(env, flags)
 /*
  * __env_panic_set --
  *	Set/clear unrecoverable error.
+ *	A panic is announced by changing the environment id stored in the
+ *	primary region (REGENV). A normal panic sets it to zero.  A re-created
+ *	environment gets a new non-zero envid in the REGENV, which triggers the
+ *	panic check in any previously attached handles.
  *
  * PUBLIC: void __env_panic_set __P((ENV *, int));
  */
@@ -681,8 +861,25 @@ __env_panic_set(env, on)
 	ENV *env;
 	int on;
 {
-	if (env != NULL && env->reginfo != NULL)
-		((REGENV *)env->reginfo->primary)->panic = on ? 1 : 0;
+	REGENV *renv;
+
+	if (env != NULL && env->reginfo != NULL) {
+		/*
+		 * Remember it in the process' env as well, so that the
+		 * panic-ness is still known on exit from the final close.
+		 */
+		renv = env->reginfo->primary;
+		if (on) {
+			F_SET(env, ENV_REMEMBER_PANIC);
+			if (F_ISSET(env->dbenv, DB_ENV_FAILCHK))
+				renv->failure_panic = 1;
+			renv->envid = ENVID_PANIC;
+		}
+		else {
+			F_CLR(env, ENV_REMEMBER_PANIC);
+			renv->envid = env->envid;
+		}
+	}
 }
 
 /*
@@ -740,7 +937,6 @@ __env_ref_decrement(env)
 
 	/* Even if we have an environment, may not have reference counted it. */
 	if (F_ISSET(env, ENV_REF_COUNTED)) {
-		/* Lock the environment, decrement the reference, unlock. */
 		MUTEX_LOCK(env, renv->mtx_regenv);
 		if (renv->refcnt == 0)
 			__db_errx(env, DB_STR("1547",
@@ -782,6 +978,31 @@ __env_ref_get(dbenv, countp)
 }
 
 /*
+ * __env_region_cleanup --
+ *	Detach from any regions, e.g., when closing after a panic.
+ *
+ * PUBLIC: int __env_region_cleanup __P((ENV *));
+ */
+int
+__env_region_cleanup(env)
+	ENV *env;
+{
+	if (env->reginfo != NULL) {
+#ifdef HAVE_MUTEX_SUPPORT
+		(void)__lock_region_detach(env, env->lk_handle);
+		(void)__mutex_region_detach(env, env->mutex_handle);
+#endif
+		(void)__log_region_detach(env, env->lg_handle);
+		(void)__memp_region_detach(env, env->mp_handle);
+		(void)__txn_region_detach(env, env->tx_handle);
+		(void)__env_detach(env, 0);
+		/* Remember the panic state after detaching. */
+		F_SET(env, ENV_REMEMBER_PANIC);
+	}
+	return (0);
+}
+
+/*
  * __env_detach --
  *	Detach from the environment.
  *
@@ -803,9 +1024,7 @@ __env_detach(env, destroy)
 
 	/* Close the locking file handle. */
 	if (env->lockfhp != NULL) {
-		if ((t_ret =
-		    __os_closehandle(env, env->lockfhp)) != 0 && ret == 0)
-			ret = t_ret;
+		ret = __os_closehandle(env, env->lockfhp);
 		env->lockfhp = NULL;
 	}
 
@@ -892,9 +1111,10 @@ __env_remove_env(env)
 	renv = infop->primary;
 
 	/*
-	 * Kill the environment, if it's not already dead.
+	 * Kill the environment, if it's not already dead.  Set both to the same
+	 * value so PANIC_CHECK does not fire while unlinking the region files.
 	 */
-	renv->panic = 1;
+	env->envid = renv->envid = ENVID_PANIC;
 
 	/*
 	 * Walk the array of regions.  Connect to each region and disconnect
@@ -965,10 +1185,10 @@ __env_remove_file(env)
 	const char *dir;
 	char saved_char, *p, **names, *path, buf[sizeof(DB_REGION_FMT) + 20];
 
-	/* Get the full path of a file in the environment. */
+	/* Get the full path of a region file in the environment. */
 	(void)snprintf(buf, sizeof(buf), "%s", DB_REGION_ENV);
 	if ((ret = __db_appname(env,
-	    DB_APP_NONE, buf, NULL, &path)) != 0)
+	    DB_APP_REGION, buf, NULL, &path)) != 0)
 		return;
 
 	/* Get the parent directory for the environment. */
@@ -1028,7 +1248,7 @@ __env_remove_file(env)
 
 		/* Remove the file. */
 		if (__db_appname(env,
-		    DB_APP_NONE, names[cnt], NULL, &path) == 0) {
+		    DB_APP_REGION, names[cnt], NULL, &path) == 0) {
 			/*
 			 * Overwrite region files.  Temporary files would have
 			 * been maintained in encrypted format, so there's no
@@ -1045,7 +1265,7 @@ __env_remove_file(env)
 
 	if (lastrm != -1)
 		if (__db_appname(env,
-		    DB_APP_NONE, names[lastrm], NULL, &path) == 0) {
+		    DB_APP_REGION, names[lastrm], NULL, &path) == 0) {
 			(void)__os_unlink(env, path, 1);
 			__os_free(env, path);
 		}
@@ -1092,7 +1312,7 @@ __env_region_attach(env, infop, init, max)
 	/* Join/create the underlying region. */
 	(void)snprintf(buf, sizeof(buf), DB_REGION_FMT, infop->id);
 	if ((ret = __db_appname(env,
-	    DB_APP_NONE, buf, NULL, &infop->name)) != 0)
+	    DB_APP_REGION, buf, NULL, &infop->name)) != 0)
 		goto err;
 	if ((ret = __env_sys_attach(env, infop, rp)) != 0)
 		goto err;
@@ -1256,13 +1476,13 @@ __env_sys_attach(env, infop, rp)
 		__db_errx(env, DB_STR_A("1548",
 		    "region size %lu is too large; maximum is %lu", "%lu %lu"),
 		    (u_long)rp->size, (u_long)DB_REGIONSIZE_MAX);
-		return (EINVAL);
+		return (USR_ERR(env, EINVAL));
 	}
 	if (rp->max > DB_REGIONSIZE_MAX) {
 		__db_errx(env, DB_STR_A("1549",
 		    "region max %lu is too large; maximum is %lu", "%lu %lu"),
 		    (u_long)rp->max, (u_long)DB_REGIONSIZE_MAX);
-		return (EINVAL);
+		return (USR_ERR(env, EINVAL));
 	}
 #endif
 
@@ -1288,7 +1508,7 @@ __env_sys_attach(env, infop, rp)
 "architecture does not support locks inside process-local (malloc) memory"));
 			__db_errx(env, DB_STR("1551",
 	    "application may not specify both DB_PRIVATE and DB_THREAD"));
-			return (EINVAL);
+			return (USR_ERR(env, EINVAL));
 		}
 #endif
 		if ((ret = __os_malloc(
@@ -1317,7 +1537,7 @@ __env_sys_attach(env, infop, rp)
 		    "region memory was not correctly aligned"));
 		(void)__env_sys_detach(env, infop,
 		    F_ISSET(infop, REGION_CREATE));
-		return (EINVAL);
+		return (USR_ERR(env, EINVAL));
 	}
 
 	return (0);
@@ -1409,7 +1629,7 @@ __env_des_get(env, env_infop, infop, rpp)
 	 * the region, fail.  The caller generates any error message.
 	 */
 	if (!F_ISSET(infop, REGION_CREATE_OK))
-		return (ENOENT);
+		return (USR_ERR(env, ENOENT));
 
 	/*
 	 * If we didn't find a region and don't have room to create the region
@@ -1418,7 +1638,7 @@ __env_des_get(env, env_infop, infop, rpp)
 	if (empty_slot == NULL) {
 		__db_errx(env, DB_STR("1553",
 		    "no room remaining for additional REGIONs"));
-		return (ENOENT);
+		return (USR_ERR(env, ENOENT));
 	}
 
 	/*

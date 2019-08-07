@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2000, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2000, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -281,7 +281,7 @@ __dbc_cmp(dbc, other_dbc, result)
 
 	/* Both cursors must be on valid positions. */
 	if (dbc_int->pgno == PGNO_INVALID || odbc_int->pgno == PGNO_INVALID) {
-		__db_errx(env, DB_STR("0693",
+		__db_errx(env, DB_STR("0692",
 "Both cursors must be initialized before calling DBC->cmp."));
 		return (EINVAL);
 	}
@@ -540,7 +540,7 @@ __dbc_db_stream(dbc, dbsp, flags)
 	u_int32_t oflags;
 
 	env = dbc->env;
-	oflags = flags;
+	oflags = 0;
 
 	if ((ret = __db_fchk(
 	    env, "DBC->db_stream", flags,
@@ -549,23 +549,23 @@ __dbc_db_stream(dbc, dbsp, flags)
 
 	if (DB_IS_READONLY(dbc->dbp)) {
 		LF_SET(DB_STREAM_READ);
-		oflags |= DB_STREAM_READ;
+		oflags |= DB_FOP_READONLY;
 	}
 	if (LF_ISSET(DB_STREAM_READ) && LF_ISSET(DB_STREAM_WRITE)) {
-		ret = EINVAL;
+		ret = USR_ERR(env, EINVAL);
 		__db_errx(env, DB_STR("0750",
 	    "Error, cannot set both DB_STREAM_WRITE and DB_STREAM_READ."));
 		goto err;
 	}
 
-	if (oflags & DB_STREAM_READ)
-		LF_SET(DB_FOP_READONLY);
+	if (flags & DB_STREAM_READ)
+		oflags |= DB_FOP_READONLY;
 	else
-		LF_SET(DB_FOP_WRITE);
-	if (oflags & DB_STREAM_SYNC_WRITE)
-		LF_SET(DB_FOP_SYNC_WRITE);
+		oflags |= DB_FOP_WRITE;
+	if (flags & DB_STREAM_SYNC_WRITE)
+		oflags |= DB_FOP_SYNC_WRITE;
 
-	ret = __db_stream_init(dbc, dbsp, flags);
+	ret = __db_stream_init(dbc, dbsp, oflags);
 
 err:	return (ret);
 }
@@ -576,15 +576,14 @@ err:	return (ret);
  * Returns the blob id stored in the data record to which the cursor currently
  * points.  Returns EINVAL if the cursor does not point to a blob record.
  *
- * PUBLIC: int __dbc_get_blob_id __P((DBC *, uintmax_t *));
+ * PUBLIC: int __dbc_get_blob_id __P((DBC *, db_seq_t *));
  */
 int
 __dbc_get_blob_id(dbc, blob_id)
 	DBC *dbc;
-	uintmax_t *blob_id;
+	db_seq_t *blob_id;
 {
 	DBT key, data;
-	ENV *env;
 	BBLOB bl;
 	HBLOB hbl;
 	HEAPBLOBHDR bhdr;
@@ -595,7 +594,6 @@ __dbc_get_blob_id(dbc, blob_id)
 		return (EINVAL);
 	}
 
-	env = dbc->env;
 	ret = 0;
 	memset(&key, 0, sizeof(DBT));
 	memset(&data, 0, sizeof(DBT));
@@ -614,42 +612,42 @@ __dbc_get_blob_id(dbc, blob_id)
 	switch (dbc->dbtype) {
 	case DB_BTREE:
 		if (data.size != BBLOB_SIZE) {
-			ret = EINVAL;
+			ret = USR_ERR(dbc->env, EINVAL);
 			goto err;
 		}
 		memcpy(&bl, data.data, BBLOB_SIZE);
 		if (B_TYPE(bl.type) != B_BLOB) {
-			ret = EINVAL;
+			ret = USR_ERR(dbc->env, EINVAL);
 			goto err;
 		}
-		GET_BLOB_ID(env, bl, *blob_id, ret);
+		*blob_id = (db_seq_t)bl.id;
 		break;
 	case DB_HEAP:
 		if (data.size != HEAPBLOBREC_SIZE) {
-			ret = EINVAL;
+			ret = USR_ERR(dbc->env, EINVAL);
 			goto err;
 		}
 		memcpy(&bhdr, data.data, HEAPBLOBREC_SIZE);
 		if (!F_ISSET(&bhdr.std_hdr, HEAP_RECBLOB)) {
-			ret = EINVAL;
+			ret = USR_ERR(dbc->env, EINVAL);
 			goto err;
 		}
-		GET_BLOB_ID(env, bhdr, *blob_id, ret);
+		*blob_id = (db_seq_t)bhdr.id;
 		break;
 	case DB_HASH:
 		if (data.size != HBLOB_SIZE) {
-			ret = EINVAL;
+			ret = USR_ERR(dbc->env, EINVAL);
 			goto err;
 		}
 		memcpy(&hbl, data.data, HBLOB_SIZE);
 		if (HPAGE_PTYPE(&hbl) != H_BLOB) {
-			ret = EINVAL;
+			ret = USR_ERR(dbc->env, EINVAL);
 			goto err;
 		}
-		GET_BLOB_ID(env, hbl, *blob_id, ret);
+		*blob_id = (db_seq_t)hbl.id;
 		break;
 	default:
-		ret = EINVAL;
+		ret = USR_ERR(dbc->env, EINVAL);
 		goto err;
 	}
 
@@ -701,42 +699,42 @@ __dbc_get_blob_size(dbc, size)
 	switch (dbc->dbtype) {
 	case DB_BTREE:
 		if (data.size != BBLOB_SIZE) {
-			ret = EINVAL;
+			ret = USR_ERR(dbc->env, EINVAL);
 			goto err;
 		}
 		memcpy(&bl, data.data, BBLOB_SIZE);
 		if (B_TYPE(bl.type) != B_BLOB) {
-			ret = EINVAL;
+			ret = USR_ERR(dbc->env, EINVAL);
 			goto err;
 		}
 		GET_BLOB_SIZE(env, bl, *size, ret);
 		break;
 	case DB_HEAP:
 		if (data.size != HEAPBLOBREC_SIZE) {
-			ret = EINVAL;
+			ret = USR_ERR(dbc->env, EINVAL);
 			goto err;
 		}
 		memcpy(&bhdr, data.data, HEAPBLOBREC_SIZE);
 		if (!F_ISSET(&bhdr.std_hdr, HEAP_RECBLOB)) {
-			ret = EINVAL;
+			ret = USR_ERR(dbc->env, EINVAL);
 			goto err;
 		}
 		GET_BLOB_SIZE(env, bhdr, *size, ret);
 		break;
 	case DB_HASH:
 		if (data.size != HBLOB_SIZE) {
-			ret = EINVAL;
+			ret = USR_ERR(dbc->env, EINVAL);
 			goto err;
 		}
 		memcpy(&hbl, data.data, HBLOB_SIZE);
 		if (HPAGE_PTYPE(&hbl) != H_BLOB) {
-			ret = EINVAL;
+			ret = USR_ERR(dbc->env, EINVAL);
 			goto err;
 		}
 		GET_BLOB_SIZE(env, hbl, *size, ret);
 		break;
 	default:
-		ret = EINVAL;
+		ret = USR_ERR(dbc->env, EINVAL);
 		goto err;
 	}
 
@@ -788,7 +786,7 @@ __dbc_set_blob_size(dbc, size)
 		bl = (BBLOB *)data.data;
 		if (bl == NULL ||
 		    B_TYPE(bl->type) != B_BLOB || data.size != BBLOB_SIZE) {
-			ret = EINVAL;
+			ret = USR_ERR(dbc->env, EINVAL);
 			goto err;
 		}
 		SET_BLOB_SIZE(bl, size, BBLOB);
@@ -798,7 +796,7 @@ __dbc_set_blob_size(dbc, size)
 		if (bhdr == NULL ||
 		    !F_ISSET(&bhdr->std_hdr, HEAP_RECBLOB) ||
 		    data.size != HEAPBLOBREC_SIZE) {
-			ret = EINVAL;
+			ret = USR_ERR(dbc->env, EINVAL);
 			goto err;
 		}
 		SET_BLOB_SIZE(bhdr, size, HEAPBLOBHDR);
@@ -807,13 +805,13 @@ __dbc_set_blob_size(dbc, size)
 		hbl = data.data;
 		if (hbl == NULL ||
 		    HPAGE_PTYPE(hbl) != H_BLOB || data.size != HBLOB_SIZE) {
-			ret = EINVAL;
+			ret = USR_ERR(dbc->env, EINVAL);
 			goto err;
 		}
 		SET_BLOB_SIZE((HBLOB *)hbl, size, HBLOB);
 		break;
 	default:
-		ret = EINVAL;
+		ret = USR_ERR(dbc->env, EINVAL);
 		goto err;
 	}
 
@@ -1114,6 +1112,7 @@ __dbc_iget(dbc, key, data, flags)
 
 	COMPQUIET(orig_ulen, 0);
 
+	dbc->cur_key = key;
 	key_small = 0;
 
 	/*
@@ -1166,7 +1165,7 @@ __dbc_iget(dbc, key, data, flags)
 	if (!DB_RETURNS_A_KEY(dbp, flags))
 		F_SET(key, DB_DBT_ISSET);
 	if (flags == DB_GET_BOTH &&
-	    (dbp->dup_compare == NULL || dbp->dup_compare == __bam_defcmp))
+	    (dbp->dup_compare == NULL || dbp->dup_compare == __dbt_defcmp))
 		F_SET(data, DB_DBT_ISSET);
 
 	/*
@@ -1178,7 +1177,11 @@ __dbc_iget(dbc, key, data, flags)
 	 * we acquire a write lock in the primary tree and no locks in the
 	 * off-page dup tree.  If the DB_RMW flag was specified and the get
 	 * operation is done in an off-page duplicate tree, call the primary
-	 * cursor's upgrade routine first.
+	 * cursor's upgrade routine first.  We fetch the primary tree's data
+	 * page to follow the buffer latching order rules for btrees: latch from
+	 * the top of the main tree down, even when also searching OPD trees.
+	 * Deadlocks could otherwise occur if we need to fetch the main page
+	 * while an OPD page is latched. [#22532]
 	 */
 	cp = dbc->internal;
 	if (cp->opd != NULL &&
@@ -1187,6 +1190,10 @@ __dbc_iget(dbc, key, data, flags)
 	    flags == DB_PREV || flags == DB_PREV_DUP)) {
 		if (tmp_rmw && (ret = dbc->am_writelock(dbc)) != 0)
 			goto err;
+		if (cp->page == NULL && (ret = __memp_fget(mpf, &cp->pgno,
+		    dbc->thread_info, dbc->txn, 0, &cp->page)) != 0)
+			goto err;
+
 		if (F_ISSET(dbc, DBC_TRANSIENT))
 			opd = cp->opd;
 		else if ((ret = __dbc_idup(cp->opd, &opd, DB_POSITION)) != 0)
@@ -1360,7 +1367,7 @@ done:	/*
 	 * valid.  Fill it in as necessary.  We don't have to worry about any
 	 * locks, the cursor must already be holding appropriate locks.
 	 *
-	 * XXX
+	 * !!!
 	 * If not a Btree and DB_SET_RANGE is set, we shouldn't return a key
 	 * either, should we?
 	 */
@@ -1507,15 +1514,11 @@ __dbc_put_resolve_key(dbc, oldkey, olddata, put_statep, flags)
 	DBT *oldkey, *olddata;
 	u_int32_t flags, *put_statep;
 {
-	DB *dbp;
-	ENV *env;
 	int ret, rmw;
 
-	dbp = dbc->dbp;
-	env = dbp->env;
 	rmw = FLD_ISSET(*put_statep, DBC_PUT_RMW) ? DB_RMW : 0;
 
-	DB_ASSERT(env, flags == DB_CURRENT);
+	DB_ASSERT(dbc->env, flags == DB_CURRENT);
 	COMPQUIET(flags, 0);
 
 	/*
@@ -1646,11 +1649,9 @@ __dbc_put_partial(dbc, pkey, data, orig_data, out_data, put_statep, flags)
 {
 	DB *dbp;
 	DBC *pdbc;
-	ENV *env;
 	int ret, rmw, t_ret;
 
 	dbp = dbc->dbp;
-	env = dbp->env;
 	ret = t_ret = 0;
 	rmw = FLD_ISSET(*put_statep, DBC_PUT_RMW) ? DB_RMW : 0;
 
@@ -1668,7 +1669,7 @@ __dbc_put_partial(dbc, pkey, data, orig_data, out_data, put_statep, flags)
 		 * When doing a put with DB_CURRENT, partial data items have
 		 * already been resolved.
 		 */
-		DB_ASSERT(env, flags != DB_CURRENT);
+		DB_ASSERT(dbp->env, flags != DB_CURRENT);
 
 		F_SET(pkey, DB_DBT_ISSET);
 		ret = __dbc_get(pdbc, pkey, orig_data, rmw | DB_SET);
@@ -1978,7 +1979,7 @@ __dbc_put_secondaries(dbc,
 				ret = __dbc_get(sdbc,
 				    tskeyp, &oldpkey, rmw | DB_SET);
 				if (ret == 0) {
-					cmp = __bam_defcmp(sdbp,
+					cmp = __dbt_defcmp(sdbp,
 					    &oldpkey, pkey, NULL);
 					__os_ufree(env, oldpkey.data);
 					/*
@@ -1989,10 +1990,10 @@ __dbc_put_secondaries(dbc,
 					if (cmp == 0)
 						continue;
 
+					ret = USR_ERR(env, EINVAL);
 					__db_errx(env, DB_STR("0695",
 			    "Put results in a non-unique secondary key in an "
 			    "index not configured to support duplicates"));
-					ret = EINVAL;
 				}
 				if (ret != DB_NOTFOUND && ret != DB_KEYEMPTY)
 					break;
@@ -2187,7 +2188,7 @@ __dbc_put_primary(dbc, key, data, flags)
 		olddata.flags = DB_DBT_PARTIAL | DB_DBT_USERMEM;
 		ret = __dbc_get(dbc, key, &olddata, DB_SET);
 		if (ret == 0) {
-			ret = DB_KEYEXIST;
+			ret = DBC_ERR(dbc, DB_KEYEXIST);
 			goto done;
 		} else if (ret != DB_NOTFOUND && ret != DB_KEYEMPTY)
 			goto err;
@@ -2281,8 +2282,6 @@ err:
 	if (olddata.data != NULL)
 		__os_ufree(env, olddata.data);
 
-	CDB_LOCKING_DONE(env, dbc);
-
 	if (sdbp != NULL &&
 	    (t_ret = __db_s_done(sdbp, dbc->txn)) != 0 && ret == 0)
 		ret = t_ret;
@@ -2351,21 +2350,25 @@ __dbc_put(dbc, key, data, flags)
 	 */
 	if (DB_IS_PRIMARY(dbp) &&
 	    ((ret = __dbc_put_primary(dbc, key, data, flags)) != 0))
-		return (ret);
+		goto done;
 
 	/*
 	 * If this is an append operation, the insert was done prior to the
 	 * secondary updates, so we are finished.
 	 */
 	if (flags == DB_APPEND)
-		return (ret);
+		goto done;
 
 #ifdef HAVE_COMPRESSION
 	if (DB_IS_COMPRESSED(dbp))
-		return (__bamc_compress_put(dbc, key, data, flags));
+		ret = __bamc_compress_put(dbc, key, data, flags);
+	else
 #endif
+		ret = __dbc_iput(dbc, key, data, flags);
 
-	return (__dbc_iput(dbc, key, data, flags));
+done:	CDB_LOCKING_DONE(dbc->env, dbc);
+
+	return (ret);
 }
 
 /*
@@ -2419,7 +2422,7 @@ __dbc_iput(dbc, key, data, flags)
 		if (dbc->dbtype == DB_HASH && F_ISSET(
 		    ((BTREE_CURSOR *)(dbc->internal->opd->internal)),
 		    C_DELETED)) {
-			ret = DB_NOTFOUND;
+			ret = DBC_ERR(dbc, DB_NOTFOUND);
 			goto err;
 		}
 
@@ -3823,5 +3826,36 @@ __db_check_skeyset(sdbp, skeyp)
 			DB_ASSERT(env,
 			    ((BTREE *)sdbp->bt_internal)->bt_compare(sdbp,
 			    key1, key2, NULL) != 0);
+}
+#endif
+
+#ifdef HAVE_ERROR_HISTORY
+/*
+ * __dbc_diags
+ *	Save the context which triggers the "first notice" of an error code;
+ *	i.e., its creation. It doesn't touch anything when err == 0.
+ *
+ * PUBLIC: int __dbc_diags __P((DBC *, int));
+ */
+ int
+ __dbc_diags(dbc, err)
+	DBC *dbc;
+	int err;
+{
+	DB_MSGBUF *mb;
+
+	if (err != 0 && dbc->env != NULL &&
+	    (mb = __db_deferred_get()) != NULL) {
+		(void)__db_remember_context(dbc->env, mb, err);
+#ifdef HAVE_SLICES
+		if (dbc->env->slice_container != NULL)
+			__db_msgadd(dbc->env, mb, "slice %d: ",
+			    dbc->env->slice_index);
+#endif
+		__db_msgadd(dbc->env, mb, "DB: %s:%s\n" ,
+			dbc->dbp->fname == NULL ? "in-mem" : dbc->dbp->fname,
+			dbc->dbp->dname == NULL ? "" : dbc->dbp->fname);
+	}
+	return (err);
 }
 #endif

@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2001, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2001, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -323,6 +323,14 @@ __rep_print_stats(env, flags)
 	    "Not waiting for any missed pages" :
 	    "Page number of first page we have after missed pages";
 	__db_msg(env, "%lu\t%s", (u_long)sp->st_waiting_pg, p);
+	__db_dl(env, "Number of duplicate external file data messages received",
+	    (u_long)sp->st_ext_duplicated);
+	__db_dl(env, "Number of external file data messages written to disk",
+	    (u_long)sp->st_ext_records);
+	__db_dl(env, "Number of external file data messages re-requested",
+	    (u_long)sp->st_ext_rereq);
+	__db_dl(env, "Number of external file update messages re-requested",
+	    (u_long)sp->st_ext_update_rereq);
 	__db_dl(env,
      "Number of duplicate master conditions originally detected at this site",
 	    (u_long)sp->st_dupmasters);
@@ -472,39 +480,49 @@ __rep_print_all(env, flags)
 	u_int32_t flags;
 {
 	static const FN rep_cfn[] = {
-		{ REP_C_2SITE_STRICT,	"REP_C_2SITE_STRICT" },
-		{ REP_C_AUTOINIT,	"REP_C_AUTOINIT" },
-		{ REP_C_AUTOROLLBACK,	"REP_C_AUTOROLLBACK" },
-		{ REP_C_AUTOTAKEOVER,	"REP_C_AUTOTAKEOVER" },
-		{ REP_C_BULK,		"REP_C_BULK" },
-		{ REP_C_DELAYCLIENT,	"REP_C_DELAYCLIENT" },
-		{ REP_C_ELECTIONS,	"REP_C_ELECTIONS" },
-		{ REP_C_INMEM,		"REP_C_INMEM" },
-		{ REP_C_LEASE,		"REP_C_LEASE" },
-		{ REP_C_NOWAIT,		"REP_C_NOWAIT" },
-		{ 0,			NULL }
+		{ REP_C_2SITE_STRICT,		"REP_C_2SITE_STRICT" },
+		{ REP_C_AUTOINIT,		"REP_C_AUTOINIT" },
+		{ REP_C_AUTOROLLBACK,		"REP_C_AUTOROLLBACK" },
+		{ REP_C_AUTOTAKEOVER,		"REP_C_AUTOTAKEOVER" },
+		{ REP_C_BULK,			"REP_C_BULK" },
+		{ REP_C_DELAYCLIENT,		"REP_C_DELAYCLIENT" },
+		{ REP_C_DISABLE_POLL,		"REP_C_DISABLE_POLL" },
+		{ REP_C_DISABLE_SSL,		"REP_C_DISABLE_SSL" },
+		{ REP_C_ELECT_LOGLENGTH,	"REP_C_ELECT_LOGLENGTH" },
+		{ REP_C_ELECTIONS,		"REP_C_ELECTIONS" },
+		{ REP_C_ENABLE_EPOLL,		"REP_C_ENABLE_EPOLL" },
+		{ REP_C_FORWARD_WRITES,		"REP_C_FORWARD_WRITES" },
+		{ REP_C_INMEM,			"REP_C_INMEM" },
+		{ REP_C_LEASE,			"REP_C_LEASE" },
+		{ REP_C_NOWAIT,			"REP_C_NOWAIT" },
+		{ REP_C_PREFMAS_CLIENT,		"REP_C_PREFMAS_CLIENT" },
+		{ REP_C_PREFMAS_MASTER,		"REP_C_PREFMAS_MASTER" },
+		{ 0,				NULL }
 	};
 	static const FN rep_efn[] = {
 		{ REP_E_PHASE0,		"REP_E_PHASE0" },
 		{ REP_E_PHASE1,		"REP_E_PHASE1" },
 		{ REP_E_PHASE2,		"REP_E_PHASE2" },
 		{ REP_E_TALLY,		"REP_E_TALLY" },
+		{ REP_E_PEER_CONN_WAIT, "REP_E_PEER_CONN_WAIT" },
 		{ 0,			NULL }
 	};
 	static const FN rep_fn[] = {
-		{ REP_F_ABBREVIATED,	"REP_F_ABBREVIATED" },
-		{ REP_F_APP_BASEAPI,	"REP_F_APP_BASEAPI" },
-		{ REP_F_APP_REPMGR,	"REP_F_APP_REPMGR" },
-		{ REP_F_CLIENT,		"REP_F_CLIENT" },
-		{ REP_F_DELAY,		"REP_F_DELAY" },
-		{ REP_F_GROUP_ESTD,	"REP_F_GROUP_ESTD" },
-		{ REP_F_LEASE_EXPIRED,	"REP_F_LEASE_EXPIRED" },
-		{ REP_F_MASTER,		"REP_F_MASTER" },
-		{ REP_F_MASTERELECT,	"REP_F_MASTERELECT" },
-		{ REP_F_NEWFILE,	"REP_F_NEWFILE" },
-		{ REP_F_NIMDBS_LOADED,	"REP_F_NIMDBS_LOADED" },
-		{ REP_F_SKIPPED_APPLY,	"REP_F_SKIPPED_APPLY" },
-		{ REP_F_START_CALLED,	"REP_F_START_CALLED" },
+		{ REP_F_ABBREVIATED,		"REP_F_ABBREVIATED" },
+		{ REP_F_APP_BASEAPI,		"REP_F_APP_BASEAPI" },
+		{ REP_F_APP_REPMGR,		"REP_F_APP_REPMGR" },
+		{ REP_F_CLIENT,			"REP_F_CLIENT" },
+		{ REP_F_DELAY,			"REP_F_DELAY" },
+		{ REP_F_GROUP_ESTD,		"REP_F_GROUP_ESTD" },
+		{ REP_F_HOLD_GEN,		"REP_F_HOLD_GEN" },
+		{ REP_F_LEASE_EXPIRED,		"REP_F_LEASE_EXPIRED" },
+		{ REP_F_MASTER,			"REP_F_MASTER" },
+		{ REP_F_MASTERELECT,		"REP_F_MASTERELECT" },
+		{ REP_F_NEWFILE,		"REP_F_NEWFILE" },
+		{ REP_F_NIMDBS_LOADED,		"REP_F_NIMDBS_LOADED" },
+		{ REP_F_READONLY_MASTER,	"REP_F_READONLY_MASTER" },
+		{ REP_F_SKIPPED_APPLY,		"REP_F_SKIPPED_APPLY" },
+		{ REP_F_START_CALLED,		"REP_F_START_CALLED" },
 		{ 0,			NULL }
 	};
 	static const FN rep_lfn[] = {

@@ -1,6 +1,6 @@
-# See the file LICENSE for redistribution information.
+# Copyright (c) 2005, 2019 Oracle and/or its affiliates.  All rights reserved.
 #
-# Copyright (c) 2005, 2013 Oracle and/or its affiliates.  All rights reserved.
+# See the file LICENSE for license information.
 #
 # $Id$
 #
@@ -18,8 +18,8 @@
 # TEST
 # TEST	On each compaction, make sure we still have the same contents.
 # TEST
-# TEST	Unlike the other compaction tests, this one does not
-# TEST	use -freespace.
+# TEST	This is much like test112, with a large number of entries and a 
+# TEST	small page size to make the tree deep. It uses -freespace as well.
 
 proc test117 { method {nentries 10000} {tnum "117"} args } {
 	source ./include.tcl
@@ -93,7 +93,7 @@ proc test117 { method {nentries 10000} {tnum "117"} args } {
 			puts "\tTest$tnum.a: Create and\
 			    populate database ($splitopt)."
 			set db [eval {berkdb_open -create \
-			    -mode 0644} $splitopt $args $omethod $testfile]
+			    -pagesize 512 -mode 0644} $splitopt $args $omethod $testfile]
 			error_check_good dbopen [is_valid_db $db] TRUE
 
 			set count 0
@@ -190,18 +190,8 @@ proc test117 { method {nentries 10000} {tnum "117"} args } {
 			set in_use1 [expr $internal1 + $leaf1]
 			set free1 [stat_field $db stat "Pages on freelist"]
 
-			puts "\tTest$tnum.c: Do a dump_file on contents."
-			if { $txnenv == 1 } {
-				set t [$env txn]
-				error_check_good txn \
-				    [is_valid_txn $t $env] TRUE
-				set txn "-txn $t"
-			}
-			dump_file $db $txn $t1
-			if { $txnenv == 1 } {
-				error_check_good txn_commit [$t commit] 0
-				set txn ""
-			}
+			puts "\tTest$tnum.c: Save contents."
+			dump_file_env $env $db $t1
 
 			# Set up the compaction option value.
 			if { $compactopt == "-fillpercent" } {
@@ -238,7 +228,7 @@ proc test117 { method {nentries 10000} {tnum "117"} args } {
 				puts "\tTest$tnum.d: Compact and verify\
 				    database $compactopt $optval."
 
-				if { [catch {eval {$db compact} \
+				if { [catch {eval {$db compact} -freespace \
 				    $compactopt $optval} ret] } {
 					error "FAIL: db compact\
 					    $compactopt $optval: $ret"
@@ -266,28 +256,15 @@ proc test117 { method {nentries 10000} {tnum "117"} args } {
 
 				#
 				# Pages in use (leaf + internal) should never
-				# increase; pages on free list should never
-				# decrease.
+				# increase.
 				#
 				set in_use2 [expr $internal2 + $leaf2]
 				error_check_good pages_in_use \
 				    [expr $in_use2 <= $in_use1] 1
-				error_check_good pages_on_freelist \
-				    [expr $free2 >= $free1] 1
 
 				puts "\tTest$tnum.e:\
 				    Contents are the same after compaction."
-				if { $txnenv == 1 } {
-					set t [$env txn]
-					error_check_good txn \
-					    [is_valid_txn $t $env] TRUE
-					set txn "-txn $t"
-				}
-				dump_file $db $txn $t2
-				if { $txnenv == 1 } {
-					error_check_good txn_commit \
-					    [$t commit] 0
-				}
+				dump_file_env $env $db $t2
 				if { [is_hash $method] == 1 } {
 					filesort $t1 $t1.sort
 					filesort $t2 $t2.sort

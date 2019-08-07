@@ -32,13 +32,17 @@ topdir=`echo "$srcdir/.." | sed 's,/dist/\.\.,,'`
 # Substitution variables. BDB additions need to be documented.
 AC_SUBST(ADDITIONAL_INCS)
 AC_SUBST(ADDITIONAL_LANG)
+AC_SUBST(ADDITIONAL_INSTALL)
 AC_SUBST(ADDITIONAL_OBJS)
 AC_SUBST(ADDITIONAL_PROGS)
+AC_SUBST(ADDITIONAL_UNINSTALL)
 AC_SUBST(BUILD_TARGET)
 AC_SUBST(CFLAGS)
+AC_SUBST(CLASSPATH)
 AC_SUBST(CONFIGURATION_ARGS)
 AC_SUBST(CONFIGURATION_PATH)
 AC_SUBST(CPPFLAGS)
+AC_SUBST(CPPFLAGS_JNI_INCLUDE)
 AC_SUBST(CRYPTO_OBJS)
 AC_SUBST(CXX)
 AC_SUBST(CXXFLAGS)
@@ -70,6 +74,7 @@ AC_SUBST(LIBTSO_LIBS)
 AC_SUBST(LIBTSO_MODSUFFIX)
 AC_SUBST(LIBTSO_MODULE)
 AC_SUBST(LIBXSO_LIBS)
+AC_SUBST(LIBSQLSO_LIBS)
 AC_SUBST(MAKEFILE_CC)
 AC_SUBST(MAKEFILE_CCLINK)
 AC_SUBST(MAKEFILE_CXX)
@@ -99,10 +104,6 @@ AC_SUBST(platform_footer)
 AC_PREFIX_DEFAULT(/usr/local/BerkeleyDB.__EDIT_DB_VERSION_MAJOR__.__EDIT_DB_VERSION_MINOR__)
 
 # Configure the version information.
-AC_SUBST(DB_VERSION_FAMILY)
-DB_VERSION_FAMILY="__EDIT_DB_VERSION_FAMILY__"
-AC_SUBST(DB_VERSION_RELEASE)
-DB_VERSION_RELEASE="__EDIT_DB_VERSION_RELEASE__"
 AC_SUBST(DB_VERSION_MAJOR)
 DB_VERSION_MAJOR="__EDIT_DB_VERSION_MAJOR__"
 AC_SUBST(DB_VERSION_MINOR)
@@ -253,9 +254,7 @@ if test "$GCC" = "yes"; then
 else
 	case "$host_os" in
 	hpux11.0*)	;;
-	hpux11*)	CPPFLAGS="$CPPFLAGS -mt"
-			test "$host_cpu" = "ia64" &&
-			    CFLAGS="$CFLAGS +u1";;
+	hpux11*)	CPPFLAGS="$CPPFLAGS -mt";;
 	solaris*)	CFLAGS="$CFLAGS "
 			CFLAGS=`echo "$CFLAGS" | sed 's/-O /-xO2 /g'`;;
 	esac
@@ -330,6 +329,7 @@ if test "$db_cv_cxx" = "yes"; then
 	AC_PROG_CXXCPP
 	###############################
 	AC_CXX_STDHEADERS
+	AC_CXX_IOTA
 	MAKEFILE_CXX="${CXX}"
 	MAKEFILE_CXXLINK="${CXX}"
 fi
@@ -428,8 +428,15 @@ if test "$db_cv_cxx" = "yes"; then
 	fi
 fi
 
-# Optional Java API / JDBC.
-if test "$db_cv_java" = "yes" -o "$db_cv_jdbc" = "yes"; then
+# Optional Thrift Server and Client Driver.
+if test "$db_cv_server" = "yes"; then
+	ADDITIONAL_INSTALL=install_server
+	ADDITIONAL_UNINSTALL=uninstall_server
+fi
+
+# Optional Java API / JDBC / GUI.
+if test "$db_cv_java" = "yes" -o "$db_cv_jdbc" = "yes" -o "$db_cv_server" = "yes" -o "$db_cv_gui" = "yes"; then
+
 	# BDB Java API requires shared libraries.
 	if test "$db_cv_java" = "yes" -a "$enable_shared" = "no"; then
 		AC_MSG_ERROR([Java requires shared libraries])
@@ -457,10 +464,18 @@ if test "$db_cv_java" = "yes" -o "$db_cv_jdbc" = "yes"; then
 	esac
 	AC_MSG_RESULT($JAVA_VERSION)
 	case "$JAVA_VERSION" in
-	1.[[3456789]]* | 1.[[1-9]][[0-9]]* | [[23456789]]* ) ;;
+	1.[[3456789]]* | 1.[[1-9]][[0-9]]* | [[23456789]]* | [[1-9]][[0-9]]*.*.* ) ;;
 	* )
 		AC_MSG_ERROR([Java version 1.3 or higher required, got $JAVA_VERSION]) ;;
 	esac
+	
+	if test "$db_cv_gui" = "yes"; then
+	   	case "$JAVA_VERSION" in
+		1.[[34567]]* )
+		     AC_MSG_ERROR([Java version 1.8 or higher required for the GUI, got $JAVA_VERSION]) ;;
+		* ) ;;
+		esac
+	fi
 
 	# Because of the code that SWIG generates to cast between pointers and
 	# integers, we need to add the flag "-fno-strict-aliasing" to the gcc
@@ -470,15 +485,22 @@ if test "$db_cv_java" = "yes" -o "$db_cv_jdbc" = "yes"; then
 		SWIGCFLAGS="-fno-strict-aliasing"
 	fi
 
+	CPPFLAGS_JNI_INCLUDE=""
 	for JNI_INCLUDE_DIR in $JNI_INCLUDE_DIRS
 	do
-		CPPFLAGS="$CPPFLAGS -I$JNI_INCLUDE_DIR"
+		CPPFLAGS_JNI_INCLUDE="$CPPFLAGS_JNI_INCLUDE -I$JNI_INCLUDE_DIR"
 	done
+	CPPFLAGS="$CPPFLAGS $CPPFLAGS_JNI_INCLUDE"
 
 	if test "$db_cv_java" = "yes"; then
 		ADDITIONAL_LANG="$ADDITIONAL_LANG java"
 		INSTALL_LIBS="$INSTALL_LIBS \$(libjso_target)"
 	fi
+	
+	if test "$db_cv_gui" = "yes"; then
+		ADDITIONAL_LANG="$ADDITIONAL_LANG db_gui"
+	fi
+	
 else
 	JAVAC=nojavac
 fi
@@ -496,6 +518,12 @@ else
 	AC_DEFINE(HAVE_SYSTEM_INCLUDE_FILES)
 fi
 
+# Slices can be enabled.
+if test "$db_cv_slices" = "yes"; then
+	AC_DEFINE(HAVE_SLICES)
+	AH_TEMPLATE(HAVE_SLICES, [Define to 1 if building sliced environment support.])
+fi
+
 # Optional SQL API.
 if test "$db_cv_sql" = "yes"; then
 	ADDITIONAL_INCS="$ADDITIONAL_INCS dbsql.h"
@@ -503,9 +531,17 @@ if test "$db_cv_sql" = "yes"; then
 
 	# Link against libdl, if found. It is only needed for the load
 	# extension, but shouldn't hurt.
-	AC_HAVE_LIBRARY(dl, SQL_LIBS="$SQL_LIBS -ldl")
+	AC_HAVE_LIBRARY(dl, [
+		SQL_LIBS="$SQL_LIBS -ldl"
+		LIBSQLSO_LIBS=" -ldl"
+	])
 
 	# Link against libedit or readline for command-line editing.
+	if test x"$with_editline" != xno; then
+		LIBS=""
+		AC_SEARCH_LIBS(readline, edit, [with_readline=no])
+		SQL_LIBS="$SQL_LIBS $LIBS"
+	fi
 	if test x"$with_readline" != xno; then
 		header=readline.h
 		for rl_lib in edit readline; do
@@ -596,11 +632,6 @@ if test "$db_cv_sql_compat" = "yes"; then
 	fi
 fi
 
-# Optional SQL code generation tool.
-if test "$db_cv_sql_codegen" = "yes"; then
-	ADDITIONAL_PROGS="$ADDITIONAL_PROGS db_sql_codegen"
-fi
-
 # Optional STL API.
 if test "$db_cv_stl" = "yes"; then
 	AC_CXX_SUPPORTS_TEMPLATES
@@ -626,7 +657,7 @@ fi
 AC_HEADER_STAT
 AC_HEADER_TIME
 AC_HEADER_DIRENT
-AC_CHECK_HEADERS(execinfo.h sys/select.h sys/socket.h sys/time.h)
+AC_CHECK_HEADERS(execinfo.h openssl/opensslconf.h openssl/ssl.h openssl/err.h sys/select.h sys/socket.h sys/time.h sys/poll.h sys/epoll.h)
 AC_CHECK_MEMBERS([struct stat.st_blksize])
 AM_TYPES
 
@@ -694,17 +725,45 @@ AC_HAVE_LIBRARY(socket, TEST_LIBS="$TEST_LIBS -lsocket")
 # deleted getwd().
 AC_REPLACE_FUNCS(\
 	abort atoi atol bsearch getcwd getenv getopt isalpha isdigit isprint\
-	isspace memcmp memcpy memmove printf qsort raise rand strcasecmp\
+	isspace memcmp memcpy memmove printf qsort raise rand\
 	strcat strchr strdup strerror strncat strncmp strrchr strsep\
 	strtol strtoul)
+AH_TEMPLATE(HAVE_STRCASECMP,
+    [Define to 1 if you have the strcasecmp symbol.])
+AC_CHECK_DECL(strcasecmp, [AC_DEFINE(HAVE_STRCASECMP)], [AC_LIBOBJ(strcasecmp)])
 
 # Check for system functions we optionally use.
 AC_CHECK_FUNCS(\
-	_fstati64 backtrace backtrace_symbols directio fchmod fclose\
-	fcntl fdatasync fgetc fgets fopen fwrite getgid\
-	getrusage getuid hstrerror mprotect pstat_getdynamic\
+	_fstati64 backtrace backtrace_symbols directio epoll_create epoll_ctl\
+	epoll_wait fchmod fclose fcntl fdatasync fgetc fgets flock fopen\
+	fwrite getgid getrusage getuid hstrerror mprotect poll pstat_getdynamic\
 	pthread_self pthread_yield random sched_yield select setgid setuid\
 	sigaction snprintf stat sysconf vsnprintf yield)
+
+# The random_r/initstate_r/srandom_r functions in AIX and OSF/1 (Tru64) have
+# atypical function signatures. Disable BerkeleyDB's use of those functions.
+case "$host_os" in
+aix*|osf*)
+	AC_MSG_WARN([random_r is ignored on $host_os.]);;
+*)
+	AC_CHECK_FUNCS(initstate_r random_r srandom_r);;
+esac
+
+if test "$db_cv_error_history" = "yes"; then
+	# Check for pthread thread local storage support
+	AC_CHECK_FUNCS(pthread_getspecific pthread_setspecific)
+	AC_CHECK_FUNCS(pthread_key_create pthread_once)
+	if test "x$ac_cv_func_pthread_getspecific" = "xyes" -a \
+		"x$ac_cv_func_pthread_setspecific" = "xyes" -a \
+		"x$ac_cv_func_pthread_key_create" = "xyes" -a \
+		"x$ac_cv_func_pthread_once" = "xyes"; then
+		AC_DEFINE(HAVE_ERROR_HISTORY)
+	else
+		AC_MSG_ERROR([--enable-error_history requires pthread thread local storage])
+	fi
+	AH_TEMPLATE(HAVE_ERROR_HISTORY,
+    [Define to 1 if you want a version that records extra information about errors.])
+fi
 
 AC_TIMERS
 
@@ -742,7 +801,7 @@ AC_TRY_LINK([
 if test "$db_cv_getaddrinfo" = "yes"; then
 	AC_DEFINE(HAVE_GETADDRINFO)
 	AH_TEMPLATE(HAVE_GETADDRINFO,
-	    [Define to 1 if you have the `getaddrinfo' function.])
+	    [Define to 1 if you have the 'getaddrinfo' function.])
 fi
 
 # Check for the fcntl F_SETFD flag to deny child process access to file
@@ -933,6 +992,8 @@ if test "$db_cv_build_replication" = "yes"; then
 	AH_TEMPLATE(HAVE_REPLICATION,
 	    [Define to 1 if building replication support.])
 	ADDITIONAL_OBJS="$ADDITIONAL_OBJS \$(REP_OBJS)"
+	AH_TEMPLATE(HAVE_REPMGR_SSL_SUPPORT,
+	    [Define to 1 if building ssl support for replication manager.])
 
 	# If we're building replication and detected POSIX threads, build the
 	# replication manager.
@@ -941,6 +1002,74 @@ if test "$db_cv_build_replication" = "yes"; then
 
 	if test "$ac_cv_header_pthread_h" = yes -a "$db_cv_mingw" != "yes"; then
 		AC_DEFINE(HAVE_REPLICATION_THREADS)
+
+		if test "$db_cv_build_repmgr_ssl" != "no"; then
+			AC_HAVE_LIBRARY(ssl, LIBSO_LIBS="$LIBSO_LIBS -lssl")
+			AC_HAVE_LIBRARY(crypto, LIBSO_LIBS="$LIBSO_LIBS -lcrypto")	
+
+			working_ssl="no"
+			AC_CHECK_LIB([ssl], [SSL_library_init], [working_ssl="yes"])
+			AC_CHECK_LIB([ssl], [OPENSSL_init_ssl], [working_ssl="yes"])
+
+			supported_ssl_version="no"
+			AC_CHECK_LIB([ssl], [TLS_method], [supported_ssl_version="yes"])
+			AC_CHECK_LIB([ssl], [TLSv1_2_method], [supported_ssl_version="yes"])
+
+			working_crypto="no"
+			AC_CHECK_LIB([crypto], [EVP_EncryptInit], [working_crypto="yes"])
+
+			ssl_headers_found="yes"
+			AC_CHECK_HEADER([openssl/ssl.h], [], [ssl_headers_found="no"])
+			AC_CHECK_HEADER([openssl/opensslconf.h], [], [ssl_headers_found="no"])
+			AC_CHECK_HEADER([openssl/err.h], [], [ssl_headers_found="no"])
+
+			ssl_config_err_msg="Please provide path to Openssl libraries and headers \
+with version >= 1.0.1 by setting LDFLAGS/LIBS/CPPFLAGS or disable Replication Manager SSL support \
+by providing --with-repmgr-ssl=no as an argument to configure."
+
+			ssl_check_failed="no"
+			if test "$working_crypto" = "no"; then
+				AC_MSG_WARN([Can't find openssl crypto libraries.])
+				ssl_check_failed="yes"
+			else
+				if test "$working_ssl" = "no"; then
+					AC_MSG_WARN([Can't find openssl ssl libraries.])
+					ssl_check_failed="yes"
+				else
+					# We got here means we have some working version of ssl
+					if test "$supported_ssl_version" = "no"; then
+						AC_MSG_WARN([Older unsupported Openssl version detected.])
+						ssl_check_failed="yes"
+					else
+						# Sometimes SSL libraries may be present but headers may
+						# be missing.
+						if test "$ssl_headers_found" = "no"; then
+							AC_MSG_WARN([Openssl header files not found.])
+							ssl_check_failed="yes"
+						else
+							# Since all of the above checks throw fatal errors,
+							# We got here then that means current setup is good
+							# for SSL support.
+							AC_DEFINE(HAVE_REPMGR_SSL_SUPPORT)
+						fi
+					fi
+				fi
+			fi
+
+			if test "$ssl_check_failed" = "yes"; then
+				if test "$db_cv_build_repmgr_ssl" = "yes"; then
+					# abort configure if client has explicitly specified
+					# --with-repmgr-ssl=yes, indicating a strong desire to
+					# build ssl support for repmgr. This is the earliest
+					# place to throw error, if the same is not possible.
+					AC_MSG_FAILURE(["$ssl_config_err_msg"])
+				else
+					# for a 'default' case, its ok to just generate a 
+					# warning and move forward to build.
+					AC_MSG_WARN(["$ssl_config_err_msg"])
+				fi
+			fi
+		fi
 
 		if test "$with_stacksize" != "no"; then
 			AC_DEFINE_UNQUOTED(DB_STACKSIZE, $with_stacksize,

@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2013, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  */
 
 #include "db_config.h"
@@ -9,9 +9,7 @@
 #include "db_int.h"
 #include "dbinc/db_page.h"
 #include "dbinc/db_am.h"
-#include "dbinc/blob.h"
 #include "dbinc/fop.h"
-#include "dbinc/mp.h"
 
 /*
  * __blob_file_create --
@@ -22,13 +20,13 @@
  *	blob_id=12002 would result in 012/__db.bl012002.
  *
  * PUBLIC: int __blob_file_create __P
- * PUBLIC:  ((DBC *, DB_FH **, uintmax_t *));
+ * PUBLIC:  ((DBC *, DB_FH **, db_seq_t *));
  */
 int
 __blob_file_create(dbc, fhpp, blob_id)
 	DBC *dbc;
 	DB_FH **fhpp;
-	uintmax_t *blob_id;
+	db_seq_t *blob_id;
 {
 	DB  *dbp;
 	DB_FH *fhp;
@@ -48,7 +46,7 @@ __blob_file_create(dbc, fhpp, blob_id)
 		goto err;
 
 	if ((ret = __blob_id_to_path(
-	    env, dbp->blob_sub_dir, *blob_id, &ppath)) != 0)
+	    env, dbp->blob_sub_dir, *blob_id, &ppath, 1)) != 0)
 		goto err;
 
 	if ((ret = __fop_create(env, dbc->txn,
@@ -56,7 +54,7 @@ __blob_file_create(dbc, fhpp, blob_id)
 	    (F_ISSET(dbc->dbp, DB_AM_NOT_DURABLE) ? DB_LOG_NOT_DURABLE : 0)))
 	    != 0) {
 		__db_errx(env, DB_STR_A("0228",
-		    "Error creating blob file: %llu.", "%llu"),
+		    "Error creating external file: %llu.", "%llu"),
 		    (unsigned long long)*blob_id);
 		goto err;
 	}
@@ -100,12 +98,12 @@ __blob_file_close(dbc, fhp, flags)
  * __blob_file_delete --
  *	Delete a blob file.
  *
- * PUBLIC: int __blob_file_delete __P((DBC *, uintmax_t));
+ * PUBLIC: int __blob_file_delete __P((DBC *, db_seq_t));
  */
 int
 __blob_file_delete(dbc, blob_id)
 	DBC *dbc;
-	uintmax_t blob_id;
+	db_seq_t blob_id;
 {
 	ENV *env;
 	char *blob_name, *full_path;
@@ -115,9 +113,9 @@ __blob_file_delete(dbc, blob_id)
 	blob_name = full_path = NULL;
 
 	if ((ret = __blob_id_to_path(
-	    env, dbc->dbp->blob_sub_dir, blob_id, &blob_name)) != 0) {
+	    env, dbc->dbp->blob_sub_dir, blob_id, &blob_name, 0)) != 0) {
 		__db_errx(env, DB_STR_A("0229",
-		   "Failed to construct path for blob file %llu.",
+		   "Failed to construct path for external file %llu.",
 		   "%llu"), (unsigned long long)blob_id);
 		goto err;
 	}
@@ -135,7 +133,7 @@ __blob_file_delete(dbc, blob_id)
 
 	if (ret != 0) {
 		__db_errx(env, DB_STR_A("0230",
-		    "Failed to remove blob file while deleting: %s.",
+		    "Failed to remove external file while deleting: %s.",
 		    "%s"), blob_name);
 		goto err;
 	}
@@ -150,36 +148,35 @@ err:	if (blob_name != NULL)
 /*
  * __blob_file_open --
  *
- * PUBLIC: int __blob_file_open __P((DB *, DB_FH **, uintmax_t, u_int32_t));
+ * PUBLIC: int __blob_file_open
+ * PUBLIC:	__P((DB *, DB_FH **, db_seq_t, u_int32_t, int));
  */
 int
-__blob_file_open(dbp, fhpp, blob_id, flags)
+__blob_file_open(dbp, fhpp, blob_id, flags, printerr)
 	DB *dbp;
 	DB_FH **fhpp;
-	uintmax_t blob_id;
+	db_seq_t blob_id;
 	u_int32_t flags;
+	int printerr;
 {
 	ENV *env;
 	int ret;
 	u_int32_t oflags;
-	char *path, *ppath, *dir;
-	const char *blob_sub_dir;
+	char *path, *ppath;
 
-	dir = NULL;
 	env = dbp->env;
 	*fhpp = NULL;
 	ppath = path = NULL;
 	oflags = 0;
-	blob_sub_dir = dbp->blob_sub_dir;
 
 	if ((ret = __blob_id_to_path(
-	    env, dbp->blob_sub_dir, blob_id, &ppath)) != 0)
+	    env, dbp->blob_sub_dir, blob_id, &ppath, 1)) != 0)
 		goto err;
 
 	if ((ret = __db_appname(
 	    env, DB_APP_BLOB, ppath, NULL, &path)) != 0) {
 		__db_errx(env, DB_STR_A("0231",
-		    "Failed to get path to blob file: %llu.", "%llu"),
+		    "Failed to get path to external file: %llu.", "%llu"),
 		    (unsigned long long)blob_id);
 		goto err;
 	}
@@ -187,8 +184,14 @@ __blob_file_open(dbp, fhpp, blob_id, flags)
 	if (LF_ISSET(DB_FOP_READONLY) || DB_IS_READONLY(dbp))
 		oflags |= DB_OSO_RDONLY;
 	if ((ret = __os_open(env, path, 0, oflags, 0, fhpp)) != 0) {
-		__db_errx(env, DB_STR_A("0232",
-		    "Error opening blob file: %s.", "%s"), path);
+		/*
+		 * In replication it is possible to try to read a blob file
+		 * that has been deleted.  In that case do not print an error.
+		 */
+		if (printerr == 1) {
+			__db_errx(env, DB_STR_A("0232",
+			    "Error opening external file: %s.", "%s"), path);
+		}
 		goto err;
 	}
 
@@ -230,11 +233,9 @@ __blob_file_read(env, fhp, dbt, offset, size)
 		buf = dbt->data;
 
 	if ((ret = __os_read(env, fhp, buf, size, &bytes)) != 0) {
-		__db_errx(env, DB_STR("0233", "Error reading blob file."));
+		__db_errx(env, DB_STR("0233", "Error reading external file."));
 		goto err;
 	}
-	/* Should never read more than what can fit in u_int32_t. */
-	DB_ASSERT(env, bytes <= UINT32_MAX);
 	/*
 	 * It is okay to read off the end of the file, in which case less bytes
 	 * will be returned than requested.  This is also how the code behaves
@@ -257,7 +258,7 @@ err:	if (buf != NULL && buf != dbt->data)
  *
  * PUBLIC: int __blob_file_write
  * PUBLIC: __P((DBC *, DB_FH *, DBT *,
- * PUBLIC:    off_t, uintmax_t, off_t *, u_int32_t));
+ * PUBLIC:    off_t, db_seq_t, off_t *, u_int32_t));
  */
 int
 __blob_file_write(dbc, fhp, buf, offset, blob_id, file_size, flags)
@@ -265,7 +266,7 @@ __blob_file_write(dbc, fhp, buf, offset, blob_id, file_size, flags)
 	DB_FH *fhp;
 	DBT *buf;
 	off_t offset;
-	uintmax_t blob_id;
+	db_seq_t blob_id;
 	off_t *file_size;
 	u_int32_t flags;
 {
@@ -281,22 +282,23 @@ __blob_file_write(dbc, fhp, buf, offset, blob_id, file_size, flags)
 	size = 0;
 	write_offset = offset;
 	DB_ASSERT(env, !DB_IS_READONLY(dbc->dbp));
+	DB_ASSERT(env, fhp != NULL);
 
 	/* File size is used to tell if the write is extending the file. */
 	size = *file_size;
 
 	if (DBENV_LOGGING(env)) {
 		if ((ret = __log_get_config(
-		    env->dbenv, DB_LOG_BLOB, &blob_lg)) != 0)
+		    env->dbenv, DB_LOG_EXT_FILE, &blob_lg)) != 0)
 			goto err;
-		if (blob_lg == 0)
+		if (blob_lg == 0 && !REP_ON(env))
 			LF_SET(DB_FOP_PARTIAL_LOG);
 		if (!LF_ISSET(DB_FOP_CREATE) && (size <= offset))
 			LF_SET(DB_FOP_APPEND);
 	}
 
 	if ((ret = __blob_id_to_path(
-	    env, dbc->dbp->blob_sub_dir, blob_id, &name)) != 0)
+	    env, dbc->dbp->blob_sub_dir, blob_id, &name, 1)) != 0)
 		goto err;
 
 	if ((ret = __dbt_usercopy(env, buf)) != 0)
@@ -314,7 +316,7 @@ __blob_file_write(dbc, fhp, buf, offset, blob_id, file_size, flags)
 		if ((ret = __fop_write_file(env, dbc->txn, name, dirname,
 		    DB_APP_BLOB, fhp, offset, ptr, data_size, flags)) != 0) {
 			__db_errx(env, DB_STR_A("0235",
-			    "Error writing blob file: %s.", "%s"), name);
+			    "Error writing external file: %s.", "%s"), name);
 				goto err;
 		}
 		LF_SET(DB_FOP_APPEND);
@@ -330,8 +332,8 @@ __blob_file_write(dbc, fhp, buf, offset, blob_id, file_size, flags)
 
 	if ((ret = __fop_write_file(env, dbc->txn, name, dirname,
 	    DB_APP_BLOB, fhp, write_offset, ptr, data_size, flags)) != 0) {
-		__db_errx(env, DB_STR_A("0236",
-		    "Error writing blob file: %s.", "%s"), name);
+		__db_errx(env, DB_STR_A("0235",
+		    "Error writing external file: %s.", "%s"), name);
 		goto err;
 	}
 

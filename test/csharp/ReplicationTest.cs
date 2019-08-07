@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2009, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2009, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  */
 using System;
@@ -81,7 +81,7 @@ namespace CsharpAPITest
 
 			cfg.RepSystemCfg = new ReplicationConfig();
 			cfg.RepSystemCfg.RepmgrSitesConfig.Add(new DbSiteConfig());
-			cfg.RepSystemCfg.RepmgrSitesConfig[0].Host = "127.0.0.1";
+			cfg.RepSystemCfg.RepmgrSitesConfig[0].Host = "::1";
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].Port = mPort;
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].LocalSite = true;
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].GroupCreator = true;
@@ -98,7 +98,7 @@ namespace CsharpAPITest
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].GroupCreator = false;
 			cfg.RepSystemCfg.Priority = 10;
 			cfg.RepSystemCfg.RepmgrSitesConfig.Add(new DbSiteConfig());
-			cfg.RepSystemCfg.RepmgrSitesConfig[1].Host = "127.0.0.1";
+			cfg.RepSystemCfg.RepmgrSitesConfig[1].Host = "::1";
 			cfg.RepSystemCfg.RepmgrSitesConfig[1].Port = mPort;
 			cfg.RepSystemCfg.RepmgrSitesConfig[1].Helper = true;
 			/* Set the site as a partial view. */
@@ -213,7 +213,9 @@ namespace CsharpAPITest
 			rsite = mEnv.RepMgrRemoteSites;
 			Assert.AreEqual(2, rsite.Length);
 			Assert.AreEqual(true, rsite[0].isView);
+			Assert.AreEqual(false, rsite[0].isElectable);
 			Assert.AreEqual(true, rsite[1].isView);
+			Assert.AreEqual(false, rsite[1].isElectable);
 			repstats = cEnv1.ReplicationSystemStats();
 			Assert.AreEqual(true, repstats.View);
 			repstats = cEnv2.ReplicationSystemStats();
@@ -266,7 +268,7 @@ namespace CsharpAPITest
 
 			cfg.RepSystemCfg = new ReplicationConfig();
 			cfg.RepSystemCfg.RepmgrSitesConfig.Add(new DbSiteConfig());
-			cfg.RepSystemCfg.RepmgrSitesConfig[0].Host = "127.0.0.1";
+			cfg.RepSystemCfg.RepmgrSitesConfig[0].Host = "::1";
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].Port = mPort;
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].LocalSite = true;
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].GroupCreator = true;
@@ -281,7 +283,7 @@ namespace CsharpAPITest
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].GroupCreator = false;
 			cfg.RepSystemCfg.Priority = 10;
 			cfg.RepSystemCfg.RepmgrSitesConfig.Add(new DbSiteConfig());
-			cfg.RepSystemCfg.RepmgrSitesConfig[1].Host = "127.0.0.1";
+			cfg.RepSystemCfg.RepmgrSitesConfig[1].Host = "::1";
 			cfg.RepSystemCfg.RepmgrSitesConfig[1].Port = mPort;
 			cfg.RepSystemCfg.RepmgrSitesConfig[1].Helper = true;
 			DatabaseEnvironment cEnv = DatabaseEnvironment.Open(
@@ -304,13 +306,13 @@ namespace CsharpAPITest
 			 */ 			 
 			Assert.AreEqual(1, mEnv.RepMgrRemoteSites.Length);
 			RepMgrSite rsite = mEnv.RepMgrRemoteSites[0];
-			Assert.AreEqual("127.0.0.1", rsite.Address.Host);
+			Assert.AreEqual("::1", rsite.Address.Host);
 			Assert.AreEqual(cPort, rsite.Address.Port);
 			Assert.AreEqual(true, rsite.isConnected);
 			Assert.AreEqual(false, rsite.isPeer);
 
-			DbSite site = mEnv.RepMgrSite("127.0.0.1", mPort);
-			Assert.AreEqual("127.0.0.1", site.Address.Host);
+			DbSite site = mEnv.RepMgrSite("::1", mPort);
+			Assert.AreEqual("::1", site.Address.Host);
 			Assert.AreEqual(mPort, site.Address.Port);
 			Assert.LessOrEqual(0, site.EId);
 			Assert.AreEqual(true, site.GroupCreator);
@@ -320,8 +322,8 @@ namespace CsharpAPITest
 			Assert.AreEqual(false, site.Peer);
 			site.Close();
 
-			site = mEnv.RepMgrSite("127.0.0.1", cPort);
-			Assert.AreEqual("127.0.0.1", site.Address.Host);
+			site = mEnv.RepMgrSite("::1", cPort);
+			Assert.AreEqual("::1", site.Address.Host);
 			Assert.AreEqual(cPort, site.Address.Port);
 			Assert.AreEqual(rsite.EId, site.EId);
 			Assert.AreEqual(false, site.GroupCreator);
@@ -339,7 +341,7 @@ namespace CsharpAPITest
 			 * unmanaged memory.
 			 */ 			 
 			rsite.Address = new ReplicationHostAddress(
-			    "192.168.1.1", 1000);
+			    "192.168.1.1:1000");
 			rsite.EId = 1024;
 			rsite.isConnected = false;
 			rsite.isPeer = true;
@@ -384,6 +386,7 @@ namespace CsharpAPITest
 		{
 			string home = testHome + "/Master";
 			string dbName = "rep.db";
+			uint metabyte = 1048576;
 			Configuration.ClearDir(home);
 
 			/*
@@ -406,7 +409,7 @@ namespace CsharpAPITest
 			cfg.FreeThreaded = true;
 			cfg.RepSystemCfg = new ReplicationConfig();
 			cfg.RepSystemCfg.RepmgrSitesConfig.Add(new DbSiteConfig());
-			cfg.RepSystemCfg.RepmgrSitesConfig[0].Host = "127.0.0.1";
+			cfg.RepSystemCfg.RepmgrSitesConfig[0].Host = "::1";
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].Port = ports[0];
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].LocalSite = true;
 			cfg.RepSystemCfg.Priority = 100;
@@ -436,6 +439,7 @@ namespace CsharpAPITest
 
 			// Get initial replication stats.
 			ReplicationStats repStats = env.ReplicationSystemStats();
+			env.Msgfile = home + "/master.log";
 			env.PrintReplicationSystemStats();
 			Assert.AreEqual(100, repStats.EnvPriority);
 			Assert.AreEqual(1, 
@@ -444,8 +448,17 @@ namespace CsharpAPITest
 			Assert.AreEqual(0, repStats.AppliedTransactions);
 			Assert.AreEqual(0, repStats.ElectionDataGeneration);
 
+			// Get repmgr incoming queue max setting.
+			Assert.AreEqual(0, env.RepmgrIncomingQueueMaxGBytes);
+			Assert.AreEqual(100 * metabyte, env.RepmgrIncomingQueueMaxBytes);
+
 			// Start a master site with replication manager.
 			env.RepMgrStartMaster(3);
+
+			// Change repmgr incoming queue setting and verify it.
+			env.RepmgrSetIncomingQueueMax(123, 321);
+			Assert.AreEqual(123, env.RepmgrIncomingQueueMaxGBytes);
+			Assert.AreEqual(321, env.RepmgrIncomingQueueMaxBytes);
 
 			// Open a btree database and write some data.
 			Transaction txn = env.BeginTransaction();
@@ -561,6 +574,10 @@ namespace CsharpAPITest
 			Assert.LessOrEqual(0, repMgrStats.FailedMessages);
 			Assert.Less(0, repMgrStats.MaxElectionThreads);
 			Assert.LessOrEqual(0, repMgrStats.QueuedMessages);
+			// There should be no messages dropped and in the queue now.
+			Assert.AreEqual(0, repMgrStats.IncomingDroppedMessages);
+			Assert.AreEqual(0, repMgrStats.IncomingQueueGBytes);
+			Assert.AreEqual(0, repMgrStats.IncomingQueueBytes);
 
 			// Print them out.
 			env.PrintRepMgrSystemStats();
@@ -601,20 +618,26 @@ namespace CsharpAPITest
 			cfg.LockTimeout = 50000;
 			cfg.RepSystemCfg = new ReplicationConfig();
 			cfg.RepSystemCfg.RepmgrSitesConfig.Add(new DbSiteConfig());
-			cfg.RepSystemCfg.RepmgrSitesConfig[0].Host = "127.0.0.1";
+			cfg.RepSystemCfg.RepmgrSitesConfig[0].Host = "::1";
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].Port = ports[1];
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].LocalSite = true;
 			cfg.RepSystemCfg.Priority = 10;
 			cfg.RepSystemCfg.RepmgrSitesConfig.Add(new DbSiteConfig());
-			cfg.RepSystemCfg.RepmgrSitesConfig[1].Host = "127.0.0.1";
+			cfg.RepSystemCfg.RepmgrSitesConfig[1].Host = "::1";
 			cfg.RepSystemCfg.RepmgrSitesConfig[1].Port = ports[0];
 			cfg.RepSystemCfg.RepmgrSitesConfig[1].Helper = true;
+			// Set the incoming queue max.
+			cfg.RepSystemCfg.RepmgrIncomingQueueMax(2, 123456);
 			cfg.EventNotify = new EventNotifyDelegate(stuffHappened);
 			DatabaseEnvironment env = DatabaseEnvironment.Open(
 			    home, cfg);
 
 			// Start a client site with replication manager.
 			env.RepMgrStartClient(3, false);
+
+			// Get repmgr incoming queue max setting.
+			Assert.AreEqual(2, env.RepmgrIncomingQueueMaxGBytes);
+			Assert.AreEqual(123456, env.RepmgrIncomingQueueMaxBytes);
 
 			// Leave enough time to sync.
 			Thread.Sleep(20000);
@@ -657,6 +680,11 @@ namespace CsharpAPITest
 			Assert.LessOrEqual(0, repStats.NextPage);
 			Assert.LessOrEqual(0, repStats.ReceivedPages);
 			Assert.AreEqual(1, repStats.Status);
+			// There should be no messages dropped and in the queue now.
+			RepMgrStats repMgrStats = env.RepMgrSystemStats();
+			Assert.AreEqual(0, repMgrStats.IncomingDroppedMessages);
+			Assert.AreEqual(0, repMgrStats.IncomingQueueGBytes);
+			Assert.AreEqual(0, repMgrStats.IncomingQueueBytes);
 
 			// Close all.
 			db.Close(false);
@@ -673,6 +701,9 @@ namespace CsharpAPITest
 		{
 			switch (eventCode)
 			{
+				case NotificationEvent.REP_AUTOTAKEOVER:
+				Console.WriteLine("Event: REP_AUTOTAKEOVER");
+					break;
 				case NotificationEvent.REP_AUTOTAKEOVER_FAILED:
 				Console.WriteLine("Event: REP_AUTOTAKEOVER_FAILED");
 					break;
@@ -834,7 +865,7 @@ namespace CsharpAPITest
 			cfg.RepSystemCfg = new ReplicationConfig();
 			cfg.RepSystemCfg.RepmgrSitesConfig.Add(
 			    new DbSiteConfig());
-			cfg.RepSystemCfg.RepmgrSitesConfig[0].Host = "127.0.0.1";
+			cfg.RepSystemCfg.RepmgrSitesConfig[0].Host = "::1";
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].Port = ports[0];
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].LocalSite = true;
 			cfg.RepSystemCfg.Priority = 200;
@@ -861,7 +892,7 @@ namespace CsharpAPITest
 				// Check remote sites are valid.
 				foreach (RepMgrSite site in 
 				    env.RepMgrRemoteSites) {
-					Assert.AreEqual("127.0.0.1",
+					Assert.AreEqual("::1",
 					    site.Address.Host);
 					Assert.IsTrue(ports.Contains(
 					    site.Address.Port));
@@ -873,7 +904,6 @@ namespace CsharpAPITest
 			} catch(Exception e) {
 				Console.WriteLine(e.Message);
 			} finally {
-				env.Close();
 				/*
 				 * Clean up electionDone and startUpDone to 
 				 * check election for new master and start-up
@@ -881,6 +911,9 @@ namespace CsharpAPITest
 				 */ 
 				electionDone = false;
 				startUpDone = 0;
+
+				env.Close();
+
 				/*
 				 * Need to set signals for three times, each
 				 * site would wait for one.
@@ -937,13 +970,13 @@ namespace CsharpAPITest
 			cfg.RepSystemCfg = new ReplicationConfig();
 			cfg.RepSystemCfg.RepmgrSitesConfig.Add(
 			    new DbSiteConfig());
-			cfg.RepSystemCfg.RepmgrSitesConfig[0].Host = "127.0.0.1";
+			cfg.RepSystemCfg.RepmgrSitesConfig[0].Host = "::1";
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].Port = localPort;
 			cfg.RepSystemCfg.RepmgrSitesConfig[0].LocalSite = true;
 			cfg.RepSystemCfg.Priority = priority;
 			cfg.RepSystemCfg.RepmgrSitesConfig.Add(
 			    new DbSiteConfig());
-			cfg.RepSystemCfg.RepmgrSitesConfig[1].Host = "127.0.0.1";
+			cfg.RepSystemCfg.RepmgrSitesConfig[1].Host = "::1";
 			cfg.RepSystemCfg.RepmgrSitesConfig[1].Port = helperPort;
 			cfg.RepSystemCfg.RepmgrSitesConfig[1].Helper = true;
 			cfg.RepSystemCfg.ElectionRetry = 100;
@@ -1074,7 +1107,7 @@ namespace CsharpAPITest
 			envConfig.UseReplication = true;
 			envConfig.UseTxns = true;
 			ReplicationHostAddress addr =
-			    new ReplicationHostAddress("localhost:6060");
+			    new ReplicationHostAddress("::1:30301");
 			ReplicationConfig repCfg = new ReplicationConfig();
 			DbSiteConfig dbSiteConfig = new DbSiteConfig();
 			dbSiteConfig.Host = addr.Host;
@@ -1151,7 +1184,7 @@ namespace CsharpAPITest
 			envConfig.UseReplication = true;
 			envConfig.UseTxns = true;
 			ReplicationHostAddress addr =
-			    new ReplicationHostAddress("localhost:6060");
+			    new ReplicationHostAddress("::1:30301");
 			ReplicationConfig repCfg = new ReplicationConfig();
 			DbSiteConfig dbSiteConfig = new DbSiteConfig();
 			dbSiteConfig.Host = addr.Host;

@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2005, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2005, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file EXAMPLES-LICENSE for license information.
  *
  * $Id$ 
  */
@@ -55,6 +55,12 @@ typedef pthread_mutex_t mutex_t;
 // Run 5 writers threads at a time.
 #define NUMWRITERS 5
 
+// Suppress unused variable warnings.
+#define COMPQUIET(n, v) do {    \
+    (n) = (v);                  \
+    (n) = (n);                  \
+} while (0)
+
 // Printing of pthread_t is implementation-specific, so we
 // create our own thread IDs for reporting purposes.
 int global_thread_num;
@@ -95,7 +101,7 @@ main(void)
 
     try {
         // Create the environment
-        envp = new DbEnv(0);
+        envp = new DbEnv((u_int32_t)0);
 
         // Specify in-memory logging
         envp->log_set_config(DB_LOG_IN_MEMORY, 1);
@@ -348,6 +354,8 @@ openDb(Db **dbpp, const char *progname, const char *fileName,
 {
     int ret;
     u_int32_t openFlags;
+
+    COMPQUIET(ret, 0);
 
     try {
         Db *dbp = new Db(envp, 0);

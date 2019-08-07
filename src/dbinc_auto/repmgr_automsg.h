@@ -35,11 +35,30 @@ typedef struct ___repmgr_parm_refresh_args {
 	u_int32_t	flags;
 } __repmgr_parm_refresh_args;
 
-#define	__REPMGR_PERMLSN_SIZE	12
+#define	__REPMGR_V6PERMLSN_SIZE	12
+typedef struct ___repmgr_v6permlsn_args {
+	u_int32_t	generation;
+	DB_LSN		lsn;
+} __repmgr_v6permlsn_args;
+
+#define	__REPMGR_PERMLSN_SIZE	20
 typedef struct ___repmgr_permlsn_args {
 	u_int32_t	generation;
 	DB_LSN		lsn;
+	DB_LSN		last_ckp_lsn;
 } __repmgr_permlsn_args;
+
+#define	__REPMGR_HEARTBEAT_SIZE	12
+typedef struct ___repmgr_heartbeat_args {
+	u_int32_t	generation;
+	DB_LSN		lsn;
+} __repmgr_heartbeat_args;
+
+#define	__REPMGR_READONLY_RESPONSE_SIZE	12
+typedef struct ___repmgr_readonly_response_args {
+	u_int32_t	generation;
+	DB_LSN		lsn;
+} __repmgr_readonly_response_args;
 
 #define	__REPMGR_VERSION_PROPOSAL_SIZE	8
 typedef struct ___repmgr_version_proposal_args {
@@ -130,5 +149,13 @@ typedef struct ___repmgr_v4connect_reject_args {
 	u_int32_t	gen;
 } __repmgr_v4connect_reject_args;
 
-#define	__REPMGR_MAXMSG_SIZE	14
+#define	__REPMGR_LSNHIST_MATCH_SIZE	24
+typedef struct ___repmgr_lsnhist_match_args {
+	DB_LSN		lsn;
+	u_int32_t	hist_sec;
+	u_int32_t	hist_nsec;
+	DB_LSN		next_gen_lsn;
+} __repmgr_lsnhist_match_args;
+
+#define	__REPMGR_MAXMSG_SIZE	24
 #endif

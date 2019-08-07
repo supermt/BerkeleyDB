@@ -164,6 +164,9 @@
   <HelpKINode Title="BaseDatabase.GetBoth method" Url="html/Overload_BerkeleyDB_BaseDatabase_GetBoth.htm" />
   <HelpKINode Title="BaseDatabase.HasMultiple property" Url="html/P_BerkeleyDB_BaseDatabase_HasMultiple.htm" />
   <HelpKINode Title="BaseDatabase.InHostOrder property" Url="html/P_BerkeleyDB_BaseDatabase_InHostOrder.htm" />
+  <HelpKINode Title="BaseDatabase.messageFeedback property" Url="html/P_BerkeleyDB_BaseDatabase_messageFeedback.htm" />
+  <HelpKINode Title="BaseDatabase.MessagePrefix property" Url="html/P_BerkeleyDB_BaseDatabase_MessagePrefix.htm" />
+  <HelpKINode Title="BaseDatabase.Msgfile property" Url="html/P_BerkeleyDB_BaseDatabase_Msgfile.htm" />
   <HelpKINode Title="BaseDatabase.NoMMap property" Url="html/P_BerkeleyDB_BaseDatabase_NoMMap.htm" />
   <HelpKINode Title="BaseDatabase.NonDurableTxns property" Url="html/P_BerkeleyDB_BaseDatabase_NonDurableTxns.htm" />
   <HelpKINode Title="BaseDatabase.NoWaitDbExclusiveLock property" Url="html/P_BerkeleyDB_BaseDatabase_NoWaitDbExclusiveLock.htm" />
@@ -325,6 +328,9 @@
   <HelpKINode Title="BerkeleyDB.LSN class" Url="html/AllMembers_T_BerkeleyDB_LSN.htm" />
   <HelpKINode Title="BerkeleyDB.LSN class" Url="html/T_BerkeleyDB_LSN.htm" />
   <HelpKINode Title="BerkeleyDB.MessageDispatchDelegate delegate" Url="html/T_BerkeleyDB_MessageDispatchDelegate.htm" />
+  <HelpKINode Title="BerkeleyDB.MessageFeedbackDelegate delegate" Url="html/T_BerkeleyDB_MessageFeedbackDelegate.htm" />
+  <HelpKINode Title="BerkeleyDB.MetaCheckSumFailException class" Url="html/AllMembers_T_BerkeleyDB_MetaCheckSumFailException.htm" />
+  <HelpKINode Title="BerkeleyDB.MetaCheckSumFailException class" Url="html/T_BerkeleyDB_MetaCheckSumFailException.htm" />
   <HelpKINode Title="BerkeleyDB.MPoolConfig class" Url="html/AllMembers_T_BerkeleyDB_MPoolConfig.htm" />
   <HelpKINode Title="BerkeleyDB.MPoolConfig class" Url="html/T_BerkeleyDB_MPoolConfig.htm" />
   <HelpKINode Title="BerkeleyDB.MPoolFileStats class" Url="html/AllMembers_T_BerkeleyDB_MPoolFileStats.htm" />
@@ -506,6 +512,8 @@
   <HelpKINode Title="BTreeDatabase.DupCompare property" Url="html/P_BerkeleyDB_BTreeDatabase_DupCompare.htm" />
   <HelpKINode Title="BTreeDatabase.Duplicates property" Url="html/P_BerkeleyDB_BTreeDatabase_Duplicates.htm" />
   <HelpKINode Title="BTreeDatabase.Exists method" Url="html/Overload_BerkeleyDB_BTreeDatabase_Exists.htm" />
+  <HelpKINode Title="BTreeDatabase.ExternalFileDir property" Url="html/P_BerkeleyDB_BTreeDatabase_ExternalFileDir.htm" />
+  <HelpKINode Title="BTreeDatabase.ExternalFileThreshold property" Url="html/P_BerkeleyDB_BTreeDatabase_ExternalFileThreshold.htm" />
   <HelpKINode Title="BTreeDatabase.FastStats method" Url="html/Overload_BerkeleyDB_BTreeDatabase_FastStats.htm" />
   <HelpKINode Title="BTreeDatabase.Get method" Url="html/Overload_BerkeleyDB_BTreeDatabase_Get.htm" />
   <HelpKINode Title="BTreeDatabase.GetBoth method" Url="html/Overload_BerkeleyDB_BTreeDatabase_GetBoth.htm" />
@@ -548,6 +556,8 @@
   <HelpKINode Title="BTreeDatabaseConfig.Decompress property" Url="html/P_BerkeleyDB_BTreeDatabaseConfig_Decompress.htm" />
   <HelpKINode Title="BTreeDatabaseConfig.DuplicateCompare field" Url="html/F_BerkeleyDB_BTreeDatabaseConfig_DuplicateCompare.htm" />
   <HelpKINode Title="BTreeDatabaseConfig.Duplicates field" Url="html/F_BerkeleyDB_BTreeDatabaseConfig_Duplicates.htm" />
+  <HelpKINode Title="BTreeDatabaseConfig.ExternalFileDir field" Url="html/F_BerkeleyDB_BTreeDatabaseConfig_ExternalFileDir.htm" />
+  <HelpKINode Title="BTreeDatabaseConfig.ExternalFileThreshold property" Url="html/P_BerkeleyDB_BTreeDatabaseConfig_ExternalFileThreshold.htm" />
   <HelpKINode Title="BTreeDatabaseConfig.MinKeysPerPage property" Url="html/P_BerkeleyDB_BTreeDatabaseConfig_MinKeysPerPage.htm" />
   <HelpKINode Title="BTreeDatabaseConfig.NoReverseSplitting field" Url="html/F_BerkeleyDB_BTreeDatabaseConfig_NoReverseSplitting.htm" />
   <HelpKINode Title="BTreeDatabaseConfig.NParts property" Url="html/P_BerkeleyDB_BTreeDatabaseConfig_NParts.htm" />
@@ -581,6 +591,7 @@
   <HelpKINode Title="BTreeStats.MinKey property" Url="html/P_BerkeleyDB_BTreeStats_MinKey.htm" />
   <HelpKINode Title="BTreeStats.nBlobRecords property" Url="html/P_BerkeleyDB_BTreeStats_nBlobRecords.htm" />
   <HelpKINode Title="BTreeStats.nData property" Url="html/P_BerkeleyDB_BTreeStats_nData.htm" />
+  <HelpKINode Title="BTreeStats.nExternalFiles property" Url="html/P_BerkeleyDB_BTreeStats_nExternalFiles.htm" />
   <HelpKINode Title="BTreeStats.nKeys property" Url="html/P_BerkeleyDB_BTreeStats_nKeys.htm" />
   <HelpKINode Title="BTreeStats.nPages property" Url="html/P_BerkeleyDB_BTreeStats_nPages.htm" />
   <HelpKINode Title="BTreeStats.OverflowPages property" Url="html/P_BerkeleyDB_BTreeStats_OverflowPages.htm" />
@@ -641,14 +652,13 @@
   <HelpKINode Title="CachePriority.LOW field" Url="html/F_BerkeleyDB_CachePriority_LOW.htm" />
   <HelpKINode Title="CachePriority.VERY_HIGH field" Url="html/F_BerkeleyDB_CachePriority_VERY_HIGH.htm" />
   <HelpKINode Title="CachePriority.VERY_LOW field" Url="html/F_BerkeleyDB_CachePriority_VERY_LOW.htm" />
-  <HelpKINode Title="CacheRegions property" Url="html/P_BerkeleyDB_MPoolStats_CacheRegions.htm" />
   <HelpKINode Title="CacheSettings property" Url="html/P_BerkeleyDB_MPoolStats_CacheSettings.htm" />
   <HelpKINode Title="CacheSize field" Url="html/F_BerkeleyDB_DatabaseConfig_CacheSize.htm" />
   <HelpKINode Title="CacheSize field" Url="html/F_BerkeleyDB_MPoolConfig_CacheSize.htm" />
-  <HelpKINode Title="CacheSize property" Url="html/P_BerkeleyDB_BaseDatabase_CacheSize.htm" />
   <HelpKINode Title="CacheSize property" Url="html/P_BerkeleyDB_DatabaseEnvironment_CacheSize.htm" />
   <HelpKINode Title="CacheSize property" Url="html/P_BerkeleyDB_SequenceStats_CacheSize.htm" />
   <HelpKINode Title="CacheSize property" Url="html/P_BerkeleyDB_LogVerifyConfig_CacheSize.htm" />
+  <HelpKINode Title="CacheSize property" Url="html/P_BerkeleyDB_BaseDatabase_CacheSize.htm" />
   <HelpKINode Title="CacheSize property" Url="html/P_BerkeleyDB_SequenceConfig_CacheSize.htm" />
   <HelpKINode Title="Cachesize property" Url="html/P_BerkeleyDB_Sequence_Cachesize.htm" />
   <HelpKINode Title="CASCADE enumeration member" Url="html/T_BerkeleyDB_ForeignKeyDeleteAction.htm" />
@@ -686,6 +696,8 @@
   <HelpKINode Title="Close method" Url="html/Overload_BerkeleyDB_SecondaryQueueDatabase_Close.htm" />
   <HelpKINode Title="Close method" Url="html/Overload_BerkeleyDB_SecondaryRecnoDatabase_Close.htm" />
   <HelpKINode Title="CloseForceSync method" Url="html/M_BerkeleyDB_DatabaseEnvironment_CloseForceSync.htm" />
+  <HelpKINode Title="CloseForceSyncAndForceSyncEnv method" Url="html/M_BerkeleyDB_DatabaseEnvironment_CloseForceSyncAndForceSyncEnv.htm" />
+  <HelpKINode Title="CloseForceSyncEnv method" Url="html/M_BerkeleyDB_DatabaseEnvironment_CloseForceSyncEnv.htm" />
   <HelpKINode Title="Commit method" Url="html/Overload_BerkeleyDB_Transaction_Commit.htm" />
   <HelpKINode Title="Committed property" Url="html/P_BerkeleyDB_TransactionStats_Committed.htm" />
   <HelpKINode Title="CommitToken property" Url="html/P_BerkeleyDB_Transaction_CommitToken.htm" />
@@ -740,6 +752,7 @@
   <HelpKINode Title="Consume method" Url="html/Overload_BerkeleyDB_QueueDatabase_Consume.htm" />
   <HelpKINode Title="ConsumeInOrder field" Url="html/F_BerkeleyDB_QueueDatabaseConfig_ConsumeInOrder.htm" />
   <HelpKINode Title="ContinueAfterFail property" Url="html/P_BerkeleyDB_LogVerifyConfig_ContinueAfterFail.htm" />
+  <HelpKINode Title="Convert method" Url="html/M_BerkeleyDB_Database_Convert.htm" />
   <HelpKINode Title="Count method" Url="html/M_BerkeleyDB_BaseCursor_Count.htm" />
   <HelpKINode Title="Count property" Url="html/P_BerkeleyDB_MutexStats_Count.htm" />
   <HelpKINode Title="Create field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_Create.htm" />
@@ -846,6 +859,7 @@
     <HelpKINode Title="properties" Url="html/Properties_T_BerkeleyDB_Database.htm" />
   </HelpKINode>
   <HelpKINode Title="Database.Close method" Url="html/Overload_BerkeleyDB_Database_Close.htm" />
+  <HelpKINode Title="Database.Convert method" Url="html/M_BerkeleyDB_Database_Convert.htm" />
   <HelpKINode Title="Database.Cursor method" Url="html/Overload_BerkeleyDB_Database_Cursor.htm" />
   <HelpKINode Title="Database.Delete method" Url="html/Overload_BerkeleyDB_Database_Delete.htm" />
   <HelpKINode Title="Database.Exists method" Url="html/Overload_BerkeleyDB_Database_Exists.htm" />
@@ -887,6 +901,7 @@
   <HelpKINode Title="DatabaseConfig.ErrorPrefix field" Url="html/F_BerkeleyDB_DatabaseConfig_ErrorPrefix.htm" />
   <HelpKINode Title="DatabaseConfig.Feedback field" Url="html/F_BerkeleyDB_DatabaseConfig_Feedback.htm" />
   <HelpKINode Title="DatabaseConfig.FreeThreaded field" Url="html/F_BerkeleyDB_DatabaseConfig_FreeThreaded.htm" />
+  <HelpKINode Title="DatabaseConfig.MessagePrefix field" Url="html/F_BerkeleyDB_DatabaseConfig_MessagePrefix.htm" />
   <HelpKINode Title="DatabaseConfig.NoMMap field" Url="html/F_BerkeleyDB_DatabaseConfig_NoMMap.htm" />
   <HelpKINode Title="DatabaseConfig.NonDurableTxns field" Url="html/F_BerkeleyDB_DatabaseConfig_NonDurableTxns.htm" />
   <HelpKINode Title="DatabaseConfig.NoWaitDbExclusiveLock field" Url="html/F_BerkeleyDB_DatabaseConfig_NoWaitDbExclusiveLock.htm" />
@@ -910,6 +925,7 @@
   <HelpKINode Title="DatabaseEntry.Data property" Url="html/P_BerkeleyDB_DatabaseEntry_Data.htm" />
   <HelpKINode Title="DatabaseEntry.DatabaseEntry constructor" Url="html/Overload_BerkeleyDB_DatabaseEntry__ctor.htm" />
   <HelpKINode Title="DatabaseEntry.Dispose method" Url="html/M_BerkeleyDB_DatabaseEntry_Dispose.htm" />
+  <HelpKINode Title="DatabaseEntry.ExternalFile property" Url="html/P_BerkeleyDB_DatabaseEntry_ExternalFile.htm" />
   <HelpKINode Title="DatabaseEntry.Partial property" Url="html/P_BerkeleyDB_DatabaseEntry_Partial.htm" />
   <HelpKINode Title="DatabaseEntry.PartialLen property" Url="html/P_BerkeleyDB_DatabaseEntry_PartialLen.htm" />
   <HelpKINode Title="DatabaseEntry.PartialOffset property" Url="html/P_BerkeleyDB_DatabaseEntry_PartialOffset.htm" />
@@ -941,6 +957,8 @@
   <HelpKINode Title="DatabaseEnvironment.Checkpoint method" Url="html/Overload_BerkeleyDB_DatabaseEnvironment_Checkpoint.htm" />
   <HelpKINode Title="DatabaseEnvironment.Close method" Url="html/M_BerkeleyDB_DatabaseEnvironment_Close.htm" />
   <HelpKINode Title="DatabaseEnvironment.CloseForceSync method" Url="html/M_BerkeleyDB_DatabaseEnvironment_CloseForceSync.htm" />
+  <HelpKINode Title="DatabaseEnvironment.CloseForceSyncAndForceSyncEnv method" Url="html/M_BerkeleyDB_DatabaseEnvironment_CloseForceSyncAndForceSyncEnv.htm" />
+  <HelpKINode Title="DatabaseEnvironment.CloseForceSyncEnv method" Url="html/M_BerkeleyDB_DatabaseEnvironment_CloseForceSyncEnv.htm" />
   <HelpKINode Title="DatabaseEnvironment.Create property" Url="html/P_BerkeleyDB_DatabaseEnvironment_Create.htm" />
   <HelpKINode Title="DatabaseEnvironment.DataDirs property" Url="html/P_BerkeleyDB_DatabaseEnvironment_DataDirs.htm" />
   <HelpKINode Title="DatabaseEnvironment.DeadlockResolution property" Url="html/P_BerkeleyDB_DatabaseEnvironment_DeadlockResolution.htm" />
@@ -949,18 +967,24 @@
   <HelpKINode Title="DatabaseEnvironment.ErrorFeedback property" Url="html/P_BerkeleyDB_DatabaseEnvironment_ErrorFeedback.htm" />
   <HelpKINode Title="DatabaseEnvironment.ErrorPrefix property" Url="html/P_BerkeleyDB_DatabaseEnvironment_ErrorPrefix.htm" />
   <HelpKINode Title="DatabaseEnvironment.EventNotify property" Url="html/P_BerkeleyDB_DatabaseEnvironment_EventNotify.htm" />
+  <HelpKINode Title="DatabaseEnvironment.ExternalFileDir property" Url="html/P_BerkeleyDB_DatabaseEnvironment_ExternalFileDir.htm" />
+  <HelpKINode Title="DatabaseEnvironment.ExternalFileThreshold property" Url="html/P_BerkeleyDB_DatabaseEnvironment_ExternalFileThreshold.htm" />
   <HelpKINode Title="DatabaseEnvironment.FailCheck method" Url="html/M_BerkeleyDB_DatabaseEnvironment_FailCheck.htm" />
   <HelpKINode Title="DatabaseEnvironment.Feedback property" Url="html/P_BerkeleyDB_DatabaseEnvironment_Feedback.htm" />
   <HelpKINode Title="DatabaseEnvironment.ForceFlush property" Url="html/P_BerkeleyDB_DatabaseEnvironment_ForceFlush.htm" />
   <HelpKINode Title="DatabaseEnvironment.FreeThreaded property" Url="html/P_BerkeleyDB_DatabaseEnvironment_FreeThreaded.htm" />
   <HelpKINode Title="DatabaseEnvironment.Home property" Url="html/P_BerkeleyDB_DatabaseEnvironment_Home.htm" />
   <HelpKINode Title="DatabaseEnvironment.HotbackupInProgress property" Url="html/P_BerkeleyDB_DatabaseEnvironment_HotbackupInProgress.htm" />
+  <HelpKINode Title="DatabaseEnvironment.InitDatabaseCount property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitDatabaseCount.htm" />
+  <HelpKINode Title="DatabaseEnvironment.InitDatabaseLength property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitDatabaseLength.htm" />
+  <HelpKINode Title="DatabaseEnvironment.InitExtFileDatabaseCount property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitExtFileDatabaseCount.htm" />
   <HelpKINode Title="DatabaseEnvironment.InitLockCount property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitLockCount.htm" />
   <HelpKINode Title="DatabaseEnvironment.InitLockerCount property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitLockerCount.htm" />
   <HelpKINode Title="DatabaseEnvironment.InitLockObjectCount property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitLockObjectCount.htm" />
   <HelpKINode Title="DatabaseEnvironment.InitLogIdCount property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitLogIdCount.htm" />
   <HelpKINode Title="DatabaseEnvironment.InitMutexes property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitMutexes.htm" />
   <HelpKINode Title="DatabaseEnvironment.InitRegions property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitRegions.htm" />
+  <HelpKINode Title="DatabaseEnvironment.InitRepSitesCount property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitRepSitesCount.htm" />
   <HelpKINode Title="DatabaseEnvironment.InitThreadCount property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitThreadCount.htm" />
   <HelpKINode Title="DatabaseEnvironment.InitTxnCount property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitTxnCount.htm" />
   <HelpKINode Title="DatabaseEnvironment.IntermediateDirMode property" Url="html/P_BerkeleyDB_DatabaseEnvironment_IntermediateDirMode.htm" />
@@ -975,6 +999,7 @@
   <HelpKINode Title="DatabaseEnvironment.LogBlobContent property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogBlobContent.htm" />
   <HelpKINode Title="DatabaseEnvironment.LogBufferSize property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogBufferSize.htm" />
   <HelpKINode Title="DatabaseEnvironment.LogDir property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogDir.htm" />
+  <HelpKINode Title="DatabaseEnvironment.LogExternalFileContent property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogExternalFileContent.htm" />
   <HelpKINode Title="DatabaseEnvironment.LogFile method" Url="html/M_BerkeleyDB_DatabaseEnvironment_LogFile.htm" />
   <HelpKINode Title="DatabaseEnvironment.LogFileMode property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogFileMode.htm" />
   <HelpKINode Title="DatabaseEnvironment.LogFiles method" Url="html/M_BerkeleyDB_DatabaseEnvironment_LogFiles.htm" />
@@ -983,6 +1008,7 @@
   <HelpKINode Title="DatabaseEnvironment.LoggingSystemStats method" Url="html/Overload_BerkeleyDB_DatabaseEnvironment_LoggingSystemStats.htm" />
   <HelpKINode Title="DatabaseEnvironment.LogInMemory property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogInMemory.htm" />
   <HelpKINode Title="DatabaseEnvironment.LogNoBuffer property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogNoBuffer.htm" />
+  <HelpKINode Title="DatabaseEnvironment.LogNoSync property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogNoSync.htm" />
   <HelpKINode Title="DatabaseEnvironment.LogRegionSize property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogRegionSize.htm" />
   <HelpKINode Title="DatabaseEnvironment.LogVerify method" Url="html/M_BerkeleyDB_DatabaseEnvironment_LogVerify.htm" />
   <HelpKINode Title="DatabaseEnvironment.LogWrite method" Url="html/M_BerkeleyDB_DatabaseEnvironment_LogWrite.htm" />
@@ -996,9 +1022,12 @@
   <HelpKINode Title="DatabaseEnvironment.MaxOpenFiles property" Url="html/P_BerkeleyDB_DatabaseEnvironment_MaxOpenFiles.htm" />
   <HelpKINode Title="DatabaseEnvironment.MaxSequentialWrites property" Url="html/P_BerkeleyDB_DatabaseEnvironment_MaxSequentialWrites.htm" />
   <HelpKINode Title="DatabaseEnvironment.MaxTransactions property" Url="html/P_BerkeleyDB_DatabaseEnvironment_MaxTransactions.htm" />
+  <HelpKINode Title="DatabaseEnvironment.messageFeedback property" Url="html/P_BerkeleyDB_DatabaseEnvironment_messageFeedback.htm" />
+  <HelpKINode Title="DatabaseEnvironment.MessagePrefix property" Url="html/P_BerkeleyDB_DatabaseEnvironment_MessagePrefix.htm" />
   <HelpKINode Title="DatabaseEnvironment.MetadataDir property" Url="html/P_BerkeleyDB_DatabaseEnvironment_MetadataDir.htm" />
   <HelpKINode Title="DatabaseEnvironment.MMapSize property" Url="html/P_BerkeleyDB_DatabaseEnvironment_MMapSize.htm" />
   <HelpKINode Title="DatabaseEnvironment.MPoolSystemStats method" Url="html/Overload_BerkeleyDB_DatabaseEnvironment_MPoolSystemStats.htm" />
+  <HelpKINode Title="DatabaseEnvironment.Msgfile property" Url="html/P_BerkeleyDB_DatabaseEnvironment_Msgfile.htm" />
   <HelpKINode Title="DatabaseEnvironment.MutexAlignment property" Url="html/P_BerkeleyDB_DatabaseEnvironment_MutexAlignment.htm" />
   <HelpKINode Title="DatabaseEnvironment.MutexIncrement property" Url="html/P_BerkeleyDB_DatabaseEnvironment_MutexIncrement.htm" />
   <HelpKINode Title="DatabaseEnvironment.MutexSystemStats method" Url="html/Overload_BerkeleyDB_DatabaseEnvironment_MutexSystemStats.htm" />
@@ -1021,6 +1050,7 @@
   <HelpKINode Title="DatabaseEnvironment.PrintTransactionSystemStats method" Url="html/Overload_BerkeleyDB_DatabaseEnvironment_PrintTransactionSystemStats.htm" />
   <HelpKINode Title="DatabaseEnvironment.Private property" Url="html/P_BerkeleyDB_DatabaseEnvironment_Private.htm" />
   <HelpKINode Title="DatabaseEnvironment.Recover method" Url="html/M_BerkeleyDB_DatabaseEnvironment_Recover.htm" />
+  <HelpKINode Title="DatabaseEnvironment.RegionDir property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RegionDir.htm" />
   <HelpKINode Title="DatabaseEnvironment.RegionMemoryLimitBytes property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RegionMemoryLimitBytes.htm" />
   <HelpKINode Title="DatabaseEnvironment.RegionMemoryLimitGBytes property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RegionMemoryLimitGBytes.htm" />
   <HelpKINode Title="DatabaseEnvironment.RegionSetMemoryLimit method" Url="html/M_BerkeleyDB_DatabaseEnvironment_RegionSetMemoryLimit.htm" />
@@ -1037,8 +1067,12 @@
   <HelpKINode Title="DatabaseEnvironment.RepClockskewSlow property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepClockskewSlow.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepConnectionRetry property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepConnectionRetry.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepDelayClientSync property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepDelayClientSync.htm" />
+  <HelpKINode Title="DatabaseEnvironment.RepDisablePoll property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepDisablePoll.htm" />
+  <HelpKINode Title="DatabaseEnvironment.RepDisableSSL property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepDisableSSL.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepElectionRetry property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepElectionRetry.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepElectionTimeout property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepElectionTimeout.htm" />
+  <HelpKINode Title="DatabaseEnvironment.RepEnableEpoll property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepEnableEpoll.htm" />
+  <HelpKINode Title="DatabaseEnvironment.RepForwardWrites property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepForwardWrites.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepFullElectionTimeout property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepFullElectionTimeout.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepHeartbeatMonitor property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepHeartbeatMonitor.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepHeartbeatSend property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepHeartbeatSend.htm" />
@@ -1050,9 +1084,12 @@
   <HelpKINode Title="DatabaseEnvironment.RepMessageDispatch property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepMessageDispatch.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepMgrAckPolicy property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepMgrAckPolicy.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepMgrChannel method" Url="html/M_BerkeleyDB_DatabaseEnvironment_RepMgrChannel.htm" />
+  <HelpKINode Title="DatabaseEnvironment.RepmgrIncomingQueueMaxBytes property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepmgrIncomingQueueMaxBytes.htm" />
+  <HelpKINode Title="DatabaseEnvironment.RepmgrIncomingQueueMaxGBytes property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepmgrIncomingQueueMaxGBytes.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepMgrLocalSite property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepMgrLocalSite.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepMgrRemoteSites property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepMgrRemoteSites.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepMgrRunElections property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepMgrRunElections.htm" />
+  <HelpKINode Title="DatabaseEnvironment.RepmgrSetIncomingQueueMax method" Url="html/M_BerkeleyDB_DatabaseEnvironment_RepmgrSetIncomingQueueMax.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepMgrSite method" Url="html/Overload_BerkeleyDB_DatabaseEnvironment_RepMgrSite.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepMgrSiteConfig method" Url="html/M_BerkeleyDB_DatabaseEnvironment_RepMgrSiteConfig.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepMgrStartClient method" Url="html/Overload_BerkeleyDB_DatabaseEnvironment_RepMgrStartClient.htm" />
@@ -1060,6 +1097,8 @@
   <HelpKINode Title="DatabaseEnvironment.RepMgrSystemStats method" Url="html/Overload_BerkeleyDB_DatabaseEnvironment_RepMgrSystemStats.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepNoBlocking property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepNoBlocking.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepNSites property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepNSites.htm" />
+  <HelpKINode Title="DatabaseEnvironment.RepPrefmasClient property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepPrefmasClient.htm" />
+  <HelpKINode Title="DatabaseEnvironment.RepPrefmasMaster property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepPrefmasMaster.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepPriority property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepPriority.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepProcessMessage method" Url="html/M_BerkeleyDB_DatabaseEnvironment_RepProcessMessage.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepRetransmissionRequestMax property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepRetransmissionRequestMax.htm" />
@@ -1076,6 +1115,7 @@
   <HelpKINode Title="DatabaseEnvironment.RepTransmitLimitGBytes property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepTransmitLimitGBytes.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepTransport property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepTransport.htm" />
   <HelpKINode Title="DatabaseEnvironment.RepUseMasterLeases property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepUseMasterLeases.htm" />
+  <HelpKINode Title="DatabaseEnvironment.RepWriteForwardTimeout property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepWriteForwardTimeout.htm" />
   <HelpKINode Title="DatabaseEnvironment.ResetFileID method" Url="html/M_BerkeleyDB_DatabaseEnvironment_ResetFileID.htm" />
   <HelpKINode Title="DatabaseEnvironment.ResetLSN method" Url="html/M_BerkeleyDB_DatabaseEnvironment_ResetLSN.htm" />
   <HelpKINode Title="DatabaseEnvironment.RunFatalRecovery property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RunFatalRecovery.htm" />
@@ -1132,11 +1172,17 @@
   <HelpKINode Title="DatabaseEnvironmentConfig.ErrorFeedback field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_ErrorFeedback.htm" />
   <HelpKINode Title="DatabaseEnvironmentConfig.ErrorPrefix field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_ErrorPrefix.htm" />
   <HelpKINode Title="DatabaseEnvironmentConfig.EventNotify field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_EventNotify.htm" />
+  <HelpKINode Title="DatabaseEnvironmentConfig.ExternalFileDir field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_ExternalFileDir.htm" />
+  <HelpKINode Title="DatabaseEnvironmentConfig.ExternalFileThreshold property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_ExternalFileThreshold.htm" />
   <HelpKINode Title="DatabaseEnvironmentConfig.Feedback field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_Feedback.htm" />
   <HelpKINode Title="DatabaseEnvironmentConfig.ForceFlush field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_ForceFlush.htm" />
   <HelpKINode Title="DatabaseEnvironmentConfig.FreeThreaded field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_FreeThreaded.htm" />
   <HelpKINode Title="DatabaseEnvironmentConfig.HotbackupInProgress field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_HotbackupInProgress.htm" />
+  <HelpKINode Title="DatabaseEnvironmentConfig.InitDatabaseCount property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_InitDatabaseCount.htm" />
+  <HelpKINode Title="DatabaseEnvironmentConfig.InitDatabaseLength property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_InitDatabaseLength.htm" />
+  <HelpKINode Title="DatabaseEnvironmentConfig.InitExtFileDatabaseCount property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_InitExtFileDatabaseCount.htm" />
   <HelpKINode Title="DatabaseEnvironmentConfig.InitRegions field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_InitRegions.htm" />
+  <HelpKINode Title="DatabaseEnvironmentConfig.InitRepSitesCount property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_InitRepSitesCount.htm" />
   <HelpKINode Title="DatabaseEnvironmentConfig.InitThreadCount property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_InitThreadCount.htm" />
   <HelpKINode Title="DatabaseEnvironmentConfig.InitTxnCount property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_InitTxnCount.htm" />
   <HelpKINode Title="DatabaseEnvironmentConfig.IntermediateDirMode field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_IntermediateDirMode.htm" />
@@ -1145,6 +1191,7 @@
   <HelpKINode Title="DatabaseEnvironmentConfig.LockTimeout property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_LockTimeout.htm" />
   <HelpKINode Title="DatabaseEnvironmentConfig.LogSystemCfg field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_LogSystemCfg.htm" />
   <HelpKINode Title="DatabaseEnvironmentConfig.MaxTransactions property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_MaxTransactions.htm" />
+  <HelpKINode Title="DatabaseEnvironmentConfig.MessagePrefix field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_MessagePrefix.htm" />
   <HelpKINode Title="DatabaseEnvironmentConfig.MetadataDir field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_MetadataDir.htm" />
   <HelpKINode Title="DatabaseEnvironmentConfig.MPoolSystemCfg field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_MPoolSystemCfg.htm" />
   <HelpKINode Title="DatabaseEnvironmentConfig.MutexSystemCfg field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_MutexSystemCfg.htm" />
@@ -1318,6 +1365,7 @@
   <HelpKINode Title="DB_LOCK_DEADLOCK field" Url="html/F_BerkeleyDB_ErrorCodes_DB_LOCK_DEADLOCK.htm" />
   <HelpKINode Title="DB_LOCK_NOTGRANTED field" Url="html/F_BerkeleyDB_ErrorCodes_DB_LOCK_NOTGRANTED.htm" />
   <HelpKINode Title="DB_LOG_BUFFER_FULL field" Url="html/F_BerkeleyDB_ErrorCodes_DB_LOG_BUFFER_FULL.htm" />
+  <HelpKINode Title="DB_META_CHKSUM_FAIL field" Url="html/F_BerkeleyDB_ErrorCodes_DB_META_CHKSUM_FAIL.htm" />
   <HelpKINode Title="DB_NOSERVER field" Url="html/F_BerkeleyDB_ErrorCodes_DB_NOSERVER.htm" />
   <HelpKINode Title="DB_NOTFOUND field" Url="html/F_BerkeleyDB_ErrorCodes_DB_NOTFOUND.htm" />
   <HelpKINode Title="DB_OLD_VERSION field" Url="html/F_BerkeleyDB_ErrorCodes_DB_OLD_VERSION.htm" />
@@ -1326,6 +1374,7 @@
   <HelpKINode Title="DB_REP_HANDLE_DEAD field" Url="html/F_BerkeleyDB_ErrorCodes_DB_REP_HANDLE_DEAD.htm" />
   <HelpKINode Title="DB_REP_HOLDELECTION field" Url="html/F_BerkeleyDB_ErrorCodes_DB_REP_HOLDELECTION.htm" />
   <HelpKINode Title="DB_REP_IGNORE field" Url="html/F_BerkeleyDB_ErrorCodes_DB_REP_IGNORE.htm" />
+  <HelpKINode Title="DB_REP_INELECT field" Url="html/F_BerkeleyDB_ErrorCodes_DB_REP_INELECT.htm" />
   <HelpKINode Title="DB_REP_ISPERM field" Url="html/F_BerkeleyDB_ErrorCodes_DB_REP_ISPERM.htm" />
   <HelpKINode Title="DB_REP_JOIN_FAILURE field" Url="html/F_BerkeleyDB_ErrorCodes_DB_REP_JOIN_FAILURE.htm" />
   <HelpKINode Title="DB_REP_LEASE_EXPIRED field" Url="html/F_BerkeleyDB_ErrorCodes_DB_REP_LEASE_EXPIRED.htm" />
@@ -1404,6 +1453,8 @@
   <HelpKINode Title="Dir field" Url="html/F_BerkeleyDB_LogConfig_Dir.htm" />
   <HelpKINode Title="DirtyPages property" Url="html/P_BerkeleyDB_MPoolStats_DirtyPages.htm" />
   <HelpKINode Title="DirtyPagesEvicted property" Url="html/P_BerkeleyDB_MPoolStats_DirtyPagesEvicted.htm" />
+  <HelpKINode Title="DisablePoll field" Url="html/F_BerkeleyDB_ReplicationConfig_DisablePoll.htm" />
+  <HelpKINode Title="DisableSSL field" Url="html/F_BerkeleyDB_ReplicationConfig_DisableSSL.htm" />
   <HelpKINode Title="Discard method" Url="html/M_BerkeleyDB_Transaction_Discard.htm" />
   <HelpKINode Title="DiskFileNumber property" Url="html/P_BerkeleyDB_LogStats_DiskFileNumber.htm" />
   <HelpKINode Title="DiskOffset property" Url="html/P_BerkeleyDB_LogStats_DiskOffset.htm" />
@@ -1473,6 +1524,7 @@
   <HelpKINode Title="EmptyPages property" Url="html/P_BerkeleyDB_BTreeStats_EmptyPages.htm" />
   <HelpKINode Title="EmptyPages property" Url="html/P_BerkeleyDB_RecnoStats_EmptyPages.htm" />
   <HelpKINode Title="EMPTY_TRANSACTION enumeration member" Url="html/T_BerkeleyDB_TransactionAppliedStatus.htm" />
+  <HelpKINode Title="EnableEpoll field" Url="html/F_BerkeleyDB_ReplicationConfig_EnableEpoll.htm" />
   <HelpKINode Title="EncryptAlgorithm property" Url="html/P_BerkeleyDB_BaseDatabase_EncryptAlgorithm.htm" />
   <HelpKINode Title="EncryptAlgorithm property" Url="html/P_BerkeleyDB_DatabaseConfig_EncryptAlgorithm.htm" />
   <HelpKINode Title="EncryptAlgorithm property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_EncryptAlgorithm.htm" />
@@ -1516,6 +1568,7 @@
   <HelpKINode Title="ErrorCodes.DB_LOCK_DEADLOCK field" Url="html/F_BerkeleyDB_ErrorCodes_DB_LOCK_DEADLOCK.htm" />
   <HelpKINode Title="ErrorCodes.DB_LOCK_NOTGRANTED field" Url="html/F_BerkeleyDB_ErrorCodes_DB_LOCK_NOTGRANTED.htm" />
   <HelpKINode Title="ErrorCodes.DB_LOG_BUFFER_FULL field" Url="html/F_BerkeleyDB_ErrorCodes_DB_LOG_BUFFER_FULL.htm" />
+  <HelpKINode Title="ErrorCodes.DB_META_CHKSUM_FAIL field" Url="html/F_BerkeleyDB_ErrorCodes_DB_META_CHKSUM_FAIL.htm" />
   <HelpKINode Title="ErrorCodes.DB_NOSERVER field" Url="html/F_BerkeleyDB_ErrorCodes_DB_NOSERVER.htm" />
   <HelpKINode Title="ErrorCodes.DB_NOTFOUND field" Url="html/F_BerkeleyDB_ErrorCodes_DB_NOTFOUND.htm" />
   <HelpKINode Title="ErrorCodes.DB_OLD_VERSION field" Url="html/F_BerkeleyDB_ErrorCodes_DB_OLD_VERSION.htm" />
@@ -1524,6 +1577,7 @@
   <HelpKINode Title="ErrorCodes.DB_REP_HANDLE_DEAD field" Url="html/F_BerkeleyDB_ErrorCodes_DB_REP_HANDLE_DEAD.htm" />
   <HelpKINode Title="ErrorCodes.DB_REP_HOLDELECTION field" Url="html/F_BerkeleyDB_ErrorCodes_DB_REP_HOLDELECTION.htm" />
   <HelpKINode Title="ErrorCodes.DB_REP_IGNORE field" Url="html/F_BerkeleyDB_ErrorCodes_DB_REP_IGNORE.htm" />
+  <HelpKINode Title="ErrorCodes.DB_REP_INELECT field" Url="html/F_BerkeleyDB_ErrorCodes_DB_REP_INELECT.htm" />
   <HelpKINode Title="ErrorCodes.DB_REP_ISPERM field" Url="html/F_BerkeleyDB_ErrorCodes_DB_REP_ISPERM.htm" />
   <HelpKINode Title="ErrorCodes.DB_REP_JOIN_FAILURE field" Url="html/F_BerkeleyDB_ErrorCodes_DB_REP_JOIN_FAILURE.htm" />
   <HelpKINode Title="ErrorCodes.DB_REP_LEASE_EXPIRED field" Url="html/F_BerkeleyDB_ErrorCodes_DB_REP_LEASE_EXPIRED.htm" />
@@ -1565,6 +1619,27 @@
   <HelpKINode Title="ExtentSize property" Url="html/P_BerkeleyDB_QueueDatabase_ExtentSize.htm" />
   <HelpKINode Title="ExtentSize property" Url="html/P_BerkeleyDB_SecondaryQueueDatabaseConfig_ExtentSize.htm" />
   <HelpKINode Title="ExtentSize property" Url="html/P_BerkeleyDB_SecondaryQueueDatabase_ExtentSize.htm" />
+  <HelpKINode Title="ExternalFile property" Url="html/P_BerkeleyDB_DatabaseEntry_ExternalFile.htm" />
+  <HelpKINode Title="ExternalFileDir field" Url="html/F_BerkeleyDB_BTreeDatabaseConfig_ExternalFileDir.htm" />
+  <HelpKINode Title="ExternalFileDir field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_ExternalFileDir.htm" />
+  <HelpKINode Title="ExternalFileDir field" Url="html/F_BerkeleyDB_HashDatabaseConfig_ExternalFileDir.htm" />
+  <HelpKINode Title="ExternalFileDir field" Url="html/F_BerkeleyDB_HeapDatabaseConfig_ExternalFileDir.htm" />
+  <HelpKINode Title="ExternalFileDir property" Url="html/P_BerkeleyDB_BTreeDatabase_ExternalFileDir.htm" />
+  <HelpKINode Title="ExternalFileDir property" Url="html/P_BerkeleyDB_DatabaseEnvironment_ExternalFileDir.htm" />
+  <HelpKINode Title="ExternalFileDir property" Url="html/P_BerkeleyDB_HashDatabase_ExternalFileDir.htm" />
+  <HelpKINode Title="ExternalFileDir property" Url="html/P_BerkeleyDB_HeapDatabase_ExternalFileDir.htm" />
+  <HelpKINode Title="ExternalFileDuplicated property" Url="html/P_BerkeleyDB_ReplicationStats_ExternalFileDuplicated.htm" />
+  <HelpKINode Title="ExternalFileRecords property" Url="html/P_BerkeleyDB_ReplicationStats_ExternalFileRecords.htm" />
+  <HelpKINode Title="ExternalFileRerequests property" Url="html/P_BerkeleyDB_ReplicationStats_ExternalFileRerequests.htm" />
+  <HelpKINode Title="ExternalFileThreshold property" Url="html/P_BerkeleyDB_BTreeDatabaseConfig_ExternalFileThreshold.htm" />
+  <HelpKINode Title="ExternalFileThreshold property" Url="html/P_BerkeleyDB_BTreeDatabase_ExternalFileThreshold.htm" />
+  <HelpKINode Title="ExternalFileThreshold property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_ExternalFileThreshold.htm" />
+  <HelpKINode Title="ExternalFileThreshold property" Url="html/P_BerkeleyDB_DatabaseEnvironment_ExternalFileThreshold.htm" />
+  <HelpKINode Title="ExternalFileThreshold property" Url="html/P_BerkeleyDB_HashDatabaseConfig_ExternalFileThreshold.htm" />
+  <HelpKINode Title="ExternalFileThreshold property" Url="html/P_BerkeleyDB_HashDatabase_ExternalFileThreshold.htm" />
+  <HelpKINode Title="ExternalFileThreshold property" Url="html/P_BerkeleyDB_HeapDatabaseConfig_ExternalFileThreshold.htm" />
+  <HelpKINode Title="ExternalFileThreshold property" Url="html/P_BerkeleyDB_HeapDatabase_ExternalFileThreshold.htm" />
+  <HelpKINode Title="ExternalFileUpdateRerequests property" Url="html/P_BerkeleyDB_ReplicationStats_ExternalFileUpdateRerequests.htm" />
   <HelpKINode Title="FailCheck method" Url="html/M_BerkeleyDB_DatabaseEnvironment_FailCheck.htm" />
   <HelpKINode Title="FailedConnections property" Url="html/P_BerkeleyDB_RepMgrStats_FailedConnections.htm" />
   <HelpKINode Title="FailedMessages property" Url="html/P_BerkeleyDB_RepMgrStats_FailedMessages.htm" />
@@ -1614,6 +1689,7 @@
   <HelpKINode Title="ForeignKeyDeleteAction enumeration" Url="html/T_BerkeleyDB_ForeignKeyDeleteAction.htm" />
   <HelpKINode Title="ForeignKeyNullfier property" Url="html/P_BerkeleyDB_SecondaryDatabaseConfig_ForeignKeyNullfier.htm" />
   <HelpKINode Title="ForeignKeyNullifyDelegate delegate" Url="html/T_BerkeleyDB_ForeignKeyNullifyDelegate.htm" />
+  <HelpKINode Title="ForwardWrites field" Url="html/F_BerkeleyDB_ReplicationConfig_ForwardWrites.htm" />
   <HelpKINode Title="FreePages property" Url="html/P_BerkeleyDB_BTreeStats_FreePages.htm" />
   <HelpKINode Title="FreePages property" Url="html/P_BerkeleyDB_HashStats_FreePages.htm" />
   <HelpKINode Title="FreePages property" Url="html/P_BerkeleyDB_RecnoStats_FreePages.htm" />
@@ -1689,6 +1765,7 @@
   <HelpKINode Title="Greater property" Url="html/P_BerkeleyDB_KeyRange_Greater.htm" />
   <HelpKINode Title="GroupCreator property" Url="html/P_BerkeleyDB_DbSiteConfig_GroupCreator.htm" />
   <HelpKINode Title="GroupCreator property" Url="html/P_BerkeleyDB_DbSite_GroupCreator.htm" />
+  <HelpKINode Title="GroupStableLogFile property" Url="html/P_BerkeleyDB_RepMgrStats_GroupStableLogFile.htm" />
   <HelpKINode Title="HASH field" Url="html/F_BerkeleyDB_DatabaseType_HASH.htm" />
   <HelpKINode Title="HashBucketMutexes property" Url="html/P_BerkeleyDB_MPoolStats_HashBucketMutexes.htm" />
   <HelpKINode Title="HashBuckets property" Url="html/P_BerkeleyDB_MPoolStats_HashBuckets.htm" />
@@ -1747,6 +1824,8 @@
   <HelpKINode Title="HashDatabase.DupCompare property" Url="html/P_BerkeleyDB_HashDatabase_DupCompare.htm" />
   <HelpKINode Title="HashDatabase.Duplicates property" Url="html/P_BerkeleyDB_HashDatabase_Duplicates.htm" />
   <HelpKINode Title="HashDatabase.Exists method" Url="html/Overload_BerkeleyDB_HashDatabase_Exists.htm" />
+  <HelpKINode Title="HashDatabase.ExternalFileDir property" Url="html/P_BerkeleyDB_HashDatabase_ExternalFileDir.htm" />
+  <HelpKINode Title="HashDatabase.ExternalFileThreshold property" Url="html/P_BerkeleyDB_HashDatabase_ExternalFileThreshold.htm" />
   <HelpKINode Title="HashDatabase.FastStats method" Url="html/Overload_BerkeleyDB_HashDatabase_FastStats.htm" />
   <HelpKINode Title="HashDatabase.FillFactor property" Url="html/P_BerkeleyDB_HashDatabase_FillFactor.htm" />
   <HelpKINode Title="HashDatabase.Get method" Url="html/Overload_BerkeleyDB_HashDatabase_Get.htm" />
@@ -1782,6 +1861,8 @@
   <HelpKINode Title="HashDatabaseConfig.Creation field" Url="html/F_BerkeleyDB_HashDatabaseConfig_Creation.htm" />
   <HelpKINode Title="HashDatabaseConfig.DuplicateCompare field" Url="html/F_BerkeleyDB_HashDatabaseConfig_DuplicateCompare.htm" />
   <HelpKINode Title="HashDatabaseConfig.Duplicates field" Url="html/F_BerkeleyDB_HashDatabaseConfig_Duplicates.htm" />
+  <HelpKINode Title="HashDatabaseConfig.ExternalFileDir field" Url="html/F_BerkeleyDB_HashDatabaseConfig_ExternalFileDir.htm" />
+  <HelpKINode Title="HashDatabaseConfig.ExternalFileThreshold property" Url="html/P_BerkeleyDB_HashDatabaseConfig_ExternalFileThreshold.htm" />
   <HelpKINode Title="HashDatabaseConfig.FillFactor property" Url="html/P_BerkeleyDB_HashDatabaseConfig_FillFactor.htm" />
   <HelpKINode Title="HashDatabaseConfig.HashComparison field" Url="html/F_BerkeleyDB_HashDatabaseConfig_HashComparison.htm" />
   <HelpKINode Title="HashDatabaseConfig.HashDatabaseConfig constructor" Url="html/M_BerkeleyDB_HashDatabaseConfig__ctor.htm" />
@@ -1819,6 +1900,7 @@
   <HelpKINode Title="HashStats.MetadataFlags property" Url="html/P_BerkeleyDB_HashStats_MetadataFlags.htm" />
   <HelpKINode Title="HashStats.nBlobRecords property" Url="html/P_BerkeleyDB_HashStats_nBlobRecords.htm" />
   <HelpKINode Title="HashStats.nData property" Url="html/P_BerkeleyDB_HashStats_nData.htm" />
+  <HelpKINode Title="HashStats.nExternalFiles property" Url="html/P_BerkeleyDB_HashStats_nExternalFiles.htm" />
   <HelpKINode Title="HashStats.nHashBuckets property" Url="html/P_BerkeleyDB_HashStats_nHashBuckets.htm" />
   <HelpKINode Title="HashStats.nKeys property" Url="html/P_BerkeleyDB_HashStats_nKeys.htm" />
   <HelpKINode Title="HashStats.nPages property" Url="html/P_BerkeleyDB_HashStats_nPages.htm" />
@@ -1843,6 +1925,8 @@
   <HelpKINode Title="HeapDatabase.Cursor method" Url="html/Overload_BerkeleyDB_HeapDatabase_Cursor.htm" />
   <HelpKINode Title="HeapDatabase.Delete method" Url="html/Overload_BerkeleyDB_HeapDatabase_Delete.htm" />
   <HelpKINode Title="HeapDatabase.Exists method" Url="html/Overload_BerkeleyDB_HeapDatabase_Exists.htm" />
+  <HelpKINode Title="HeapDatabase.ExternalFileDir property" Url="html/P_BerkeleyDB_HeapDatabase_ExternalFileDir.htm" />
+  <HelpKINode Title="HeapDatabase.ExternalFileThreshold property" Url="html/P_BerkeleyDB_HeapDatabase_ExternalFileThreshold.htm" />
   <HelpKINode Title="HeapDatabase.FastStats method" Url="html/Overload_BerkeleyDB_HeapDatabase_FastStats.htm" />
   <HelpKINode Title="HeapDatabase.Get method" Url="html/Overload_BerkeleyDB_HeapDatabase_Get.htm" />
   <HelpKINode Title="HeapDatabase.GetBoth method" Url="html/Overload_BerkeleyDB_HeapDatabase_GetBoth.htm" />
@@ -1871,6 +1955,8 @@
   <HelpKINode Title="HeapDatabaseConfig.BlobDir field" Url="html/F_BerkeleyDB_HeapDatabaseConfig_BlobDir.htm" />
   <HelpKINode Title="HeapDatabaseConfig.BlobThreshold property" Url="html/P_BerkeleyDB_HeapDatabaseConfig_BlobThreshold.htm" />
   <HelpKINode Title="HeapDatabaseConfig.Creation field" Url="html/F_BerkeleyDB_HeapDatabaseConfig_Creation.htm" />
+  <HelpKINode Title="HeapDatabaseConfig.ExternalFileDir field" Url="html/F_BerkeleyDB_HeapDatabaseConfig_ExternalFileDir.htm" />
+  <HelpKINode Title="HeapDatabaseConfig.ExternalFileThreshold property" Url="html/P_BerkeleyDB_HeapDatabaseConfig_ExternalFileThreshold.htm" />
   <HelpKINode Title="HeapDatabaseConfig.HeapDatabaseConfig constructor" Url="html/M_BerkeleyDB_HeapDatabaseConfig__ctor.htm" />
   <HelpKINode Title="HeapDatabaseConfig.MaxSize method" Url="html/M_BerkeleyDB_HeapDatabaseConfig_MaxSize.htm" />
   <HelpKINode Title="HeapDatabaseConfig.MaxSizeBytes property" Url="html/P_BerkeleyDB_HeapDatabaseConfig_MaxSizeBytes.htm" />
@@ -1912,6 +1998,7 @@
   <HelpKINode Title="HeapStats.MagicNumber property" Url="html/P_BerkeleyDB_HeapStats_MagicNumber.htm" />
   <HelpKINode Title="HeapStats.MetadataFlags property" Url="html/P_BerkeleyDB_HeapStats_MetadataFlags.htm" />
   <HelpKINode Title="HeapStats.nBlobRecords property" Url="html/P_BerkeleyDB_HeapStats_nBlobRecords.htm" />
+  <HelpKINode Title="HeapStats.nExternalFiles property" Url="html/P_BerkeleyDB_HeapStats_nExternalFiles.htm" />
   <HelpKINode Title="HeapStats.nPages property" Url="html/P_BerkeleyDB_HeapStats_nPages.htm" />
   <HelpKINode Title="HeapStats.nRecords property" Url="html/P_BerkeleyDB_HeapStats_nRecords.htm" />
   <HelpKINode Title="HeapStats.nRegions property" Url="html/P_BerkeleyDB_HeapStats_nRegions.htm" />
@@ -1945,12 +2032,21 @@
   <HelpKINode Title="IGNORED enumeration member" Url="html/T_BerkeleyDB_RepProcMsgResult_ProcMsgResult.htm" />
   <HelpKINode Title="IgnoredMessages property" Url="html/P_BerkeleyDB_ReplicationStats_IgnoredMessages.htm" />
   <HelpKINode Title="ImmutableKey field" Url="html/F_BerkeleyDB_SecondaryDatabaseConfig_ImmutableKey.htm" />
+  <HelpKINode Title="IncomingDroppedMessages property" Url="html/P_BerkeleyDB_RepMgrStats_IncomingDroppedMessages.htm" />
+  <HelpKINode Title="IncomingQueueBytes property" Url="html/P_BerkeleyDB_RepMgrStats_IncomingQueueBytes.htm" />
+  <HelpKINode Title="IncomingQueueGBytes property" Url="html/P_BerkeleyDB_RepMgrStats_IncomingQueueGBytes.htm" />
   <HelpKINode Title="Increment property" Url="html/P_BerkeleyDB_MutexConfig_Increment.htm" />
   <HelpKINode Title="Increment property" Url="html/P_BerkeleyDB_SequenceConfig_Increment.htm" />
   <HelpKINode Title="Increment property" Url="html/P_BerkeleyDB_Sequence_Increment.htm" />
   <HelpKINode Title="Index property" Url="html/P_BerkeleyDB_HeapRecordId_Index.htm" />
   <HelpKINode Title="InHostOrder property" Url="html/P_BerkeleyDB_BaseDatabase_InHostOrder.htm" />
   <HelpKINode Title="InitCount property" Url="html/P_BerkeleyDB_MutexStats_InitCount.htm" />
+  <HelpKINode Title="InitDatabaseCount property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_InitDatabaseCount.htm" />
+  <HelpKINode Title="InitDatabaseCount property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitDatabaseCount.htm" />
+  <HelpKINode Title="InitDatabaseLength property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_InitDatabaseLength.htm" />
+  <HelpKINode Title="InitDatabaseLength property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitDatabaseLength.htm" />
+  <HelpKINode Title="InitExtFileDatabaseCount property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_InitExtFileDatabaseCount.htm" />
+  <HelpKINode Title="InitExtFileDatabaseCount property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitExtFileDatabaseCount.htm" />
   <HelpKINode Title="InitFileId property" Url="html/P_BerkeleyDB_LogStats_InitFileId.htm" />
   <HelpKINode Title="InitialValue property" Url="html/P_BerkeleyDB_SequenceConfig_InitialValue.htm" />
   <HelpKINode Title="InitLockCount property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitLockCount.htm" />
@@ -1968,6 +2064,8 @@
   <HelpKINode Title="InitObjects property" Url="html/P_BerkeleyDB_LockStats_InitObjects.htm" />
   <HelpKINode Title="InitRegions field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_InitRegions.htm" />
   <HelpKINode Title="InitRegions property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitRegions.htm" />
+  <HelpKINode Title="InitRepSitesCount property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_InitRepSitesCount.htm" />
+  <HelpKINode Title="InitRepSitesCount property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitRepSitesCount.htm" />
   <HelpKINode Title="InitThreadCount property" Url="html/P_BerkeleyDB_DatabaseEnvironmentConfig_InitThreadCount.htm" />
   <HelpKINode Title="InitThreadCount property" Url="html/P_BerkeleyDB_DatabaseEnvironment_InitThreadCount.htm" />
   <HelpKINode Title="InitTransactionCount property" Url="html/P_BerkeleyDB_TransactionConfig_InitTransactionCount.htm" />
@@ -1988,6 +2086,7 @@
   <HelpKINode Title="InternalPagesFreeBytes property" Url="html/P_BerkeleyDB_RecnoStats_InternalPagesFreeBytes.htm" />
   <HelpKINode Title="InUse property" Url="html/P_BerkeleyDB_MutexStats_InUse.htm" />
   <HelpKINode Title="isConnected field" Url="html/F_BerkeleyDB_RepMgrSite_isConnected.htm" />
+  <HelpKINode Title="isElectable field" Url="html/F_BerkeleyDB_RepMgrSite_isElectable.htm" />
   <HelpKINode Title="Isolation enumeration" Url="html/T_BerkeleyDB_Isolation.htm" />
   <HelpKINode Title="IsolationDegree field" Url="html/F_BerkeleyDB_CursorConfig_IsolationDegree.htm" />
   <HelpKINode Title="IsolationDegree field" Url="html/F_BerkeleyDB_LockingInfo_IsolationDegree.htm" />
@@ -2247,11 +2346,15 @@
   <HelpKINode Title="LogConfig.InMemory field" Url="html/F_BerkeleyDB_LogConfig_InMemory.htm" />
   <HelpKINode Title="LogConfig.LogBlobContent field" Url="html/F_BerkeleyDB_LogConfig_LogBlobContent.htm" />
   <HelpKINode Title="LogConfig.LogConfig constructor" Url="html/M_BerkeleyDB_LogConfig__ctor.htm" />
+  <HelpKINode Title="LogConfig.LogExternalFileContent field" Url="html/F_BerkeleyDB_LogConfig_LogExternalFileContent.htm" />
   <HelpKINode Title="LogConfig.MaxFileSize property" Url="html/P_BerkeleyDB_LogConfig_MaxFileSize.htm" />
   <HelpKINode Title="LogConfig.NoBuffer field" Url="html/F_BerkeleyDB_LogConfig_NoBuffer.htm" />
+  <HelpKINode Title="LogConfig.NoSync field" Url="html/F_BerkeleyDB_LogConfig_NoSync.htm" />
   <HelpKINode Title="LogConfig.RegionSize property" Url="html/P_BerkeleyDB_LogConfig_RegionSize.htm" />
   <HelpKINode Title="LogConfig.ZeroOnCreate field" Url="html/F_BerkeleyDB_LogConfig_ZeroOnCreate.htm" />
   <HelpKINode Title="LogDir property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogDir.htm" />
+  <HelpKINode Title="LogExternalFileContent field" Url="html/F_BerkeleyDB_LogConfig_LogExternalFileContent.htm" />
+  <HelpKINode Title="LogExternalFileContent property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogExternalFileContent.htm" />
   <HelpKINode Title="LogFile method" Url="html/M_BerkeleyDB_DatabaseEnvironment_LogFile.htm" />
   <HelpKINode Title="LogFileMode property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogFileMode.htm" />
   <HelpKINode Title="LogFileNumber field" Url="html/F_BerkeleyDB_LSN_LogFileNumber.htm" />
@@ -2261,6 +2364,7 @@
   <HelpKINode Title="LoggingSystemStats method" Url="html/Overload_BerkeleyDB_DatabaseEnvironment_LoggingSystemStats.htm" />
   <HelpKINode Title="LogInMemory property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogInMemory.htm" />
   <HelpKINode Title="LogNoBuffer property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogNoBuffer.htm" />
+  <HelpKINode Title="LogNoSync property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogNoSync.htm" />
   <HelpKINode Title="LogRegionSize property" Url="html/P_BerkeleyDB_DatabaseEnvironment_LogRegionSize.htm" />
   <HelpKINode Title="LogStats class" Url="html/AllMembers_T_BerkeleyDB_LogStats.htm" />
   <HelpKINode Title="LogStats class" Url="html/T_BerkeleyDB_LogStats.htm" />
@@ -2350,11 +2454,13 @@
   <HelpKINode Title="Max property" Url="html/P_BerkeleyDB_SequenceConfig_Max.htm" />
   <HelpKINode Title="Max property" Url="html/P_BerkeleyDB_SequenceStats_Max.htm" />
   <HelpKINode Title="Max property" Url="html/P_BerkeleyDB_Sequence_Max.htm" />
+  <HelpKINode Title="maxAcknowledgedLSN field" Url="html/F_BerkeleyDB_RepMgrSite_maxAcknowledgedLSN.htm" />
   <HelpKINode Title="MaxActive property" Url="html/P_BerkeleyDB_TransactionStats_MaxActive.htm" />
   <HelpKINode Title="MaxBucketLength property" Url="html/P_BerkeleyDB_LockStats_MaxBucketLength.htm" />
   <HelpKINode Title="MaxBucketsCheckedDuringAlloc property" Url="html/P_BerkeleyDB_MPoolStats_MaxBucketsCheckedDuringAlloc.htm" />
   <HelpKINode Title="MaxBufferWrites property" Url="html/P_BerkeleyDB_MPoolStats_MaxBufferWrites.htm" />
   <HelpKINode Title="MaxBufferWritesSleep property" Url="html/P_BerkeleyDB_MPoolStats_MaxBufferWritesSleep.htm" />
+  <HelpKINode Title="MaxCacheRegions property" Url="html/P_BerkeleyDB_MPoolStats_MaxCacheRegions.htm" />
   <HelpKINode Title="MaxCacheSize field" Url="html/F_BerkeleyDB_MPoolConfig_MaxCacheSize.htm" />
   <HelpKINode Title="MaxCacheSize property" Url="html/P_BerkeleyDB_DatabaseEnvironment_MaxCacheSize.htm" />
   <HelpKINode Title="MaxCommitsPerFlush property" Url="html/P_BerkeleyDB_LogStats_MaxCommitsPerFlush.htm" />
@@ -2411,7 +2517,25 @@
   <HelpKINode Title="MBytes property" Url="html/P_BerkeleyDB_LogStats_MBytes.htm" />
   <HelpKINode Title="MBytesSinceCheckpoint property" Url="html/P_BerkeleyDB_LogStats_MBytesSinceCheckpoint.htm" />
   <HelpKINode Title="MessageDispatchDelegate delegate" Url="html/T_BerkeleyDB_MessageDispatchDelegate.htm" />
+  <HelpKINode Title="messageFeedback property" Url="html/P_BerkeleyDB_BaseDatabase_messageFeedback.htm" />
+  <HelpKINode Title="messageFeedback property" Url="html/P_BerkeleyDB_DatabaseEnvironment_messageFeedback.htm" />
+  <HelpKINode Title="MessageFeedbackDelegate delegate" Url="html/T_BerkeleyDB_MessageFeedbackDelegate.htm" />
+  <HelpKINode Title="MessagePrefix field" Url="html/F_BerkeleyDB_DatabaseConfig_MessagePrefix.htm" />
+  <HelpKINode Title="MessagePrefix field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_MessagePrefix.htm" />
+  <HelpKINode Title="MessagePrefix property" Url="html/P_BerkeleyDB_BaseDatabase_MessagePrefix.htm" />
+  <HelpKINode Title="MessagePrefix property" Url="html/P_BerkeleyDB_DatabaseEnvironment_MessagePrefix.htm" />
   <HelpKINode Title="MessagesSent property" Url="html/P_BerkeleyDB_ReplicationStats_MessagesSent.htm" />
+  <HelpKINode Title="MetaCheckSumFailException class" Url="html/AllMembers_T_BerkeleyDB_MetaCheckSumFailException.htm" />
+  <HelpKINode Title="MetaCheckSumFailException class" Url="html/T_BerkeleyDB_MetaCheckSumFailException.htm" />
+  <HelpKINode Title="MetaCheckSumFailException class">
+    <HelpKINode Title="about MetaCheckSumFailException class" Url="html/T_BerkeleyDB_MetaCheckSumFailException.htm" />
+    <HelpKINode Title="all members" Url="html/AllMembers_T_BerkeleyDB_MetaCheckSumFailException.htm" />
+    <HelpKINode Title="constructor" Url="html/M_BerkeleyDB_MetaCheckSumFailException__ctor.htm" />
+    <HelpKINode Title="fields" Url="html/Fields_T_BerkeleyDB_MetaCheckSumFailException.htm" />
+    <HelpKINode Title="methods" Url="html/Methods_T_BerkeleyDB_MetaCheckSumFailException.htm" />
+    <HelpKINode Title="properties" Url="html/Properties_T_BerkeleyDB_MetaCheckSumFailException.htm" />
+  </HelpKINode>
+  <HelpKINode Title="MetaCheckSumFailException.MetaCheckSumFailException constructor" Url="html/M_BerkeleyDB_MetaCheckSumFailException__ctor.htm" />
   <HelpKINode Title="MetadataDir field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_MetadataDir.htm" />
   <HelpKINode Title="MetadataDir property" Url="html/P_BerkeleyDB_DatabaseEnvironment_MetadataDir.htm" />
   <HelpKINode Title="MetadataFlags property" Url="html/P_BerkeleyDB_BTreeStats_MetadataFlags.htm" />
@@ -2567,7 +2691,6 @@
   </HelpKINode>
   <HelpKINode Title="MPoolStats.BlockedOperations property" Url="html/P_BerkeleyDB_MPoolStats_BlockedOperations.htm" />
   <HelpKINode Title="MPoolStats.BucketsCheckedDuringAlloc property" Url="html/P_BerkeleyDB_MPoolStats_BucketsCheckedDuringAlloc.htm" />
-  <HelpKINode Title="MPoolStats.CacheRegions property" Url="html/P_BerkeleyDB_MPoolStats_CacheRegions.htm" />
   <HelpKINode Title="MPoolStats.CacheSettings property" Url="html/P_BerkeleyDB_MPoolStats_CacheSettings.htm" />
   <HelpKINode Title="MPoolStats.CleanPages property" Url="html/P_BerkeleyDB_MPoolStats_CleanPages.htm" />
   <HelpKINode Title="MPoolStats.CleanPagesEvicted property" Url="html/P_BerkeleyDB_MPoolStats_CleanPagesEvicted.htm" />
@@ -2587,6 +2710,7 @@
   <HelpKINode Title="MPoolStats.MaxBucketsCheckedDuringAlloc property" Url="html/P_BerkeleyDB_MPoolStats_MaxBucketsCheckedDuringAlloc.htm" />
   <HelpKINode Title="MPoolStats.MaxBufferWrites property" Url="html/P_BerkeleyDB_MPoolStats_MaxBufferWrites.htm" />
   <HelpKINode Title="MPoolStats.MaxBufferWritesSleep property" Url="html/P_BerkeleyDB_MPoolStats_MaxBufferWritesSleep.htm" />
+  <HelpKINode Title="MPoolStats.MaxCacheRegions property" Url="html/P_BerkeleyDB_MPoolStats_MaxCacheRegions.htm" />
   <HelpKINode Title="MPoolStats.MaxHashLockNoWait property" Url="html/P_BerkeleyDB_MPoolStats_MaxHashLockNoWait.htm" />
   <HelpKINode Title="MPoolStats.MaxHashLockWait property" Url="html/P_BerkeleyDB_MPoolStats_MaxHashLockWait.htm" />
   <HelpKINode Title="MPoolStats.MaxMMapSize property" Url="html/P_BerkeleyDB_MPoolStats_MaxMMapSize.htm" />
@@ -2613,6 +2737,8 @@
   <HelpKINode Title="MPoolStats.ThawedBuffers property" Url="html/P_BerkeleyDB_MPoolStats_ThawedBuffers.htm" />
   <HelpKINode Title="MPoolSystemCfg field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_MPoolSystemCfg.htm" />
   <HelpKINode Title="MPoolSystemStats method" Url="html/Overload_BerkeleyDB_DatabaseEnvironment_MPoolSystemStats.htm" />
+  <HelpKINode Title="Msgfile property" Url="html/P_BerkeleyDB_BaseDatabase_Msgfile.htm" />
+  <HelpKINode Title="Msgfile property" Url="html/P_BerkeleyDB_DatabaseEnvironment_Msgfile.htm" />
   <HelpKINode Title="MultipleDatabaseEntry class" Url="html/AllMembers_T_BerkeleyDB_MultipleDatabaseEntry.htm" />
   <HelpKINode Title="MultipleDatabaseEntry class" Url="html/T_BerkeleyDB_MultipleDatabaseEntry.htm" />
   <HelpKINode Title="MultipleDatabaseEntry class">
@@ -2682,6 +2808,7 @@
   <HelpKINode Title="nBlobRecords property" Url="html/P_BerkeleyDB_BTreeStats_nBlobRecords.htm" />
   <HelpKINode Title="nBlobRecords property" Url="html/P_BerkeleyDB_HashStats_nBlobRecords.htm" />
   <HelpKINode Title="nBlobRecords property" Url="html/P_BerkeleyDB_HeapStats_nBlobRecords.htm" />
+  <HelpKINode Title="nBlobRecords property" Url="html/P_BerkeleyDB_RecnoStats_nBlobRecords.htm" />
   <HelpKINode Title="NCaches field" Url="html/F_BerkeleyDB_CacheInfo_NCaches.htm" />
   <HelpKINode Title="nData property" Url="html/P_BerkeleyDB_BTreeStats_nData.htm" />
   <HelpKINode Title="nData property" Url="html/P_BerkeleyDB_HashStats_nData.htm" />
@@ -2690,6 +2817,10 @@
   <HelpKINode Title="NEVER enumeration member" Url="html/T_BerkeleyDB_CreatePolicy.htm" />
   <HelpKINode Title="NewSiteMessages property" Url="html/P_BerkeleyDB_ReplicationStats_NewSiteMessages.htm" />
   <HelpKINode Title="NEW_SITE enumeration member" Url="html/T_BerkeleyDB_RepProcMsgResult_ProcMsgResult.htm" />
+  <HelpKINode Title="nExternalFiles property" Url="html/P_BerkeleyDB_BTreeStats_nExternalFiles.htm" />
+  <HelpKINode Title="nExternalFiles property" Url="html/P_BerkeleyDB_HashStats_nExternalFiles.htm" />
+  <HelpKINode Title="nExternalFiles property" Url="html/P_BerkeleyDB_HeapStats_nExternalFiles.htm" />
+  <HelpKINode Title="nExternalFiles property" Url="html/P_BerkeleyDB_RecnoStats_nExternalFiles.htm" />
   <HelpKINode Title="NextLSN property" Url="html/P_BerkeleyDB_ReplicationStats_NextLSN.htm" />
   <HelpKINode Title="NextPage property" Url="html/P_BerkeleyDB_ReplicationStats_NextPage.htm" />
   <HelpKINode Title="NextRecordNumber property" Url="html/P_BerkeleyDB_QueueStats_NextRecordNumber.htm" />
@@ -2718,6 +2849,7 @@
   <HelpKINode Title="NoReverseSplitting field" Url="html/F_BerkeleyDB_BTreeDatabaseConfig_NoReverseSplitting.htm" />
   <HelpKINode Title="NoReverseSplitting field" Url="html/F_BerkeleyDB_SecondaryBTreeDatabaseConfig_NoReverseSplitting.htm" />
   <HelpKINode Title="NOSYNC enumeration member" Url="html/T_BerkeleyDB_TransactionConfig_LogFlush.htm" />
+  <HelpKINode Title="NoSync field" Url="html/F_BerkeleyDB_LogConfig_NoSync.htm" />
   <HelpKINode Title="NOTFOUND enumeration member" Url="html/T_BerkeleyDB_TransactionAppliedStatus.htm" />
   <HelpKINode Title="NotFoundException class" Url="html/AllMembers_T_BerkeleyDB_NotFoundException.htm" />
   <HelpKINode Title="NotFoundException class" Url="html/T_BerkeleyDB_NotFoundException.htm" />
@@ -2829,13 +2961,13 @@
   <HelpKINode Title="PagesFreed property" Url="html/P_BerkeleyDB_CompactData_PagesFreed.htm" />
   <HelpKINode Title="PagesInCache property" Url="html/P_BerkeleyDB_MPoolFileStats_PagesInCache.htm" />
   <HelpKINode Title="PagesInCache property" Url="html/P_BerkeleyDB_MPoolStats_PagesInCache.htm" />
+  <HelpKINode Title="Pagesize property" Url="html/P_BerkeleyDB_BaseDatabase_Pagesize.htm" />
   <HelpKINode Title="PageSize property" Url="html/P_BerkeleyDB_BTreeStats_PageSize.htm" />
   <HelpKINode Title="PageSize property" Url="html/P_BerkeleyDB_DatabaseConfig_PageSize.htm" />
   <HelpKINode Title="PageSize property" Url="html/P_BerkeleyDB_HashStats_PageSize.htm" />
   <HelpKINode Title="PageSize property" Url="html/P_BerkeleyDB_HeapStats_PageSize.htm" />
   <HelpKINode Title="PageSize property" Url="html/P_BerkeleyDB_MPoolFileStats_PageSize.htm" />
   <HelpKINode Title="PageSize property" Url="html/P_BerkeleyDB_MPoolStats_PageSize.htm" />
-  <HelpKINode Title="Pagesize property" Url="html/P_BerkeleyDB_BaseDatabase_Pagesize.htm" />
   <HelpKINode Title="PageSize property" Url="html/P_BerkeleyDB_QueueStats_PageSize.htm" />
   <HelpKINode Title="PageSize property" Url="html/P_BerkeleyDB_RecnoStats_PageSize.htm" />
   <HelpKINode Title="PagesNotInCache property" Url="html/P_BerkeleyDB_MPoolFileStats_PagesNotInCache.htm" />
@@ -2869,12 +3001,15 @@
   <HelpKINode Title="Peer property" Url="html/P_BerkeleyDB_DbSiteConfig_Peer.htm" />
   <HelpKINode Title="Peer property" Url="html/P_BerkeleyDB_DbSite_Peer.htm" />
   <HelpKINode Title="PermissionsMode property" Url="html/P_BerkeleyDB_LogStats_PermissionsMode.htm" />
+  <HelpKINode Title="PollingMethod property" Url="html/P_BerkeleyDB_RepMgrStats_PollingMethod.htm" />
   <HelpKINode Title="Populate field" Url="html/F_BerkeleyDB_SecondaryDatabaseConfig_Populate.htm" />
   <HelpKINode Title="Port field" Url="html/F_BerkeleyDB_DbSiteConfig_Port.htm" />
   <HelpKINode Title="Port field" Url="html/F_BerkeleyDB_ReplicationHostAddress_Port.htm" />
   <HelpKINode Title="PrefixCompare field" Url="html/F_BerkeleyDB_SecondaryBTreeDatabaseConfig_PrefixCompare.htm" />
   <HelpKINode Title="PrefixCompare property" Url="html/P_BerkeleyDB_BTreeDatabase_PrefixCompare.htm" />
   <HelpKINode Title="PrefixCompare property" Url="html/P_BerkeleyDB_SecondaryBTreeDatabase_PrefixCompare.htm" />
+  <HelpKINode Title="PrefmasClient field" Url="html/F_BerkeleyDB_ReplicationConfig_PrefmasClient.htm" />
+  <HelpKINode Title="PrefmasMaster field" Url="html/F_BerkeleyDB_ReplicationConfig_PrefmasMaster.htm" />
   <HelpKINode Title="Prepare method" Url="html/M_BerkeleyDB_Transaction_Prepare.htm" />
   <HelpKINode Title="PreparedTransaction class" Url="html/AllMembers_T_BerkeleyDB_PreparedTransaction.htm" />
   <HelpKINode Title="PreparedTransaction class" Url="html/T_BerkeleyDB_PreparedTransaction.htm" />
@@ -3140,7 +3275,9 @@
   <HelpKINode Title="RecnoStats.MagicNumber property" Url="html/P_BerkeleyDB_RecnoStats_MagicNumber.htm" />
   <HelpKINode Title="RecnoStats.MetadataFlags property" Url="html/P_BerkeleyDB_RecnoStats_MetadataFlags.htm" />
   <HelpKINode Title="RecnoStats.MinKey property" Url="html/P_BerkeleyDB_RecnoStats_MinKey.htm" />
+  <HelpKINode Title="RecnoStats.nBlobRecords property" Url="html/P_BerkeleyDB_RecnoStats_nBlobRecords.htm" />
   <HelpKINode Title="RecnoStats.nData property" Url="html/P_BerkeleyDB_RecnoStats_nData.htm" />
+  <HelpKINode Title="RecnoStats.nExternalFiles property" Url="html/P_BerkeleyDB_RecnoStats_nExternalFiles.htm" />
   <HelpKINode Title="RecnoStats.nKeys property" Url="html/P_BerkeleyDB_RecnoStats_nKeys.htm" />
   <HelpKINode Title="RecnoStats.nPages property" Url="html/P_BerkeleyDB_RecnoStats_nPages.htm" />
   <HelpKINode Title="RecnoStats.OverflowPages property" Url="html/P_BerkeleyDB_RecnoStats_OverflowPages.htm" />
@@ -3175,6 +3312,7 @@
   <HelpKINode Title="RefreshMultipleKey method" Url="html/Overload_BerkeleyDB_Cursor_RefreshMultipleKey.htm" />
   <HelpKINode Title="RefreshMultipleKey method" Url="html/Overload_BerkeleyDB_HashCursor_RefreshMultipleKey.htm" />
   <HelpKINode Title="RefreshMultipleKey method" Url="html/Overload_BerkeleyDB_RecnoCursor_RefreshMultipleKey.htm" />
+  <HelpKINode Title="RegionDir property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RegionDir.htm" />
   <HelpKINode Title="RegionLockNoWait property" Url="html/P_BerkeleyDB_LogStats_RegionLockNoWait.htm" />
   <HelpKINode Title="RegionLockNoWait property" Url="html/P_BerkeleyDB_MPoolStats_RegionLockNoWait.htm" />
   <HelpKINode Title="RegionLockNoWait property" Url="html/P_BerkeleyDB_TransactionStats_RegionLockNoWait.htm" />
@@ -3224,8 +3362,12 @@
   <HelpKINode Title="RepClockskewSlow property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepClockskewSlow.htm" />
   <HelpKINode Title="RepConnectionRetry property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepConnectionRetry.htm" />
   <HelpKINode Title="RepDelayClientSync property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepDelayClientSync.htm" />
+  <HelpKINode Title="RepDisablePoll property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepDisablePoll.htm" />
+  <HelpKINode Title="RepDisableSSL property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepDisableSSL.htm" />
   <HelpKINode Title="RepElectionRetry property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepElectionRetry.htm" />
   <HelpKINode Title="RepElectionTimeout property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepElectionTimeout.htm" />
+  <HelpKINode Title="RepEnableEpoll property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepEnableEpoll.htm" />
+  <HelpKINode Title="RepForwardWrites property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepForwardWrites.htm" />
   <HelpKINode Title="RepFullElectionTimeout property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepFullElectionTimeout.htm" />
   <HelpKINode Title="RepHeartbeatMonitor property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepHeartbeatMonitor.htm" />
   <HelpKINode Title="RepHeartbeatSend property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepHeartbeatSend.htm" />
@@ -3252,9 +3394,13 @@
   <HelpKINode Title="ReplicationConfig.ClockskewSlow property" Url="html/P_BerkeleyDB_ReplicationConfig_ClockskewSlow.htm" />
   <HelpKINode Title="ReplicationConfig.ConnectionRetry property" Url="html/P_BerkeleyDB_ReplicationConfig_ConnectionRetry.htm" />
   <HelpKINode Title="ReplicationConfig.DelayClientSync field" Url="html/F_BerkeleyDB_ReplicationConfig_DelayClientSync.htm" />
+  <HelpKINode Title="ReplicationConfig.DisablePoll field" Url="html/F_BerkeleyDB_ReplicationConfig_DisablePoll.htm" />
+  <HelpKINode Title="ReplicationConfig.DisableSSL field" Url="html/F_BerkeleyDB_ReplicationConfig_DisableSSL.htm" />
   <HelpKINode Title="ReplicationConfig.ElectionRetry property" Url="html/P_BerkeleyDB_ReplicationConfig_ElectionRetry.htm" />
   <HelpKINode Title="ReplicationConfig.Elections field" Url="html/F_BerkeleyDB_ReplicationConfig_Elections.htm" />
   <HelpKINode Title="ReplicationConfig.ElectionTimeout property" Url="html/P_BerkeleyDB_ReplicationConfig_ElectionTimeout.htm" />
+  <HelpKINode Title="ReplicationConfig.EnableEpoll field" Url="html/F_BerkeleyDB_ReplicationConfig_EnableEpoll.htm" />
+  <HelpKINode Title="ReplicationConfig.ForwardWrites field" Url="html/F_BerkeleyDB_ReplicationConfig_ForwardWrites.htm" />
   <HelpKINode Title="ReplicationConfig.FullElectionTimeout property" Url="html/P_BerkeleyDB_ReplicationConfig_FullElectionTimeout.htm" />
   <HelpKINode Title="ReplicationConfig.HeartbeatMonitor property" Url="html/P_BerkeleyDB_ReplicationConfig_HeartbeatMonitor.htm" />
   <HelpKINode Title="ReplicationConfig.HeartbeatSend property" Url="html/P_BerkeleyDB_ReplicationConfig_HeartbeatSend.htm" />
@@ -3262,10 +3408,15 @@
   <HelpKINode Title="ReplicationConfig.LeaseTimeout property" Url="html/P_BerkeleyDB_ReplicationConfig_LeaseTimeout.htm" />
   <HelpKINode Title="ReplicationConfig.NoBlocking field" Url="html/F_BerkeleyDB_ReplicationConfig_NoBlocking.htm" />
   <HelpKINode Title="ReplicationConfig.NSites property" Url="html/P_BerkeleyDB_ReplicationConfig_NSites.htm" />
+  <HelpKINode Title="ReplicationConfig.PrefmasClient field" Url="html/F_BerkeleyDB_ReplicationConfig_PrefmasClient.htm" />
+  <HelpKINode Title="ReplicationConfig.PrefmasMaster field" Url="html/F_BerkeleyDB_ReplicationConfig_PrefmasMaster.htm" />
   <HelpKINode Title="ReplicationConfig.Priority property" Url="html/P_BerkeleyDB_ReplicationConfig_Priority.htm" />
   <HelpKINode Title="ReplicationConfig.ReplicationConfig constructor" Url="html/M_BerkeleyDB_ReplicationConfig__ctor.htm" />
   <HelpKINode Title="ReplicationConfig.ReplicationView property" Url="html/P_BerkeleyDB_ReplicationConfig_ReplicationView.htm" />
   <HelpKINode Title="ReplicationConfig.RepMgrAckPolicy field" Url="html/F_BerkeleyDB_ReplicationConfig_RepMgrAckPolicy.htm" />
+  <HelpKINode Title="ReplicationConfig.RepmgrIncomingQueueMax method" Url="html/M_BerkeleyDB_ReplicationConfig_RepmgrIncomingQueueMax.htm" />
+  <HelpKINode Title="ReplicationConfig.RepmgrIncomingQueueMaxBytes property" Url="html/P_BerkeleyDB_ReplicationConfig_RepmgrIncomingQueueMaxBytes.htm" />
+  <HelpKINode Title="ReplicationConfig.RepmgrIncomingQueueMaxGBytes property" Url="html/P_BerkeleyDB_ReplicationConfig_RepmgrIncomingQueueMaxGBytes.htm" />
   <HelpKINode Title="ReplicationConfig.RepmgrSitesConfig field" Url="html/F_BerkeleyDB_ReplicationConfig_RepmgrSitesConfig.htm" />
   <HelpKINode Title="ReplicationConfig.RetransmissionRequest method" Url="html/M_BerkeleyDB_ReplicationConfig_RetransmissionRequest.htm" />
   <HelpKINode Title="ReplicationConfig.RetransmissionRequestMax property" Url="html/P_BerkeleyDB_ReplicationConfig_RetransmissionRequestMax.htm" />
@@ -3276,6 +3427,7 @@
   <HelpKINode Title="ReplicationConfig.TransmitLimitGBytes property" Url="html/P_BerkeleyDB_ReplicationConfig_TransmitLimitGBytes.htm" />
   <HelpKINode Title="ReplicationConfig.Transport field" Url="html/F_BerkeleyDB_ReplicationConfig_Transport.htm" />
   <HelpKINode Title="ReplicationConfig.UseMasterLeases field" Url="html/F_BerkeleyDB_ReplicationConfig_UseMasterLeases.htm" />
+  <HelpKINode Title="ReplicationConfig.WriteForwardTimeout property" Url="html/P_BerkeleyDB_ReplicationConfig_WriteForwardTimeout.htm" />
   <HelpKINode Title="ReplicationElection field" Url="html/F_BerkeleyDB_VerboseMessages_ReplicationElection.htm" />
   <HelpKINode Title="ReplicationHostAddress class" Url="html/AllMembers_T_BerkeleyDB_ReplicationHostAddress.htm" />
   <HelpKINode Title="ReplicationHostAddress class" Url="html/T_BerkeleyDB_ReplicationHostAddress.htm" />
@@ -3330,6 +3482,10 @@
   <HelpKINode Title="ReplicationStats.ElectionTimeUSec property" Url="html/P_BerkeleyDB_ReplicationStats_ElectionTimeUSec.htm" />
   <HelpKINode Title="ReplicationStats.EnvID property" Url="html/P_BerkeleyDB_ReplicationStats_EnvID.htm" />
   <HelpKINode Title="ReplicationStats.EnvPriority property" Url="html/P_BerkeleyDB_ReplicationStats_EnvPriority.htm" />
+  <HelpKINode Title="ReplicationStats.ExternalFileDuplicated property" Url="html/P_BerkeleyDB_ReplicationStats_ExternalFileDuplicated.htm" />
+  <HelpKINode Title="ReplicationStats.ExternalFileRecords property" Url="html/P_BerkeleyDB_ReplicationStats_ExternalFileRecords.htm" />
+  <HelpKINode Title="ReplicationStats.ExternalFileRerequests property" Url="html/P_BerkeleyDB_ReplicationStats_ExternalFileRerequests.htm" />
+  <HelpKINode Title="ReplicationStats.ExternalFileUpdateRerequests property" Url="html/P_BerkeleyDB_ReplicationStats_ExternalFileUpdateRerequests.htm" />
   <HelpKINode Title="ReplicationStats.FailedMessageSends property" Url="html/P_BerkeleyDB_ReplicationStats_FailedMessageSends.htm" />
   <HelpKINode Title="ReplicationStats.ForcedRerequests property" Url="html/P_BerkeleyDB_ReplicationStats_ForcedRerequests.htm" />
   <HelpKINode Title="ReplicationStats.IgnoredMessages property" Url="html/P_BerkeleyDB_ReplicationStats_IgnoredMessages.htm" />
@@ -3375,10 +3531,16 @@
   <HelpKINode Title="RepMgrAckPolicy property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepMgrAckPolicy.htm" />
   <HelpKINode Title="RepMgrChannel method" Url="html/M_BerkeleyDB_DatabaseEnvironment_RepMgrChannel.htm" />
   <HelpKINode Title="RepMgrConnectionFailure field" Url="html/F_BerkeleyDB_VerboseMessages_RepMgrConnectionFailure.htm" />
+  <HelpKINode Title="RepmgrIncomingQueueMax method" Url="html/M_BerkeleyDB_ReplicationConfig_RepmgrIncomingQueueMax.htm" />
+  <HelpKINode Title="RepmgrIncomingQueueMaxBytes property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepmgrIncomingQueueMaxBytes.htm" />
+  <HelpKINode Title="RepmgrIncomingQueueMaxBytes property" Url="html/P_BerkeleyDB_ReplicationConfig_RepmgrIncomingQueueMaxBytes.htm" />
+  <HelpKINode Title="RepmgrIncomingQueueMaxGBytes property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepmgrIncomingQueueMaxGBytes.htm" />
+  <HelpKINode Title="RepmgrIncomingQueueMaxGBytes property" Url="html/P_BerkeleyDB_ReplicationConfig_RepmgrIncomingQueueMaxGBytes.htm" />
   <HelpKINode Title="RepMgrLocalSite property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepMgrLocalSite.htm" />
   <HelpKINode Title="RepMgrMisc field" Url="html/F_BerkeleyDB_VerboseMessages_RepMgrMisc.htm" />
   <HelpKINode Title="RepMgrRemoteSites property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepMgrRemoteSites.htm" />
   <HelpKINode Title="RepMgrRunElections property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepMgrRunElections.htm" />
+  <HelpKINode Title="RepmgrSetIncomingQueueMax method" Url="html/M_BerkeleyDB_DatabaseEnvironment_RepmgrSetIncomingQueueMax.htm" />
   <HelpKINode Title="RepMgrSite class" Url="html/AllMembers_T_BerkeleyDB_RepMgrSite.htm" />
   <HelpKINode Title="RepMgrSite class" Url="html/T_BerkeleyDB_RepMgrSite.htm" />
   <HelpKINode Title="RepMgrSite class">
@@ -3391,10 +3553,15 @@
   <HelpKINode Title="RepMgrSite.Address field" Url="html/F_BerkeleyDB_RepMgrSite_Address.htm" />
   <HelpKINode Title="RepMgrSite.EId field" Url="html/F_BerkeleyDB_RepMgrSite_EId.htm" />
   <HelpKINode Title="RepMgrSite.isConnected field" Url="html/F_BerkeleyDB_RepMgrSite_isConnected.htm" />
+  <HelpKINode Title="RepMgrSite.isElectable field" Url="html/F_BerkeleyDB_RepMgrSite_isElectable.htm" />
   <HelpKINode Title="RepMgrSite.isPeer field" Url="html/F_BerkeleyDB_RepMgrSite_isPeer.htm" />
   <HelpKINode Title="RepMgrSite.isView field" Url="html/F_BerkeleyDB_RepMgrSite_isView.htm" />
+  <HelpKINode Title="RepMgrSite.maxAcknowledgedLSN field" Url="html/F_BerkeleyDB_RepMgrSite_maxAcknowledgedLSN.htm" />
   <HelpKINode Title="RepMgrSiteConfig method" Url="html/M_BerkeleyDB_DatabaseEnvironment_RepMgrSiteConfig.htm" />
   <HelpKINode Title="RepmgrSitesConfig field" Url="html/F_BerkeleyDB_ReplicationConfig_RepmgrSitesConfig.htm" />
+  <HelpKINode Title="RepMgrSSLAll field" Url="html/F_BerkeleyDB_VerboseMessages_RepMgrSSLAll.htm" />
+  <HelpKINode Title="RepMgrSSLConnection field" Url="html/F_BerkeleyDB_VerboseMessages_RepMgrSSLConnection.htm" />
+  <HelpKINode Title="RepMgrSSLIO field" Url="html/F_BerkeleyDB_VerboseMessages_RepMgrSSLIO.htm" />
   <HelpKINode Title="RepMgrStartClient method" Url="html/Overload_BerkeleyDB_DatabaseEnvironment_RepMgrStartClient.htm" />
   <HelpKINode Title="RepMgrStartMaster method" Url="html/M_BerkeleyDB_DatabaseEnvironment_RepMgrStartMaster.htm" />
   <HelpKINode Title="RepMgrStats class" Url="html/AllMembers_T_BerkeleyDB_RepMgrStats.htm" />
@@ -3411,14 +3578,23 @@
   <HelpKINode Title="RepMgrStats.ElectionThreads property" Url="html/P_BerkeleyDB_RepMgrStats_ElectionThreads.htm" />
   <HelpKINode Title="RepMgrStats.FailedConnections property" Url="html/P_BerkeleyDB_RepMgrStats_FailedConnections.htm" />
   <HelpKINode Title="RepMgrStats.FailedMessages property" Url="html/P_BerkeleyDB_RepMgrStats_FailedMessages.htm" />
+  <HelpKINode Title="RepMgrStats.GroupStableLogFile property" Url="html/P_BerkeleyDB_RepMgrStats_GroupStableLogFile.htm" />
+  <HelpKINode Title="RepMgrStats.IncomingDroppedMessages property" Url="html/P_BerkeleyDB_RepMgrStats_IncomingDroppedMessages.htm" />
+  <HelpKINode Title="RepMgrStats.IncomingQueueBytes property" Url="html/P_BerkeleyDB_RepMgrStats_IncomingQueueBytes.htm" />
+  <HelpKINode Title="RepMgrStats.IncomingQueueGBytes property" Url="html/P_BerkeleyDB_RepMgrStats_IncomingQueueGBytes.htm" />
   <HelpKINode Title="RepMgrStats.MaxElectionThreads property" Url="html/P_BerkeleyDB_RepMgrStats_MaxElectionThreads.htm" />
   <HelpKINode Title="RepMgrStats.ParticipantSites property" Url="html/P_BerkeleyDB_RepMgrStats_ParticipantSites.htm" />
+  <HelpKINode Title="RepMgrStats.PollingMethod property" Url="html/P_BerkeleyDB_RepMgrStats_PollingMethod.htm" />
   <HelpKINode Title="RepMgrStats.QueuedMessages property" Url="html/P_BerkeleyDB_RepMgrStats_QueuedMessages.htm" />
   <HelpKINode Title="RepMgrStats.TotalSites property" Url="html/P_BerkeleyDB_RepMgrStats_TotalSites.htm" />
   <HelpKINode Title="RepMgrStats.ViewSites property" Url="html/P_BerkeleyDB_RepMgrStats_ViewSites.htm" />
+  <HelpKINode Title="RepMgrStats.WriteOpsForwarded property" Url="html/P_BerkeleyDB_RepMgrStats_WriteOpsForwarded.htm" />
+  <HelpKINode Title="RepMgrStats.WriteOpsReceived property" Url="html/P_BerkeleyDB_RepMgrStats_WriteOpsReceived.htm" />
   <HelpKINode Title="RepMgrSystemStats method" Url="html/Overload_BerkeleyDB_DatabaseEnvironment_RepMgrSystemStats.htm" />
   <HelpKINode Title="RepNoBlocking property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepNoBlocking.htm" />
   <HelpKINode Title="RepNSites property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepNSites.htm" />
+  <HelpKINode Title="RepPrefmasClient property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepPrefmasClient.htm" />
+  <HelpKINode Title="RepPrefmasMaster property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepPrefmasMaster.htm" />
   <HelpKINode Title="RepPriority property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepPriority.htm" />
   <HelpKINode Title="RepProcessMessage method" Url="html/M_BerkeleyDB_DatabaseEnvironment_RepProcessMessage.htm" />
   <HelpKINode Title="RepProcMsgResult class" Url="html/AllMembers_T_BerkeleyDB_RepProcMsgResult.htm" />
@@ -3447,6 +3623,8 @@
   <HelpKINode Title="RepTransmitLimitGBytes property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepTransmitLimitGBytes.htm" />
   <HelpKINode Title="RepTransport property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepTransport.htm" />
   <HelpKINode Title="RepUseMasterLeases property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepUseMasterLeases.htm" />
+  <HelpKINode Title="RepWriteForwardTimeout property" Url="html/P_BerkeleyDB_DatabaseEnvironment_RepWriteForwardTimeout.htm" />
+  <HelpKINode Title="REP_AUTOTAKEOVER enumeration member" Url="html/T_BerkeleyDB_NotificationEvent.htm" />
   <HelpKINode Title="REP_AUTOTAKEOVER_FAILED enumeration member" Url="html/T_BerkeleyDB_NotificationEvent.htm" />
   <HelpKINode Title="REP_CLIENT enumeration member" Url="html/T_BerkeleyDB_NotificationEvent.htm" />
   <HelpKINode Title="REP_CONNECT_BROKEN enumeration member" Url="html/T_BerkeleyDB_NotificationEvent.htm" />
@@ -3456,6 +3634,7 @@
   <HelpKINode Title="REP_ELECTED enumeration member" Url="html/T_BerkeleyDB_NotificationEvent.htm" />
   <HelpKINode Title="REP_ELECTION_FAILED enumeration member" Url="html/T_BerkeleyDB_NotificationEvent.htm" />
   <HelpKINode Title="REP_INIT_DONE enumeration member" Url="html/T_BerkeleyDB_NotificationEvent.htm" />
+  <HelpKINode Title="REP_INQUEUE_FULL enumeration member" Url="html/T_BerkeleyDB_NotificationEvent.htm" />
   <HelpKINode Title="REP_JOIN_FAILURE enumeration member" Url="html/T_BerkeleyDB_NotificationEvent.htm" />
   <HelpKINode Title="REP_LOCAL_SITE_REMOVED enumeration member" Url="html/T_BerkeleyDB_NotificationEvent.htm" />
   <HelpKINode Title="REP_MASTER enumeration member" Url="html/T_BerkeleyDB_NotificationEvent.htm" />
@@ -4049,6 +4228,9 @@
   <HelpKINode Title="VerboseMessages.ReplicationTest field" Url="html/F_BerkeleyDB_VerboseMessages_ReplicationTest.htm" />
   <HelpKINode Title="VerboseMessages.RepMgrConnectionFailure field" Url="html/F_BerkeleyDB_VerboseMessages_RepMgrConnectionFailure.htm" />
   <HelpKINode Title="VerboseMessages.RepMgrMisc field" Url="html/F_BerkeleyDB_VerboseMessages_RepMgrMisc.htm" />
+  <HelpKINode Title="VerboseMessages.RepMgrSSLAll field" Url="html/F_BerkeleyDB_VerboseMessages_RepMgrSSLAll.htm" />
+  <HelpKINode Title="VerboseMessages.RepMgrSSLConnection field" Url="html/F_BerkeleyDB_VerboseMessages_RepMgrSSLConnection.htm" />
+  <HelpKINode Title="VerboseMessages.RepMgrSSLIO field" Url="html/F_BerkeleyDB_VerboseMessages_RepMgrSSLIO.htm" />
   <HelpKINode Title="VerboseMessages.VerboseMessages constructor" Url="html/M_BerkeleyDB_VerboseMessages__ctor.htm" />
   <HelpKINode Title="VerboseMessages.WaitsForTable field" Url="html/F_BerkeleyDB_VerboseMessages_WaitsForTable.htm" />
   <HelpKINode Title="Verbosity field" Url="html/F_BerkeleyDB_DatabaseEnvironmentConfig_Verbosity.htm" />
@@ -4094,6 +4276,9 @@
   <HelpKINode Title="Write method" Url="html/M_BerkeleyDB_DatabaseStream_Write.htm" />
   <HelpKINode Title="Write method" Url="html/M_BerkeleyDB_IBackup_Write.htm" />
   <HelpKINode Title="WriteCursor field" Url="html/F_BerkeleyDB_CursorConfig_WriteCursor.htm" />
+  <HelpKINode Title="WriteForwardTimeout property" Url="html/P_BerkeleyDB_ReplicationConfig_WriteForwardTimeout.htm" />
+  <HelpKINode Title="WriteOpsForwarded property" Url="html/P_BerkeleyDB_RepMgrStats_WriteOpsForwarded.htm" />
+  <HelpKINode Title="WriteOpsReceived property" Url="html/P_BerkeleyDB_RepMgrStats_WriteOpsReceived.htm" />
   <HelpKINode Title="Writes property" Url="html/P_BerkeleyDB_LogStats_Writes.htm" />
   <HelpKINode Title="WriteToLog method" Url="html/Overload_BerkeleyDB_DatabaseEnvironment_WriteToLog.htm" />
   <HelpKINode Title="WRITE_FAILED enumeration member" Url="html/T_BerkeleyDB_NotificationEvent.htm" />

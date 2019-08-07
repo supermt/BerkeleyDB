@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1999, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1999, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -36,7 +36,8 @@ public class MemoryException extends DatabaseException {
 
     /**
     Returns the {@link com.sleepycat.db.DatabaseEntry DatabaseEntry} object with insufficient memory
-    to complete the operation to complete the operation.
+    to complete the operation.
+    @return the DatabaseEntry object with insufficient memory to complete the operation
     */
     public DatabaseEntry getDatabaseEntry() {
         return dbt;

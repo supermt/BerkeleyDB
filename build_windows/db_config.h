@@ -42,6 +42,9 @@
 /* Define to 1 if platform reads and writes files atomically. */
 /* #undef HAVE_ATOMICFILEREAD */
 
+/* Define to 1 to use GCC's built-in atomic operations. */
+/* #undef HAVE_ATOMIC_GCC_BUILTIN */
+
 /* Define to 1 to use Solaris library routes for atomic operations. */
 /* #undef HAVE_ATOMIC_SOLARIS */
 
@@ -52,7 +55,6 @@
    operations. */
 /* #undef HAVE_ATOMIC_X86_GCC_ASSEMBLY */
 
-/* Define to 1 if you have the `backtrace' function. */
 /* Define to 1 if you have the `backtrace' function. */
 /* #undef HAVE_BACKTRACE */
 
@@ -87,8 +89,23 @@
 /* Define to 1 if ctime_r takes a buffer length as a third argument. */
 /* #undef HAVE_CTIME_R_3ARG */
 
+/* Define to 1 to use the C++11-specific iota function provided by the
+   compiler. */
+#define HAVE_CXX_IOTA 1
+
 /* Define to 1 if building the DBM API. */
 #define HAVE_DBM 1
+
+/* Define to 1 if you want a version that records extra information about
+   errors. */
+/* #undef HAVE_ERROR_HISTORY */
+
+/* Define to 1 if you have the `directio' function. */
+/* #undef HAVE_DIRECTIO */
+
+/* Define to 1 if you have the <dirent.h> header file, and it defines `DIR'.
+   */
+#define HAVE_DIRENT_H 1
 
 /* Define to 1 if you have the `directio' function. */
 /* #undef HAVE_DIRECTIO */
@@ -103,11 +120,23 @@
 /* Define to 1 to use dtrace for performance event tracing. */
 /* #undef HAVE_DTRACE */
 
+/* Define to 1 if you have the `epoll_create' function. */
+/* #undef HAVE_EPOLL_CREATE */
+
+/* Define to 1 if you have the `epoll_ctl' function. */
+/* #undef HAVE_EPOLL_CTL */
+
+/* Define to 1 if you have the `epoll_wait' function. */
+/* #undef HAVE_EPOLL_WAIT */
+
 /* Define to 1 if you have the <execinfo.h> header file. */
 /* #undef HAVE_EXECINFO_H */
 
 /* Define to 1 if you have EXIT_SUCCESS/EXIT_FAILURE #defines. */
 #define HAVE_EXIT_SUCCESS 1
+
+/* Define to 1 for failchk to inform all waiting threads about crashes. */
+/* #undef HAVE_FAILCHK_BROADCAST */
 
 /* Define to 1 if you have the `fchmod' function. */
 /* #undef HAVE_FCHMOD */
@@ -132,6 +161,9 @@
 
 /* Define to 1 if allocated filesystem blocks are not zeroed. */
 #define HAVE_FILESYSTEM_NOTZERO 1
+
+/* Define to 1 if you have the `flock' function. */
+/* #undef HAVE_FLOCK */
 
 /* Define to 1 if you have the `fopen' function. */
 #define HAVE_FOPEN 1
@@ -186,6 +218,9 @@
 /* Define to 1 if you have the `hstrerror' function. */
 /* #undef HAVE_HSTRERROR */
 
+/* Define to 1 if you have the `initstate_r' function. */
+/* #undef HAVE_INITSTATE_R */
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 /* #undef HAVE_INTTYPES_H */
 
@@ -203,6 +238,9 @@
 
 /* Define to 1 if you have the `localtime' function. */
 #define HAVE_LOCALTIME 1
+
+/* Define to 1 if you have the `localtime_r' function. */
+/* #undef HAVE_LOCALTIME_R */
 
 /* Define to 1 to enable log checksums. */
 #define HAVE_LOG_CHECKSUM 1
@@ -250,8 +288,14 @@
 /* Define to 1 to use the GCC compiler and Alpha assembly language mutexes. */
 /* #undef HAVE_MUTEX_ALPHA_GCC_ASSEMBLY */
 
+/* Define to 1 to use the GCC compiler and ARM64 assembly language mutexes. */
+/* #undef HAVE_MUTEX_ARM64_GCC_ASSEMBLY */
+
 /* Define to 1 to use the GCC compiler and ARM assembly language mutexes. */
 /* #undef HAVE_MUTEX_ARM_GCC_ASSEMBLY */
+
+/* Define to 1 to use the BSD/Apple/Darwin OSSpinLockTry mutexes. */
+/* #undef HAVE_MUTEX_BSD_OSSPINLOCKTRY */
 
 /* Define to 1 to use the Apple/Darwin _spin_lock_try mutexes. */
 /* #undef HAVE_MUTEX_DARWIN_SPIN_LOCK_TRY */
@@ -354,6 +398,21 @@
 /* Define to 1 if you have the <ndir.h> header file, and it defines `DIR'. */
 /* #undef HAVE_NDIR_H */
 
+/* Define to 1 if you have the <openssl/err.h> header file. */
+#ifndef HAVE_SMALLBUILD
+#define HAVE_OPENSSL_ERR_H 1
+#endif
+
+/* Define to 1 if you have the <openssl/opensslconf.h> header file. */
+#ifndef HAVE_SMALLBUILD
+#define HAVE_OPENSSL_OPENSSLCONF_H 1
+#endif
+
+/* Define to 1 if you have the <openssl/ssl.h> header file. */
+#ifndef HAVE_SMALLBUILD
+#define HAVE_OPENSSL_SSL_H 1
+#endif
+
 /* Define to 1 if you have the O_DIRECT flag. */
 /* #undef HAVE_O_DIRECT */
 
@@ -366,6 +425,9 @@
 /* Define to 1 to enable performance event monitoring of *_stat() statistics.
    */
 /* #undef HAVE_PERFMON_STATISTICS */
+
+/* Define to 1 if you have the `poll' function. */
+/* #undef HAVE_POLL */
 
 /* Define to 1 if you have the `pread' function. */
 /* #undef HAVE_PREAD */
@@ -380,12 +442,24 @@
    pthread_cond_t. */
 /* #undef HAVE_PTHREAD_COND_REINIT_OKAY */
 
+/* Define to 1 if you have the `pthread_getspecific' function. */
+/* #undef HAVE_PTHREAD_GETSPECIFIC */
+
+/* Define to 1 if you have the `pthread_key_create' function. */
+/* #undef HAVE_PTHREAD_KEY_CREATE */
+
+/* Define to 1 if you have the `pthread_once' function. */
+/* #undef HAVE_PTHREAD_ONCE */
+
 /* Define to 1 if it is OK to initialize an already initialized
    pthread_rwlock_t. */
 /* #undef HAVE_PTHREAD_RWLOCK_REINIT_OKAY */
 
 /* Define to 1 if you have the `pthread_self' function. */
 /* #undef HAVE_PTHREAD_SELF */
+
+/* Define to 1 if you have the `pthread_setspecific' function. */
+/* #undef HAVE_PTHREAD_SETSPECIFIC */
 
 /* Define to 1 if you have the `pthread_yield' function. */
 /* #undef HAVE_PTHREAD_YIELD */
@@ -413,6 +487,9 @@
 /* Define to 1 if you have the `random' function. */
 /* #undef HAVE_RANDOM */
 
+/* Define to 1 if you have the `random_r' function. */
+/* #undef HAVE_RANDOM_R /
+
 /* Define to 1 if building replication support. */
 #ifndef HAVE_SMALLBUILD
 #define HAVE_REPLICATION 1
@@ -422,6 +499,9 @@
 #ifndef HAVE_SMALLBUILD
 #define HAVE_REPLICATION_THREADS 1
 #endif
+
+/* Define to 1 if building ssl support for replication manager. */
+/* #undef HAVE_REPMGR_SSL_SUPPORT */
 
 /* Define to 1 if you have the `sched_yield' function. */
 /* #undef HAVE_SCHED_YIELD */
@@ -450,8 +530,14 @@
 /* Define to 1 if thread identifier type db_threadid_t is integral. */
 #define HAVE_SIMPLE_THREAD_TYPE 1
 
+/* Define to 1 if building sliced environment support. */
+/* #undef HAVE_SLICES */
+
 /* Define to 1 if you have the `snprintf' function. */
 #define HAVE_SNPRINTF 1
+
+/* Define to 1 if you have the `srandom_r' function. */
+/* #undef HAVE_SRANDOM_R */
 
 /* Define to 1 if you have the `stat' function. */
 #define HAVE_STAT 1
@@ -525,9 +611,15 @@
    */
 /* #undef HAVE_SYS_DIR_H */
 
+/* Define to 1 if you have the <sys/epoll.h> header file. */
+/* #undef HAVE_SYS_EPOLL_H */
+
 /* Define to 1 if you have the <sys/ndir.h> header file, and it defines `DIR'.
    */
 /* #undef HAVE_SYS_NDIR_H */
+
+/* Define to 1 if you have the <sys/poll.h> header file. */
+/* #undef HAVE_SYS_POLL_H */
 
 /* Define to 1 if you have the <sys/sdt.h> header file. */
 /* #undef HAVE_SYS_SDT_H */
@@ -586,16 +678,16 @@
 #define PACKAGE_NAME "Berkeley DB"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "Berkeley DB 6.0.20"
+#define PACKAGE_STRING "Berkeley DB 18.1.32"
 
 /* Define to the one symbol short name of this package. */
-#define PACKAGE_TARNAME "db-6.0.20"
+#define PACKAGE_TARNAME "db-18.1.32"
 
 /* Define to the home page for this package. */
 #define PACKAGE_URL "http://www.oracle.com/technology/software/products/berkeley-db/index.html"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "6.0.20"
+#define PACKAGE_VERSION "18.1.32"
 
 /* The size of a `char', as computed by sizeof. */
 /* #undef SIZEOF_CHAR */

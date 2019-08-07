@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 2005, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2005, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -75,7 +75,8 @@ __repmgr_stat(env, statp, flags)
 		memset(stats, 0, sizeof(DB_REPMGR_STAT));
 		stats->st_max_elect_threads = tmp;
 	}
-	stats->st_incoming_queue_size = (u_int32_t)db_rep->input_queue.size;
+	stats->st_incoming_queue_gbytes = db_rep->input_queue.gbytes;
+	stats->st_incoming_queue_bytes = db_rep->input_queue.bytes;
 	LOCK_MUTEX(db_rep->mutex);
 	for (i = 0; i < db_rep->site_cnt; i++) {
 		site = SITE_FROM_EID(i);
@@ -153,6 +154,7 @@ __repmgr_print_stats(env, flags)
 {
 	DB_REPMGR_STAT *sp;
 	int ret;
+	char* poll_method;
 
 	if ((ret = __repmgr_stat(env, &sp, flags)) != 0)
 		return (ret);
@@ -163,12 +165,19 @@ __repmgr_print_stats(env, flags)
 	    (u_long)sp->st_msgs_queued);
 	__db_dl(env, "Number of messages discarded due to queue length",
 	    (u_long)sp->st_msgs_dropped);
+	__db_dlbytes(env, "Incoming message size in queue",
+	    (u_long)sp->st_incoming_queue_gbytes, (u_long)0,
+	    (u_long)sp->st_incoming_queue_bytes);
+	__db_dl(env, "Number of messages discarded due to incoming queue full",
+	    (u_long)sp->st_incoming_msgs_dropped);
 	__db_dl(env, "Number of existing connections dropped",
 	    (u_long)sp->st_connection_drop);
 	__db_dl(env, "Number of failed new connection attempts",
 	    (u_long)sp->st_connect_fail);
 	__db_dl(env, "Number of currently active election threads",
 	    (u_long)sp->st_elect_threads);
+	__db_dl(env, "Earliest log file still needed by replication group",
+	    (u_long)sp->st_group_stable_log_file);
 	__db_dl(env, "Election threads for which space is reserved",
 	    (u_long)sp->st_max_elect_threads);
 	__db_dl(env, "Number of participant sites in replication group",
@@ -179,8 +188,27 @@ __repmgr_print_stats(env, flags)
 	    (u_long)sp->st_site_views);
 	__db_dl(env, "Number of automatic replication process takeovers",
 	    (u_long)sp->st_takeovers);
-	__db_dl(env, "Size of incoming message queue",
-	    (u_long)sp->st_incoming_queue_size);
+	__db_dl(env, "Number of write operations forwarded by this client",
+	    (u_long)sp->st_write_ops_forwarded);
+	__db_dl(env, "Number of write operations received by this master",
+	    (u_long)sp->st_write_ops_received);
+
+	switch (sp->st_polling_method) {
+	case SELECT:
+		poll_method = "SELECT";
+		break;
+	case POLL:
+		poll_method = "POLL";
+		break;
+	case EPOLL:
+		poll_method = "EPOLL";
+		break;
+	default:
+		poll_method = "Not yet specified";
+		break;
+	}
+	__db_msg(env, "%lu(%s) \tReplication Manager Polling method",
+	    (u_long)sp->st_polling_method, poll_method);
 
 	__os_ufree(env, sp);
 
@@ -212,6 +240,12 @@ __repmgr_print_sites(env)
 		if (list[i].status != 0)
 			__db_msgadd(env, &mb, ", %sconnected",
 			    list[i].status == DB_REPMGR_CONNECTED ? "" : "dis");
+		if (IS_REP_MASTER(env))
+			__db_msgadd(env, &mb, ", max_ack_lsn: %lu/%lu",
+			    (u_long)list[i].max_ack_lsn.file,
+			    (u_long)list[i].max_ack_lsn.offset);
+		__db_msgadd(env, &mb, ", %selectable",
+		    F_ISSET(&list[i], DB_REPMGR_ISELECTABLE) ? "" : "non-");
 		__db_msgadd(env, &mb, ", %speer",
 		    F_ISSET(&list[i], DB_REPMGR_ISPEER) ? "" : "non-");
 		__db_msgadd(env, &mb, ", %s",
@@ -377,6 +411,8 @@ __repmgr_site_list_int(env, countp, listp)
 			F_SET(&status[i], DB_REPMGR_ISPEER);
 		if (FLD_ISSET(site->gmdb_flags, SITE_VIEW))
 			F_SET(&status[i], DB_REPMGR_ISVIEW);
+		else if (F_ISSET(site, SITE_ELECTABLE))
+			F_SET(&status[i], DB_REPMGR_ISELECTABLE);
 
 		/*
 		 * If we haven't started a communications thread, connection
@@ -398,6 +434,7 @@ __repmgr_site_list_int(env, countp, listp)
 			status[i].status = DB_REPMGR_CONNECTED;
 		else
 			status[i].status = DB_REPMGR_DISCONNECTED;
+		memcpy(&status[i].max_ack_lsn, &site->max_ack, sizeof(DB_LSN));
 
 		i++;
 	}

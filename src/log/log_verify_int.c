@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -1680,7 +1680,7 @@ __dbreg_register_verify(env, dbtp, lsnp, notused2, lvhp)
 				__db_errx(env, DB_STR_A("2543",
 				    "[%lu][%lu] Wrong dbreg operation sequence,"
 				    "file %s with id %d is first seen of "
-				    "status: %s", "%lu %lu %s %d"),
+				    "status: %s", "%lu %lu %s %d %s"),
 				    (u_long)lsnp->file, (u_long)lsnp->offset,
 				    dbfname, argp->fileid,
 				    __lv_dbreg_str(opcode));
@@ -1745,6 +1745,36 @@ err:
 	if (pflife != NULL)
 		__os_free(env, pflife);
 
+	return (ret);
+}
+
+/*
+ * PUBLIC: int __dbreg_register_42_verify __P((ENV *, DBT *, DB_LSN *,
+ * PUBLIC:     db_recops, void *));
+ */
+int
+__dbreg_register_42_verify(env, dbtp, lsnp, notused2, lvhp)
+	ENV *env;
+	DBT *dbtp;
+	DB_LSN *lsnp;
+	db_recops notused2;
+	void *lvhp;
+{
+	__dbreg_register_42_args *argp;
+	DB_LOG_VRFY_INFO *lvh;
+	int ret;
+
+	COMPQUIET(notused2, DB_TXN_LOG_VERIFY);
+	lvh = (DB_LOG_VRFY_INFO *)lvhp;
+
+	if ((ret = __dbreg_register_42_read(env, dbtp->data, &argp)) != 0)
+		goto err;
+
+	ON_NOT_SUPPORTED(env, lvh, *lsnp, argp->type);
+	/* LOG_VRFY_PROC(lvh, *lsnp, argp, argp->fileid); */
+
+err:
+	__os_free(env, argp);
 	return (ret);
 }
 
@@ -2245,6 +2275,37 @@ err:
 }
 
 /*
+ * PUBLIC: int __fop_create_60_verify __P((ENV *, DBT *, DB_LSN *,
+ * PUBLIC:     db_recops, void *));
+ */
+int
+__fop_create_60_verify(env, dbtp, lsnp, notused2, lvhp)
+	ENV *env;
+	DBT *dbtp;
+	DB_LSN *lsnp;
+	db_recops notused2;
+	void *lvhp;
+{
+	__fop_create_60_args *argp;
+	DB_LOG_VRFY_INFO *lvh;
+	int ret;
+
+	COMPQUIET(notused2, DB_TXN_LOG_VERIFY);
+	lvh = (DB_LOG_VRFY_INFO *)lvhp;
+
+	if ((ret = __fop_create_60_read(env, dbtp->data, &argp)) != 0)
+		return (ret);
+
+	ON_NOT_SUPPORTED(env, lvh, *lsnp, argp->type);
+	/* LOG_VRFY_PROC(lvh, *lsnp, argp, INVAL_DBREGID); */
+err:
+
+	__os_free(env, argp);
+
+	return (ret);
+}
+
+/*
  * PUBLIC: int __fop_create_verify __P((ENV *, DBT *, DB_LSN *,
  * PUBLIC:     db_recops, void *));
  */
@@ -2269,6 +2330,38 @@ __fop_create_verify(env, dbtp, lsnp, notused2, lvhp)
 	LOG_VRFY_PROC(lvh, *lsnp, argp, INVAL_DBREGID);
 
 out:
+
+err:
+
+	__os_free(env, argp);
+
+	return (ret);
+}
+
+/*
+ * PUBLIC: int __fop_remove_60_verify __P((ENV *, DBT *, DB_LSN *,
+ * PUBLIC:     db_recops, void *));
+ */
+int
+__fop_remove_60_verify(env, dbtp, lsnp, notused2, lvhp)
+	ENV *env;
+	DBT *dbtp;
+	DB_LSN *lsnp;
+	db_recops notused2;
+	void *lvhp;
+{
+	__fop_remove_60_args *argp;
+	DB_LOG_VRFY_INFO *lvh;
+	int ret;
+
+	COMPQUIET(notused2, DB_TXN_LOG_VERIFY);
+	lvh = (DB_LOG_VRFY_INFO *)lvhp;
+
+	if ((ret = __fop_remove_60_read(env, dbtp->data, &argp)) != 0)
+		return (ret);
+
+	ON_NOT_SUPPORTED(env, lvh, *lsnp, argp->type);
+	/*LOG_VRFY_PROC(lvh, *lsnp, argp, INVAL_DBREGID);*/
 
 err:
 
@@ -2341,6 +2434,36 @@ err:
 }
 
 /*
+ * PUBLIC: int __fop_write_60_verify __P((ENV *, DBT *, DB_LSN *,
+ * PUBLIC:     db_recops, void *));
+ */
+int
+__fop_write_60_verify(env, dbtp, lsnp, notused2, lvhp)
+	ENV *env;
+	DBT *dbtp;
+	DB_LSN *lsnp;
+	db_recops notused2;
+	void *lvhp;
+{
+	__fop_write_60_args *argp;
+	DB_LOG_VRFY_INFO *lvh;
+	int ret;
+
+	COMPQUIET(notused2, DB_TXN_LOG_VERIFY);
+	lvh = (DB_LOG_VRFY_INFO *)lvhp;
+
+	if ((ret = __fop_write_60_read(env, dbtp->data, &argp)) != 0)
+		return (ret);
+
+	ON_NOT_SUPPORTED(env, lvh, *lsnp, argp->type);
+	/* LOG_VRFY_PROC(lvh, *lsnp, argp, INVAL_DBREGID); */
+err:
+
+	__os_free(env, argp);
+	return (ret);
+}
+
+/*
  * PUBLIC: int __fop_write_verify __P((ENV *, DBT *, DB_LSN *,
  * PUBLIC:     db_recops, void *));
  */
@@ -2368,6 +2491,35 @@ out:
 
 err:
 
+	__os_free(env, argp);
+	return (ret);
+}
+
+/*
+ * PUBLIC: int __fop_write_file_60_verify __P((ENV *, DBT *, DB_LSN *,
+ * PUBLIC:     db_recops, void *));
+ */
+int
+__fop_write_file_60_verify(env, dbtp, lsnp, notused2, lvhp)
+	ENV *env;
+	DBT *dbtp;
+	DB_LSN *lsnp;
+	db_recops notused2;
+	void *lvhp;
+{
+	__fop_write_file_60_args *argp;
+	DB_LOG_VRFY_INFO *lvh;
+	int ret;
+
+	COMPQUIET(notused2, DB_TXN_LOG_VERIFY);
+	lvh = (DB_LOG_VRFY_INFO *)lvhp;
+
+	if ((ret = __fop_write_file_60_read(env, dbtp->data, &argp)) != 0)
+		return (ret);
+
+	ON_NOT_SUPPORTED(env, lvh, *lsnp, argp->type);
+	/*LOG_VRFY_PROC(lvh, *lsnp, argp, INVAL_DBREGID);*/
+err:
 	__os_free(env, argp);
 	return (ret);
 }
@@ -2424,6 +2576,37 @@ __fop_rename_42_verify(env, dbtp, lsnp, notused2, lvhp)
 	lvh = (DB_LOG_VRFY_INFO *)lvhp;
 
 	if ((ret = __fop_rename_42_read(env, dbtp->data, &argp)) != 0)
+		return (ret);
+
+	ON_NOT_SUPPORTED(env, lvh, *lsnp, argp->type);
+	/* LOG_VRFY_PROC(lvh, *lsnp, argp, INVAL_DBREGID); */
+err:
+
+	__os_free(env, argp);
+
+	return (ret);
+}
+
+/*
+ * PUBLIC: int __fop_rename_60_verify __P((ENV *, DBT *, DB_LSN *,
+ * PUBLIC:     db_recops, void *));
+ */
+int
+__fop_rename_60_verify(env, dbtp, lsnp, notused2, lvhp)
+	ENV *env;
+	DBT *dbtp;
+	DB_LSN *lsnp;
+	db_recops notused2;
+	void *lvhp;
+{
+	__fop_rename_60_args *argp;
+	DB_LOG_VRFY_INFO *lvh;
+	int ret;
+
+	COMPQUIET(notused2, DB_TXN_LOG_VERIFY);
+	lvh = (DB_LOG_VRFY_INFO *)lvhp;
+
+	if ((ret = __fop_rename_60_read(env, dbtp->data, &argp)) != 0)
 		return (ret);
 
 	ON_NOT_SUPPORTED(env, lvh, *lsnp, argp->type);
@@ -2496,6 +2679,38 @@ out:
 err:
 	if (buf != NULL)
 		__os_free(lvh->dbenv->env, buf);
+	__os_free(env, argp);
+
+	return (ret);
+}
+
+/*
+ * PUBLIC: int __fop_file_remove_60_verify __P((ENV *, DBT *, DB_LSN *,
+ * PUBLIC:     db_recops, void *));
+ */
+int
+__fop_file_remove_60_verify(env, dbtp, lsnp, notused2, lvhp)
+	ENV *env;
+	DBT *dbtp;
+	DB_LSN *lsnp;
+	db_recops notused2;
+	void *lvhp;
+{
+	__fop_file_remove_60_args *argp;
+	DB_LOG_VRFY_INFO *lvh;
+	int ret;
+
+	COMPQUIET(notused2, DB_TXN_LOG_VERIFY);
+	lvh = (DB_LOG_VRFY_INFO *)lvhp;
+
+	if ((ret = __fop_file_remove_60_read(env, dbtp->data, &argp)) != 0)
+		return (ret);
+
+	ON_NOT_SUPPORTED(env, lvh, *lsnp, argp->type);
+	/*LOG_VRFY_PROC(lvh, *lsnp, argp, INVAL_DBREGID);*/
+
+err:
+
 	__os_free(env, argp);
 
 	return (ret);
@@ -3048,6 +3263,40 @@ __heap_addrem_verify(env, dbtp, lsnp, notused2, lvhp)
 
 	if ((ret =
 	    __heap_addrem_read(env, NULL, NULL, dbtp->data, &argp)) != 0)
+		return (ret);
+
+	LOG_VRFY_PROC(lvh, *lsnp, argp, argp->fileid);
+	ON_PAGE_UPDATE(lvh, *lsnp, argp, argp->pgno);
+	if ((ret = __lv_on_heap_log(lvh, *lsnp, argp->fileid)) != 0)
+		goto err;
+out:
+
+err:
+	__os_free(env, argp);
+	return (ret);
+}
+
+/*
+ * PUBLIC: int __heap_addrem_60_verify
+ * PUBLIC:   __P((ENV *, DBT *, DB_LSN *, db_recops, void *));
+ */
+int
+__heap_addrem_60_verify(env, dbtp, lsnp, notused2, lvhp)
+	ENV *env;
+	DBT *dbtp;
+	DB_LSN *lsnp;
+	db_recops notused2;
+	void *lvhp;
+{
+	__heap_addrem_60_args *argp;
+	DB_LOG_VRFY_INFO *lvh;
+	int ret;
+
+	COMPQUIET(notused2, DB_TXN_LOG_VERIFY);
+	lvh = (DB_LOG_VRFY_INFO *)lvhp;
+
+	if ((ret =
+	    __heap_addrem_60_read(env, NULL, NULL, dbtp->data, &argp)) != 0)
 		return (ret);
 
 	LOG_VRFY_PROC(lvh, *lsnp, argp, argp->fileid);
@@ -3746,7 +3995,7 @@ __txn_child_verify(env, dbtp, lsnp, notused2, lvhp)
 		}
 		if (ret2 != 0)
 			ret = ret2;
-		__db_errx(lvh->dbenv->env, DB_STR_A("2553",
+		__db_errx(lvh->dbenv->env, DB_STR_A("2547",
 		    "[%lu][%lu] Can not find an active transaction's "
 		    "information, txnid: %lx.", "%lu %lu %lx"),
 		    (u_long)lsnp->file, (u_long)lsnp->offset,
@@ -3791,7 +4040,7 @@ __txn_child_verify(env, dbtp, lsnp, notused2, lvhp)
 		}
 		if (ret2 != 0)
 			ret = ret2;
-		__db_errx(lvh->dbenv->env, DB_STR_A("2555",
+		__db_errx(lvh->dbenv->env, DB_STR_A("2547",
 		    "[%lu][%lu] Can not find an active "
 		    "transaction's information, txnid: %lx.",
 		    "%lu %lu %lx"), (u_long)lsnp->file,
@@ -3897,7 +4146,7 @@ __txn_prepare_verify(env, dbtp, lsnp, notused2, lvhp)
 		}
 		if (ret2 != 0)
 			ret = ret2;
-		__db_errx(lvh->dbenv->env, DB_STR_A("2557",
+		__db_errx(lvh->dbenv->env, DB_STR_A("2547",
 		    "[%lu][%lu] Can not find an active transaction's "
 		    "information, txnid: %lx.", "%lu %lu %lx"),
 		    (u_long)lsnp->file, (u_long)lsnp->offset,
@@ -4083,7 +4332,7 @@ cont:
 		if (ret2 != 0)
 			ret = ret2;
 
-		__db_errx(lvh->dbenv->env, DB_STR_A("2561",
+		__db_errx(lvh->dbenv->env, DB_STR_A("2547",
 		    "[%lu][%lu] Can not find an active transaction's "
 		    "information, txnid: %lx.", "%lu %lu %lx"),
 		    (u_long)lsnp->file, (u_long)lsnp->offset, (u_long)txnid);
@@ -4209,7 +4458,7 @@ __lv_on_new_txn (lvh, lsnp, txnp, type, dbregid, fid)
 		 */
 		} else if (vtip->nchild_active + vtip->nchild_commit +
 		    vtip->nchild_abort == 0) {
-			__db_errx(lvh->dbenv->env, DB_STR_A("2564",
+			__db_errx(env, DB_STR_A("2564",
 			    "[%lu][%lu] Transaction id %lx reused without "
 			    "being recycled with a __txn_recycle.",
 			    "%lu %lu %lx"),
@@ -4345,7 +4594,7 @@ __lv_on_txn_aborted(lvinfo)
 		}
 		if (ret2 != 0)
 			ret = ret2;/* Use the same error msg below. */
-		__db_errx(lvinfo->dbenv->env, DB_STR_A("2566",
+		__db_errx(lvinfo->dbenv->env, DB_STR_A("2547",
 		    "[%lu][%lu] Can not find an active transaction's "
 		    "information, txnid: %lx.", "%lu %lu %lx"),
 		    (u_long)lsn.file, (u_long)lsn.offset,

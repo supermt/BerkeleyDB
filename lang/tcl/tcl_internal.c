@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1999, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1999, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -156,6 +156,8 @@ _DeleteInfo(p)
 	}	
 	if (p->i_errpfx != NULL)
 		__os_free(NULL, p->i_errpfx);
+	if (p->i_msgpfx != NULL)
+		__os_free(NULL, p->i_msgpfx);
 	if (p->i_compare != NULL) {
 		Tcl_DecrRefCount(p->i_compare);
 	}
@@ -173,6 +175,9 @@ _DeleteInfo(p)
 	}
 	if (p->i_second_call != NULL) {
 		Tcl_DecrRefCount(p->i_second_call);
+	}
+	if (p->i_slice_callback != NULL) {
+		Tcl_DecrRefCount(p->i_slice_callback);
 	}
 	if (p->i_rep_eid != NULL) {
 		Tcl_DecrRefCount(p->i_rep_eid);
@@ -615,6 +620,7 @@ _EventFunc(dbenv, event, info)
 	/* Record the fact that this event occurred. */
 	bit_flag = 1 << event;
 	ip->i_event_info->events |= bit_flag;
+	ip->i_event_info->count[event]++;
 
 	/*
 	 * For events that have associated "info" (currently most don't), save

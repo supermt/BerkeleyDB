@@ -1,6 +1,6 @@
-# See the file LICENSE for redistribution information.
+# Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
 #
-# Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+# See the file LICENSE for license information.
 #
 # $Id$
 #
@@ -23,7 +23,7 @@ proc test008 { method {reopen "008"} {debug 0} args} {
 	global has_crypto
 	global databases_in_memory
 
-	set tnum test$reopen
+	set testname test$reopen
 	set args [convert_args $method $args]
 	set omethod [convert_method $method]
 
@@ -41,14 +41,16 @@ proc test008 { method {reopen "008"} {debug 0} args} {
 	set eindex [lsearch -exact $args "-env"]
 	#
 	# If we are using an env, then testfile should just be the db name.
-	# Otherwise it is the test directory and the name.
+	# Otherwise it is the test directory and the name.  Just set up 
+	# the "basename" here; we will save both the overflow db and the
+	# blob db by adding $opt into the database name.
 	if { $eindex == -1 } {
-		set testfile $testdir/$tnum.db
+		set testfile $testdir/$testname
 		set env NULL
 		set blrootdir $testdir/__db_bl
 		set vrflags "-blob_dir $blrootdir"
 	} else {
-		set testfile $tnum.db
+		set testfile $testname
 		incr eindex
 		set env [lindex $args $eindex]
 		set txnenv [is_txnenv $env]
@@ -66,7 +68,7 @@ proc test008 { method {reopen "008"} {debug 0} args} {
 
 	# Look for incompatible configurations of blob.
 	set skipblob 0
-	foreach conf { "-encryptaes" "-encrypt" "-compress" "-dup" "-dupsort" \
+	foreach conf { "-compress" "-dup" "-dupsort" \
 	    "-read_uncommitted" "-multiversion" } {
 		if { [lsearch -exact $args $conf] != -1 } {
 			set skipblob 1
@@ -82,12 +84,6 @@ proc test008 { method {reopen "008"} {debug 0} args} {
 	if { $skipblob == 0 && $databases_in_memory } {
 		set skipblob 1
 		set skipmsg "Test$reopen skipping in-memory database for blob"
-	}
-	if { $has_crypto == 1 && $skipblob == 0 && $env != "NULL" } {
-	    	if {[$env get_encrypt_flags] != "" } {
-			set skipblob 1
-			set skipmsg "Test$reopen skipping security environment"
-		}
 	}
 
 	set t1 $testdir/t1
@@ -108,7 +104,7 @@ proc test008 { method {reopen "008"} {debug 0} args} {
 		set fsflags -n
 	}
 	foreach opt { "overflow" "blob" } {
-		puts -nonewline "$tnum: $method $msg (with $opt)"
+		puts -nonewline "$testname: $method $msg $args (with $opt)"
 		if { $reopen == "009" } {
 			puts " (with close)"
 		} else {
@@ -124,14 +120,6 @@ proc test008 { method {reopen "008"} {debug 0} args} {
 			if { $skipblob != 0 } {
 				puts $skipmsg
 				continue
-			} elseif { $env != "NULL" && [is_repenv $env] == 1 } {
-				puts "Test$reopen\
-				    skipping blob for replication."
-				continue
-			} elseif { [lsearch -exact $args "-chksum"] != -1 } {
-				set indx [lsearch -exact $args "-chksum"]
-				set args [lreplace $args $indx $indx]
-				puts "Test$reopen ignoring -chskum for blob"
 			}
 			set bflags "-blob_threshold 30"
 			if { $env == "NULL" } {
@@ -149,7 +137,7 @@ proc test008 { method {reopen "008"} {debug 0} args} {
 		cleanup $testdir $env
 
 		set db [eval {berkdb_open -create -mode 0644} \
-		    $bflags $args $omethod $testfile]
+		    $bflags $args $omethod $testfile-$opt.db]
 		error_check_good dbopen [is_valid_db $db] TRUE
 		if { $opt == "blob" } {
 			error_check_good blob_threshold \
@@ -312,9 +300,12 @@ proc test008 { method {reopen "008"} {debug 0} args} {
 			error_check_good blob_meta_db \
 			    [file exists $blobdir/__db_blob_meta.db] 1
 
+			set encargs ""
+			split_encargs $args encargs
+			#puts "encargs $encargs"
 			# Run verify to check the internal structure and order.
 			if { [catch {eval {berkdb dbverify} \
-			    $vrflags $testfile} res] } {
+			    $vrflags $encargs $testfile-$opt.db} res] } {
 				error "FAIL: Verification failed with $res"
 			}
 		} else {
@@ -331,7 +322,7 @@ proc test008 { method {reopen "008"} {debug 0} args} {
 			if { $opt == "blob" && $env == "NULL" } {
 				set bflags "-blob_dir $blrootdir"
 			}
-			set db [eval {berkdb_open} $bflags $args $testfile]
+			set db [eval {berkdb_open} $bflags $args $testfile-$opt.db]
 			error_check_good dbopen [is_valid_db $db] TRUE
 			if { $opt == "blob" } {
 				error_check_good blob_threshold \
@@ -386,7 +377,7 @@ proc test008 { method {reopen "008"} {debug 0} args} {
 
 		if {$reopen == "009"} {
 			error_check_good db_close [$db close] 0
-			set db [eval {berkdb_open} $bflags $args $testfile]
+			set db [eval {berkdb_open} $bflags $args $testfile-$opt.db]
 			error_check_good dbopen [is_valid_db $db] TRUE
 			if { $opt == "blob" } {
 				error_check_good blob_threshold \
@@ -466,7 +457,6 @@ proc test008 { method {reopen "008"} {debug 0} args} {
 }
 
 proc test008.check { binfile tmpfile } {
-	global tnum
 	source ./include.tcl
 
 	error_check_good diff($binfile,$tmpfile) \

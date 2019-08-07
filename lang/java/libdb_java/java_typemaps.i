@@ -471,13 +471,13 @@ JAVA_TYPEMAP(DB_TXN_TOKEN *, byte[], jobject)
                $1 = NULL;
        } else {
                $1 = &token;
-               (*jenv)->GetByteArrayRegion(jenv, (jbyteArray)$input, 0, DB_TXN_TOKEN_SIZE, $1->buf);
+               (*jenv)->GetByteArrayRegion(jenv, (jbyteArray)$input, 0, DB_TXN_TOKEN_SIZE, (jbyte *)$1->buf);
        }
 %}
 
 %typemap(out) DB_TXN_TOKEN * %{
        if ($input != NULL) {
-               (*jenv)->SetByteArrayRegion(jenv, (jbyteArray)$input, 0, DB_TXN_TOKEN_SIZE, $1->buf);
+               (*jenv)->SetByteArrayRegion(jenv, (jbyteArray)$input, 0, DB_TXN_TOKEN_SIZE, (jbyte *)$1->buf);
        }
 %}
 
@@ -532,7 +532,7 @@ JAVA_TYPEMAP(u_int *, long, jlong)
 %}
 
 %typemap(in) u_int %{
-        $1 = $input;
+        $1 = (u_int)$input;
 %}
 
 JAVA_TYPEMAP(DB_KEY_RANGE *, com.sleepycat.db.KeyRange, jobject)
@@ -574,6 +574,43 @@ JAVA_TYPEMAP(DBC **, Dbc[], jobjectArray)
 %typemap(freearg) DBC ** %{
 	__os_free(NULL, $1);
 %}
+
+JAVA_TYPEMAP(DB **, Db[], jobjectArray)
+%typemap(out) DB ** { 
+	int i, len;
+
+	len = 0;
+	while ($1[len] != NULL)
+		len++;
+	if (($result = (*jenv)->NewObjectArray(jenv, (jsize)len, db_class,
+	    NULL)) == NULL)
+		return $null; /* an exception is pending */
+	for (i = 0; i < len; i++) {
+		jobject jdb = (*jenv)->NewObject(jenv, db_class,
+			    db_construct, $1[i], JNI_FALSE);
+		(*jenv)->SetObjectArrayElement(jenv, $result, (jsize)i, jdb);
+	}
+}
+
+
+JAVA_TYPEMAP(DB_ENV **, DbEnv[], jobjectArray)
+%typemap(out) DB_ENV ** {
+	int i, len;
+
+	len = 0;
+	while ($1[len] != NULL)
+		len++;
+	if (($result = (*jenv)->NewObjectArray(jenv, (jsize)len, dbenv_class,
+	    NULL)) == NULL)
+		return $null; /* an exception is pending */
+	for (i = 0; i < len; i++) {
+		jobject jdbenv = (*jenv)->NewObject(jenv, dbenv_class,
+			    dbenv_construct, $1[i], JNI_FALSE);
+		(*jenv)->SetObjectArrayElement(
+		    jenv, $result, (jsize)i, jdbenv);
+	}
+}
+
 
 JAVA_TYPEMAP(u_int8_t *gid, byte[], jbyteArray)
 %typemap(check) u_int8_t *gid %{
@@ -619,6 +656,48 @@ JAVA_TYPEMAP(char **, String[], jobjectArray)
 		STRING_ARRAY_OUT
 		__os_ufree(NULL, $1);
 	}
+}
+
+%define STRING_ARRAY_IN
+	int i, ret;
+	size_t sz;
+
+	size = (*jenv)->GetArrayLength(jenv, $input);
+	sz = (size_t)(size + 1) * sizeof(char *); 
+	if ((ret = __os_malloc(NULL, sz, &$1)) != 0) {
+		__dbj_throw(jenv, ret, NULL, NULL, NULL);
+		return $null;
+	}
+	/* Make a copy of each string. */
+	for (i = 0; i < size; i++) {
+		jstring j_string = (jstring)(*jenv)->GetObjectArrayElement(jenv, $input, i);
+		const char * c_string = (*jenv)->GetStringUTFChars(jenv, j_string, 0);
+		sz = strlen(c_string) + 1;
+		if ((ret = __os_malloc(NULL, sz, &$1[i])) != 0) {
+			__dbj_throw(jenv, ret, NULL, NULL, NULL);
+			return $null;
+		}
+		strcpy($1[i], c_string);
+		(*jenv)->ReleaseStringUTFChars(jenv, j_string, c_string);
+		(*jenv)->DeleteLocalRef(jenv, j_string);
+	}
+	$1[i] = 0;
+%enddef
+
+/* This cleans up the memory we malloc'd before the function call. */
+%typemap(freearg) char ** {
+	int i;
+	for (i = 0; i < size$argnum-1; i++)
+		__os_free(NULL, $1[i]);
+	__os_free(NULL, $1);
+}
+
+%typemap(in) char ** (jint size) {
+        STRING_ARRAY_IN
+}
+
+%typemap(in) const char ** (jint size) {
+        STRING_ARRAY_IN
 }
 
 JAVA_TYPEMAP(char **hostp, String, jobjectArray)
@@ -831,7 +910,7 @@ Java_com_sleepycat_db_internal_db_1javaJNI_DbEnv_1lock_1vec(JNIEnv *jenv,
 		switch (op) {
 		case DB_LOCK_GET_TIMEOUT:
 			/* Needed: mode, timeout, obj.  Returned: lock. */
-			prereq->op = (db_lockop_t)(*jenv)->GetIntField(
+			prereq->timeout = (db_timeout_t)(*jenv)->GetIntField(
 			    jenv, jlockreq, lockreq_timeout_fid);
 			/* FALLTHROUGH */
 		case DB_LOCK_GET:
@@ -1067,7 +1146,7 @@ JAVA_TYPEMAP(struct __db_repmgr_sites,
 %typemap(out) struct __db_repmgr_sites
 {
 	int i, len;
-	jobject jrep_addr, jrep_info;
+	jobject jrep_addr, jrep_info, jrep_lsn;
 
 	len = $1.nsites;
 	$result = (*jenv)->NewObjectArray(jenv, (jsize)len, repmgr_siteinfo_class,
@@ -1082,9 +1161,13 @@ JAVA_TYPEMAP(struct __db_repmgr_sites,
 		    rephost_class, rephost_construct, addr_host, $1.sites[i].port);
 		if (jrep_addr == NULL)
 			return $null; /* An exception is pending */
+		jrep_lsn = (*jenv)->NewObject(jenv, dblsn_class, dblsn_construct,
+			$1.sites[i].max_ack_lsn.file, $1.sites[i].max_ack_lsn.offset);
+		if (jrep_lsn == NULL)
+			return $null; /* An exception is pending */
 
 		jrep_info = (*jenv)->NewObject(jenv,
-		    repmgr_siteinfo_class, repmgr_siteinfo_construct, jrep_addr, $1.sites[i].eid);
+		    repmgr_siteinfo_class, repmgr_siteinfo_construct, jrep_addr, jrep_lsn, $1.sites[i].eid);
 		if (jrep_info == NULL)
 			return $null; /* An exception is pending */
 		(*jenv)->SetIntField(jenv, jrep_info, repmgr_siteinfo_flags_fid,

@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -73,25 +73,24 @@ struct __db_foreign_info {
 #define	DB_ADD_HEAP	8
 #define	DB_REM_HEAP	9
 
-#define OP_MODE_SHIFT   8
-#define OP_PAGE_MASK    0xff
+#define	OP_MODE_SHIFT   8
+#define	OP_PAGE_MASK    0xff
 
-#define OP_SET(mode, page)	(((mode) << OP_MODE_SHIFT) | (TYPE(page)))
-#define OP_MODE_GET(mode)	((mode) >> OP_MODE_SHIFT)
-#define OP_PAGE_GET(mode)	((mode) & OP_PAGE_MASK)
-
+#define	OP_SET(mode, page)	(((mode) << OP_MODE_SHIFT) | (TYPE(page)))
+#define	OP_MODE_GET(mode)	((mode) >> OP_MODE_SHIFT)
+#define	OP_PAGE_GET(mode)	((mode) & OP_PAGE_MASK)
 
 /*
  * Standard initialization and shutdown macros for all recovery functions.
  */
-#define	REC_INTRO(func, ip, do_cursor) do {				\
+#define	REC_INTRO(func, txnhead, do_cursor) do {			\
 	argp = NULL;							\
 	dbc = NULL;							\
 	file_dbp = NULL;						\
 	COMPQUIET(mpf, NULL);	/* Not all recovery routines use mpf. */\
-	if ((ret = func(env, &file_dbp,					\
-	    (info != NULL) ? ((DB_TXNHEAD *)info)->td : NULL,		\
+	if ((ret = func(env, &file_dbp,	 txnhead->td,			\
 	    dbtp->data, &argp)) != 0) {					\
+		/* Skip this logrec if the db file has been removed. */	\
 		if (ret	== DB_DELETED) {				\
 			ret = 0;					\
 			goto done;					\
@@ -99,8 +98,8 @@ struct __db_foreign_info {
 		goto out;						\
 	}								\
 	if (do_cursor) {						\
-		if ((ret = __db_cursor(file_dbp,			\
-		    ip, NULL, &dbc, DB_RECOVER)) != 0)			\
+		if ((ret = __db_cursor(file_dbp, txnhead->thread_info,	\
+		    txnhead->txn, &dbc, DB_RECOVER)) != 0)		\
 			goto out;					\
 	}								\
 	mpf = file_dbp->mpf;						\
@@ -110,6 +109,7 @@ struct __db_foreign_info {
 	int __t_ret;							\
 	if (argp != NULL)						\
 		__os_free(env, argp);					\
+	(void)USR_ERR(env, ret);					\
 	if (dbc != NULL &&						\
 	    (__t_ret = __dbc_close(dbc)) != 0 && ret == 0)		\
 		ret = __t_ret;						\
@@ -121,7 +121,7 @@ struct __db_foreign_info {
  */
 #define	REC_NOOP_INTRO(func) do {					\
 	argp = NULL;							\
-	if ((ret = func(env, dbtp->data, &argp)) != 0)		\
+	if ((ret = func(env, dbtp->data, &argp)) != 0)			\
 		return (ret);						\
 } while (0)
 #define	REC_NOOP_CLOSE							\
@@ -132,31 +132,56 @@ struct __db_foreign_info {
 /*
  * Macro for reading pages during recovery.  In most cases we
  * want to avoid an error if the page is not found during rollback.
+ *
+ * The last parameter ('cont') is not a variable, but the label used when
+ * the page is not found.
  */
-#define	REC_FGET(mpf, ip, pgno, pagep, cont)				\
-	if ((ret = __memp_fget(mpf,					\
-	     &(pgno), ip, NULL, 0, pagep)) != 0) {			\
+#define	REC_FGET(mpf, txnhead, pgno, pagep, cont)			\
+	if ((ret = __memp_fget(mpf, &(pgno), 				\
+	     txnhead->thread_info, txnhead->txn, 0, pagep)) != 0) {	\
 		if (ret != DB_PAGE_NOTFOUND) {				\
 			ret = __db_pgerr(file_dbp, pgno, ret);		\
 			goto out;					\
 		} else							\
 			goto cont;					\
 	}
-#define	REC_DIRTY(mpf, ip, priority, pagep)				\
-	if ((ret = __memp_dirty(mpf,					\
-	    pagep, ip, NULL, priority, DB_MPOOL_EDIT)) != 0) {		\
+#define	REC_DIRTY(mpf, txnhead, priority, pagep)			\
+	if ((ret = __memp_dirty(mpf, pagep, txnhead->thread_info,	\
+	    txnhead->txn, priority, DB_MPOOL_EDIT)) != 0) {		\
 		ret = __db_pgerr(file_dbp, PGNO(*(pagep)), ret);	\
 		goto out;						\
 	}
 
 /*
- * Standard debugging macro for all recovery functions.
+ * Standard debugging macro for all recovery functions. The caller is required
+ * to have the typical local vars: env, dbtp, lsnp, op and info. However, the
+ * dbreg_register recovery function has to pass in an internal info pointer.
  */
+#define	REC_PRINT(func)			REC_PRINT_INTERNAL(func, info)
+#define	REC_PRINT_DBREG(func, dummy)	REC_PRINT_INTERNAL(func, dummy)
+
 #ifdef DEBUG_RECOVER
-#define	REC_PRINT(func)							\
-	(void)func(env, dbtp, lsnp, op, info);
+/*
+ * When DEBUG_RECOVER is defined, include the recovery opcode if it is being
+ * applied, either forward or backward.  Include the environment home if the
+ * env is in a group -- a process with many roles can be hard to follow.
+ */
+#define	REC_PRINT_INTERNAL(func, info)	 {				\
+	char *rep_home;							\
+	if (op != DB_TXN_PRINT && op != DB_TXN_LOG_VERIFY) {		\
+		if (!REP_ON(env))					\
+			rep_home = "";					\
+		else if ((rep_home = strrchr(env->db_home, '/')) == NULL) \
+			rep_home = env->db_home;			\
+		else							\
+			rep_home++;	/* Skip over '/'. */		\
+		__db_msg(env, "%s:%s", DB_UNDO(op) ? "undo" :		\
+		    (DB_REDO(op) ? "redo" : "open/popen"), rep_home);	\
+	}								\
+	(void)func(env, dbtp, lsnp, op, info);				\
+    }
 #else
-#define	REC_PRINT(func)
+#define	REC_PRINT_INTERNAL(func, __info)	NOP_STATEMENT
 #endif
 
 /*
@@ -199,12 +224,16 @@ struct __db_foreign_info {
 #define	DB_IS_PRIMARY(dbp) (LIST_FIRST(&dbp->s_secondaries) != NULL)
 /*
  * A database should be required to be readonly if it's been explicitly
- * specified as such or if we're a client in a replicated environment
- * and the user did not specify DB_TXN_NOT_DURABLE.
+ * specified as such, if we're a client in a replicated environment
+ * and the user did not specify DB_TXN_NOT_DURABLE, or if we're a master
+ * in a replicated environment and the REP_F_READONLY_MASTER flag has been
+ * set in preparation for a preferred master takeover.
  */
 #define	DB_IS_READONLY(dbp)						\
     (F_ISSET(dbp, DB_AM_RDONLY) ||					\
-    (IS_REP_CLIENT((dbp)->env) && !F_ISSET((dbp), DB_AM_NOT_DURABLE)))
+    (IS_REP_CLIENT((dbp)->env) && !F_ISSET((dbp), DB_AM_NOT_DURABLE))	\
+    || (IS_REP_MASTER((dbp)->env) &&					\
+    F_ISSET((dbp)->env->rep_handle->region, REP_F_READONLY_MASTER)))
 
 #ifdef HAVE_COMPRESSION
 /*
@@ -235,7 +264,7 @@ struct __db_foreign_info {
 #define	DB_RETURNS_A_KEY(dbp, flags)					\
 	(((flags) != 0 && (flags) != DB_GET_BOTH &&			\
 	    (flags) != DB_GET_BOTH_RANGE && (flags) != DB_SET) ||	\
-	    ((BTREE *)(dbp)->bt_internal)->bt_compare != __bam_defcmp ||\
+	    ((BTREE *)(dbp)->bt_internal)->bt_compare != __dbt_defcmp ||\
 	    DB_RETURNS_A_KEY_HASH(dbp))
 
 /*
@@ -310,11 +339,11 @@ struct __db_foreign_info {
 /*
  * Flags to __db_truncate_page.
  */
-#define DB_EXCH_FREE		0x01	/* Free the old page. */
-#define DB_EXCH_PARENT		0x02	/* There is a parent to update. */
+#define	DB_EXCH_FREE		0x01	/* Free the old page. */
+#define	DB_EXCH_PARENT		0x02	/* There is a parent to update. */
 
 /* We usually want to do these operations. */
-#define DB_EXCH_DEFAULT		(DB_EXCH_FREE | DB_EXCH_PARENT)
+#define	DB_EXCH_DEFAULT		(DB_EXCH_FREE | DB_EXCH_PARENT)
 
 #if defined(__cplusplus)
 }

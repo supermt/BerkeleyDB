@@ -12,7 +12,7 @@
   <body>
     <div xmlns="" class="navheader">
       <div class="libver">
-        <p>Library Version 12.1.6.0</p>
+        <p>Library Version 18.1.32</p>
       </div>
       <table width="100%" summary="Navigation header">
         <tr>
@@ -30,25 +30,37 @@
       <div class="titlepage">
         <div>
           <div>
-            <h1 class="title"><a id="idm661976"></a>Berkeley DB Programmer's Reference Guide</h1>
+            <h1 class="title"><a id="idm140088469390656"></a>Berkeley DB Programmer's Reference Guide</h1>
           </div>
           <div>
             <div class="legalnotice">
-              <a id="idm1458824"></a>
+              <a id="idm140088469869104"></a>
               <p class="legalnotice-title">
                 <b>Legal Notice</b>
               </p>
-              <span>
-        <p>
-            This documentation is distributed under an open source license.
-            You may review the terms of this license at:
-            <a class="ulink" href="http://www.oracle.com/technetwork/database/berkeleydb/downloads/oslicense-093458.html" target="_top">http://www.oracle.com/technetwork/database/berkeleydb/downloads/oslicense-093458.html</a>
-            
-            
+              <p>
+            Copyright © 2002 - 2019 Oracle and/or its affiliates. All rights
+            reserved.
         </p>
-
-        <p>
-                Oracle, Berkeley DB,
+              <p>
+            This software and related documentation are provided under a
+            license agreement containing restrictions on use and disclosure
+            and are protected by intellectual property laws. Except as
+            expressly permitted in your license agreement or allowed by
+            law, you may not use, copy, reproduce, translate, broadcast,
+            modify, license, transmit, distribute, exhibit, perform,
+            publish, or display any part, in any form, or by any means.
+            Reverse engineering, disassembly, or decompilation of this
+            software, unless required by law for interoperability, is
+            prohibited.
+        </p>
+              <p>
+            The information contained herein is subject to change without
+            notice and is not warranted to be error-free. If you find any
+            errors, please report them to us in writing.
+        </p>
+              <p>
+                Berkeley DB,
                 
                 
                 and
@@ -57,22 +69,69 @@
                 No third-party use is permitted without the
                 express prior written consent of Oracle.
         </p>
-        
-        <p>
+              <p>
             Other names may be trademarks of their respective owners.
         </p>
-        <p>
-            To obtain a copy of this document's original source code, please
-            submit a request to the Oracle Technology Network forum at:
-            <a class="ulink" href="https://forums.oracle.com/forums/forum.jspa?forumID=271" target="_top">https://forums.oracle.com/forums/forum.jspa?forumID=271</a>
-            
-            
+              <p>
+            If this is software or related documentation that is delivered
+            to the U.S. Government or anyone licensing it on behalf of the
+            U.S. Government, the following notice is applicable:
         </p>
-    </span>
+              <p>
+            U.S. GOVERNMENT END USERS: Oracle programs, including any
+            operating system, integrated software, any programs installed
+            on the hardware, and/or documentation, delivered to U.S.
+            Government end users are "commercial computer software"
+            pursuant to the applicable Federal Acquisition Regulation and
+            agency-specific supplemental regulations. As such, use,
+            duplication, disclosure, modification, and adaptation of the
+            programs, including any operating system, integrated software,
+            any programs installed on the hardware, and/or documentation,
+            shall be subject to license terms and license restrictions
+            applicable to the programs. No other rights are granted to the
+            U.S. Government.
+        </p>
+              <p>
+            This software or hardware is developed for general use in a
+            variety of information management applications. It is not
+            developed or intended for use in any inherently dangerous
+            applications, including applications that may create a risk of
+            personal injury. If you use this software or hardware in
+            dangerous applications, then you shall be responsible to take
+            all appropriate fail-safe, backup, redundancy, and other
+            measures to ensure its safe use. Oracle Corporation and its
+            affiliates disclaim any liability for any damages caused by use
+            of this software or hardware in dangerous applications.
+        </p>
+              <p>
+            Oracle and Java are registered trademarks of Oracle and/or its
+            affiliates. Other names may be trademarks of their respective
+            owners.
+        </p>
+              <p>
+            Intel and Intel Xeon are trademarks or registered trademarks of
+            Intel Corporation. All SPARC trademarks are used under license
+            and are trademarks or registered trademarks of SPARC
+            International, Inc. AMD, Opteron, the AMD logo, and the AMD
+            Opteron logo are trademarks or registered trademarks of
+            Advanced Micro Devices. UNIX is a registered trademark of The
+            Open Group.
+        </p>
+              <p>
+            This software or hardware and documentation may provide access
+            to or information on content, products, and services from third
+            parties. Oracle Corporation and its affiliates are not
+            responsible for and expressly disclaim all warranties of any
+            kind with respect to third-party content, products, and
+            services. Oracle Corporation and its affiliates will not be
+            responsible for any loss, costs, or damages incurred due to
+            your access to or use of third-party content, products, or
+            services.
+        </p>
             </div>
           </div>
           <div>
-            <p class="pubdate">6/25/2013</p>
+            <p class="pubdate">19-Feb-2019</p>
           </div>
         </div>
         <hr />
@@ -112,48 +171,48 @@
           </dd>
           <dt>
             <span class="chapter">
-              <a href="intro.html">1. 
-		Introduction
-        </a>
+              <a href="intro.html">1.  Introduction </a>
             </span>
           </dt>
           <dd>
             <dl>
               <dt>
                 <span class="sect1">
-                  <a href="intro.html#intro_data">An introduction to data management</a>
+                  <a href="intro.html#intro_data">An introduction to data
+        management</a>
                 </span>
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="intro_terrain.html">Mapping the terrain: theory and practice</a>
+                  <a href="intro_terrain.html">Mapping the terrain: theory and
+        practice</a>
                 </span>
               </dt>
               <dd>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_terrain.html#idm2284864">Data access and data management</a>
+                      <a href="intro_terrain.html#idm140088470165648">Data access and data management</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_terrain.html#idm1954368">Relational databases</a>
+                      <a href="intro_terrain.html#idm140088472807136">Relational databases</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_terrain.html#idm2414728">Object-oriented databases</a>
+                      <a href="intro_terrain.html#idm140088472953520">Object-oriented databases</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_terrain.html#idm2677304">Network databases</a>
+                      <a href="intro_terrain.html#idm140088472979952">Network databases</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_terrain.html#idm2926000">Clients and servers</a>
+                      <a href="intro_terrain.html#idm140088473031952">Clients and servers</a>
                     </span>
                   </dt>
                 </dl>
@@ -167,17 +226,17 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_dbis.html#idm1511888">Data Access Services</a>
+                      <a href="intro_dbis.html#idm140088472806448">Data Access Services</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_dbis.html#idm2851552">Data management services</a>
+                      <a href="intro_dbis.html#idm140088473079648">Data management services</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_dbis.html#idm7212168">Design</a>
+                      <a href="intro_dbis.html#idm140088473122144">Design</a>
                     </span>
                   </dt>
                 </dl>
@@ -191,22 +250,22 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_dbisnot.html#idm2341896">Berkeley DB is not a relational database</a>
+                      <a href="intro_dbisnot.html#idm140088473078096">Berkeley DB is not a relational database</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_dbisnot.html#idm2075184">Berkeley DB is not an object-oriented database</a>
+                      <a href="intro_dbisnot.html#idm140088473252256">Berkeley DB is not an object-oriented database</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_dbisnot.html#idm703264">Berkeley DB is not a network database</a>
+                      <a href="intro_dbisnot.html#idm140088473264224">Berkeley DB is not a network database</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_dbisnot.html#idm1971424">Berkeley DB is not a database server</a>
+                      <a href="intro_dbisnot.html#idm140088473324240">Berkeley DB is not a database server</a>
                     </span>
                   </dt>
                 </dl>
@@ -223,7 +282,8 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="intro_distrib.html">What does the Berkeley DB distribution include?</a>
+                  <a href="intro_distrib.html">What does the Berkeley DB
+        distribution include?</a>
                 </span>
               </dt>
               <dt>
@@ -240,22 +300,22 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_products.html#idm1178744">Berkeley DB Data Store</a>
+                      <a href="intro_products.html#idm140088473668608">Berkeley DB Data Store</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_products.html#idm1898320">Berkeley DB Concurrent Data Store</a>
+                      <a href="intro_products.html#idm140088474639312">Berkeley DB Concurrent Data Store</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_products.html#idm2409928">Berkeley DB Transactional Data Store</a>
+                      <a href="intro_products.html#idm140088474677264">Berkeley DB Transactional Data Store</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="intro_products.html#idm1827024">Berkeley DB High Availability</a>
+                      <a href="intro_products.html#idm140088474702864">Berkeley DB High Availability</a>
                     </span>
                   </dt>
                 </dl>
@@ -264,45 +324,42 @@
           </dd>
           <dt>
             <span class="chapter">
-              <a href="am_conf.html">2. 
-		Access Method Configuration
-        </a>
+              <a href="am_conf.html">2.  Access Method Configuration </a>
             </span>
           </dt>
           <dd>
             <dl>
               <dt>
                 <span class="sect1">
-                  <a href="am_conf.html#am_conf_intro">
-        What are the available access methods?
-    </a>
+                  <a href="am_conf.html#am_conf_intro"> What are the available access
+        methods? </a>
                 </span>
               </dt>
               <dd>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="am_conf.html#idm1941720">Btree</a>
+                      <a href="am_conf.html#idm140088472644368">Btree</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="am_conf.html#idm987928">Hash</a>
+                      <a href="am_conf.html#idm140088474817696">Hash</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="am_conf.html#idm2633240">Heap</a>
+                      <a href="am_conf.html#idm140088469421184">Heap</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="am_conf.html#idm2927592">Queue</a>
+                      <a href="am_conf.html#idm140088469930784">Queue</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="am_conf.html#idm1144352">Recno</a>
+                      <a href="am_conf.html#idm140088469883360">Recno</a>
                     </span>
                   </dt>
                 </dl>
@@ -316,17 +373,17 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="am_conf_select.html#idm1499528">Btree or Heap?</a>
+                      <a href="am_conf_select.html#idm140088474802400">Btree or Heap?</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="am_conf_select.html#idm2039528">Hash or Btree?</a>
+                      <a href="am_conf_select.html#idm140088469683456">Hash or Btree?</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="am_conf_select.html#idm2364872">Queue or Recno?</a>
+                      <a href="am_conf_select.html#idm140088471420064">Queue or Recno?</a>
                     </span>
                   </dt>
                 </dl>
@@ -365,7 +422,8 @@
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="general_am_conf.html#am_conf_malloc">Non-local memory allocation</a>
+                      <a href="general_am_conf.html#am_conf_malloc">Non-local memory
+        allocation</a>
                     </span>
                   </dt>
                 </dl>
@@ -384,7 +442,8 @@
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="bt_conf.html#am_conf_bt_prefix">Btree prefix comparison</a>
+                      <a href="bt_conf.html#am_conf_bt_prefix">Btree prefix
+        comparison</a>
                     </span>
                   </dt>
                   <dt>
@@ -406,7 +465,8 @@
               </dd>
               <dt>
                 <span class="sect1">
-                  <a href="hash_conf.html">Hash access method specific configuration</a>
+                  <a href="hash_conf.html">Hash access method specific
+        configuration</a>
                 </span>
               </dt>
               <dd>
@@ -430,7 +490,8 @@
               </dd>
               <dt>
                 <span class="sect1">
-                  <a href="heap_conf.html">Heap access method specific configuration</a>
+                  <a href="heap_conf.html">Heap access method specific
+        configuration</a>
                 </span>
               </dt>
               <dt>
@@ -442,22 +503,26 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="rq_conf.html#am_conf_recno">Managing record-based databases</a>
+                      <a href="rq_conf.html#am_conf_recno">Managing record-based
+        databases</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="rq_conf.html#am_conf_extentsize">Selecting a Queue extent size</a>
+                      <a href="rq_conf.html#am_conf_extentsize">Selecting a Queue extent
+        size</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="rq_conf.html#am_conf_re_source">Flat-text backing files</a>
+                      <a href="rq_conf.html#am_conf_re_source">Flat-text backing
+        files</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="rq_conf.html#am_conf_renumber">Logically renumbering records</a>
+                      <a href="rq_conf.html#am_conf_renumber">Logically renumbering
+        records</a>
                     </span>
                   </dt>
                 </dl>
@@ -466,9 +531,7 @@
           </dd>
           <dt>
             <span class="chapter">
-              <a href="am.html">3. 
-		Access Method Operations
-        </a>
+              <a href="am.html">3.  Access Method Operations </a>
             </span>
           </dt>
           <dd>
@@ -480,24 +543,25 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="am_opensub.html">Opening multiple databases in a single file</a>
+                  <a href="am_opensub.html">Opening multiple databases in a
+        single file</a>
                 </span>
               </dt>
               <dd>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="am_opensub.html#idm465352">Configuring databases sharing a file</a>
+                      <a href="am_opensub.html#idm140088473714656">Configuring databases sharing a file</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="am_opensub.html#idm2203608">Caching databases sharing a file</a>
+                      <a href="am_opensub.html#idm140088473153728">Caching databases sharing a file</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="am_opensub.html#idm2248056">Locking in databases based on sharing a file</a>
+                      <a href="am_opensub.html#idm140088471324624">Locking in databases based on sharing a file</a>
                     </span>
                   </dt>
                 </dl>
@@ -511,17 +575,20 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="am_partition.html#am_partition_keys">Specifying partition keys</a>
+                      <a href="am_partition.html#am_partition_keys">Specifying partition
+            keys</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="am_partition.html#am_partition_function">Partitioning callback</a>
+                      <a href="am_partition.html#am_partition_function">Partitioning
+            callback</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="am_partition.html#partition_file_placement">Placing partition files</a>
+                      <a href="am_partition.html#partition_file_placement">Placing partition
+            files</a>
                     </span>
                   </dt>
                 </dl>
@@ -558,7 +625,8 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="am_verify.html">Database verification and salvage</a>
+                  <a href="am_verify.html">Database verification and
+        salvage</a>
                 </span>
               </dt>
               <dt>
@@ -580,7 +648,7 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="am_second.html#idp572312">Error Handling With Secondary Indexes</a>
+                      <a href="am_second.html#idm140088471288912">Error Handling With Secondary Indexes</a>
                     </span>
                   </dt>
                 </dl>
@@ -599,7 +667,8 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="am_cursor.html#am_curget">Retrieving records with a cursor</a>
+                      <a href="am_cursor.html#am_curget">Retrieving records with a
+        cursor</a>
                     </span>
                   </dt>
                   <dt>
@@ -638,9 +707,7 @@
           </dd>
           <dt>
             <span class="chapter">
-              <a href="am_misc.html">4. 
-		Access Method Wrapup
-        </a>
+              <a href="am_misc.html">4.  Access Method Wrapup </a>
             </span>
           </dt>
           <dd>
@@ -676,12 +743,14 @@
               </dd>
               <dt>
                 <span class="sect1">
-                  <a href="am_misc_partial.html">Partial record storage and retrieval</a>
+                  <a href="am_misc_partial.html">Partial record storage and
+        retrieval</a>
                 </span>
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="am_misc_struct.html">Storing C/C++ structures/objects</a>
+                  <a href="am_misc_struct.html">Storing C/C++
+        structures/objects</a>
                 </span>
               </dt>
               <dt>
@@ -706,57 +775,58 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="am_misc_diskspace.html">Disk space requirements</a>
+                  <a href="am_misc_diskspace.html">Disk space
+        requirements</a>
                 </span>
               </dt>
               <dd>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="am_misc_diskspace.html#idp781704">Btree</a>
+                      <a href="am_misc_diskspace.html#idm140088468146416">Btree</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="am_misc_diskspace.html#idp781768">Hash</a>
+                      <a href="am_misc_diskspace.html#idm140088468146288">Hash</a>
                     </span>
                   </dt>
                 </dl>
               </dd>
               <dt>
                 <span class="sect1">
-                  <a href="blobs.html">BLOB support</a>
+                  <a href="blobs.html">External File support</a>
                 </span>
               </dt>
               <dd>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="blobs.html#blob_threshold">The BLOB threshold</a>
+                      <a href="blobs.html#blob_threshold">The external file threshold</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="blobs.html#blob_create">Creating BLOBs</a>
+                      <a href="blobs.html#blob_create">Creating external files</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="blobs.html#blob_access">BLOB access</a>
+                      <a href="blobs.html#blob_access">External file access</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="blobs.html#blob_storage">BLOB storage</a>
+                      <a href="blobs.html#blob_storage">External file storage</a>
+                    </span>
+                  </dt>
+                  <dt>
+                    <span class="sect2">
+                      <a href="blobs.html#blob_replication">External Files and Replication</a>
                     </span>
                   </dt>
                 </dl>
               </dd>
-              <dt>
-                <span class="sect1">
-                  <a href="am_misc_db_sql.html">Specifying a Berkeley DB schema using SQL DDL</a>
-                </span>
-              </dt>
               <dt>
                 <span class="sect1">
                   <a href="am_misc_tune.html">Access method tuning</a>
@@ -771,9 +841,7 @@
           </dd>
           <dt>
             <span class="chapter">
-              <a href="java.html">5. 
-		Java API
-        </a>
+              <a href="java.html">5.  Java API </a>
             </span>
           </dt>
           <dd>
@@ -802,7 +870,12 @@
           </dd>
           <dt>
             <span class="chapter">
-              <a href="csharp.html">6. C# API</a>
+              <a href="bdb_server.html">6. Berkeley DB Server</a>
+            </span>
+          </dt>
+          <dt>
+            <span class="chapter">
+              <a href="csharp.html">7. C# API</a>
             </span>
           </dt>
           <dd>
@@ -816,7 +889,7 @@
           </dd>
           <dt>
             <span class="chapter">
-              <a href="stl.html">7. Standard Template Library API</a>
+              <a href="stl.html">8. Standard Template Library API</a>
             </span>
           </dt>
           <dd>
@@ -835,7 +908,8 @@
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="stl.html#stl_intro_performance">Performance overhead</a>
+                      <a href="stl.html#stl_intro_performance">Performance
+            overhead</a>
                     </span>
                   </dt>
                   <dt>
@@ -864,51 +938,52 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_db_usage.html#idp933584">Registering database and environment handles</a>
+                      <a href="stl_db_usage.html#idm140088467891856">Registering database and environment handles</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_db_usage.html#idp957024">Truncate requirements</a>
+                      <a href="stl_db_usage.html#idm140088467849456">Truncate requirements</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_db_usage.html#idp966168">Auto commit support</a>
+                      <a href="stl_db_usage.html#idm140088467826976">Auto commit support</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_db_usage.html#idp959920">Database and environment identity checks</a>
+                      <a href="stl_db_usage.html#idm140088467823456">Database and environment identity checks</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_db_usage.html#idp969896">Products, constructors and configurations</a>
+                      <a href="stl_db_usage.html#idm140088467820016">Products, constructors and configurations</a>
                     </span>
                   </dt>
                 </dl>
               </dd>
               <dt>
                 <span class="sect1">
-                  <a href="stl_db_advanced_usage.html">Using advanced Berkeley DB features with dbstl</a>
+                  <a href="stl_db_advanced_usage.html">Using advanced Berkeley DB
+        features with dbstl</a>
                 </span>
               </dt>
               <dd>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_db_advanced_usage.html#idp918704">Using bulk retrieval iterators</a>
+                      <a href="stl_db_advanced_usage.html#idm140088467816288">Using bulk retrieval iterators</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_db_advanced_usage.html#idp918768">Using the DB_RMW flag</a>
+                      <a href="stl_db_advanced_usage.html#idm140088467913936">Using the DB_RMW flag</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_db_advanced_usage.html#idp967520">Using secondary index database and secondary containers</a>
+                      <a href="stl_db_advanced_usage.html#idm140088467814176">Using secondary index database and secondary containers</a>
                     </span>
                   </dt>
                 </dl>
@@ -920,7 +995,8 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="stl_mt_usage.html">Using dbstl in multithreaded applications</a>
+                  <a href="stl_mt_usage.html">Using dbstl in multithreaded
+        applications</a>
                 </span>
               </dt>
               <dt>
@@ -932,31 +1008,32 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_primitive_rw.html#idp1018720">Storing strings</a>
+                      <a href="stl_primitive_rw.html#idm140088467737520">Storing strings</a>
                     </span>
                   </dt>
                 </dl>
               </dd>
               <dt>
                 <span class="sect1">
-                  <a href="stl_complex_rw.html">Store and Retrieve data or objects of complex types </a>
+                  <a href="stl_complex_rw.html">Store and Retrieve data or
+        objects of complex types </a>
                 </span>
               </dt>
               <dd>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_complex_rw.html#idp1009480">Storing varying length objects</a>
+                      <a href="stl_complex_rw.html#idm140088467754000">Storing varying length objects</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_complex_rw.html#idp995464">Storing arbitrary sequences</a>
+                      <a href="stl_complex_rw.html#idm140088467720368">Storing arbitrary sequences</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_complex_rw.html#idp1075960">Notes</a>
+                      <a href="stl_complex_rw.html#idm140088467631168">Notes</a>
                     </span>
                   </dt>
                 </dl>
@@ -987,38 +1064,40 @@
               </dd>
               <dt>
                 <span class="sect1">
-                  <a href="stl_container_specific.html">Dbstl container specific notes</a>
+                  <a href="stl_container_specific.html">Dbstl container specific
+        notes</a>
                 </span>
               </dt>
               <dd>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_container_specific.html#idp1043328">db_vector specific notes</a>
+                      <a href="stl_container_specific.html#idm140088467694048">db_vector specific notes</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_container_specific.html#idp1112320">Associative container specific notes</a>
+                      <a href="stl_container_specific.html#idm140088467530528">Associative container specific notes</a>
                     </span>
                   </dt>
                 </dl>
               </dd>
               <dt>
                 <span class="sect1">
-                  <a href="stl_efficienct_use.html">Using dbstl efficiently</a>
+                  <a href="stl_efficienct_use.html">Using dbstl
+        efficiently</a>
                 </span>
               </dt>
               <dd>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_efficienct_use.html#idp1081720">Using iterators efficiently</a>
+                      <a href="stl_efficienct_use.html#idm140088467640784">Using iterators efficiently</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_efficienct_use.html#idp1081504">Using containers efficiently</a>
+                      <a href="stl_efficienct_use.html#idm140088467622192">Using containers efficiently</a>
                     </span>
                   </dt>
                 </dl>
@@ -1032,12 +1111,12 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_memory_mgmt.html#idp1115536">Freeing memory</a>
+                      <a href="stl_memory_mgmt.html#idm140088467555744">Freeing memory</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_memory_mgmt.html#idp1155736">Type specific notes</a>
+                      <a href="stl_memory_mgmt.html#idm140088467481488">Type specific notes</a>
                     </span>
                   </dt>
                 </dl>
@@ -1051,12 +1130,13 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_misc.html#idp1137928">Special notes about trivial methods</a>
+                      <a href="stl_misc.html#idm140088467556432">Special notes about trivial methods</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="stl_misc.html#idp1151568">Using correct container and iterator public types</a>
+                      <a href="stl_misc.html#idm140088467488240">Using correct container and iterator public
+            types</a>
                     </span>
                   </dt>
                 </dl>
@@ -1070,9 +1150,7 @@
           </dd>
           <dt>
             <span class="chapter">
-              <a href="arch.html">8. 
-		Berkeley DB Architecture
-        </a>
+              <a href="arch.html">9.  Berkeley DB Architecture </a>
             </span>
           </dt>
           <dd>
@@ -1096,27 +1174,27 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="arch_apis.html#idp1197800">C</a>
+                      <a href="arch_apis.html#idm140088467440352">C</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="arch_apis.html#idp1178808">C++</a>
+                      <a href="arch_apis.html#idm140088467389568">C++</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="arch_apis.html#idp1198072">STL</a>
+                      <a href="arch_apis.html#idm140088467407056">STL</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="arch_apis.html#idp1198696">Java</a>
+                      <a href="arch_apis.html#idm140088467407472">Java</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="arch_apis.html#idp1216176">Dbm/Ndbm, Hsearch</a>
+                      <a href="arch_apis.html#idm140088467377616">Dbm/Ndbm, Hsearch</a>
                     </span>
                   </dt>
                 </dl>
@@ -1130,17 +1208,17 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="arch_script.html#idp1191824">Perl</a>
+                      <a href="arch_script.html#idm140088467414944">Perl</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="arch_script.html#idp1197864">PHP</a>
+                      <a href="arch_script.html#idm140088467391568">PHP</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="arch_script.html#idp1207712">Tcl</a>
+                      <a href="arch_script.html#idm140088467387712">Tcl</a>
                     </span>
                   </dt>
                 </dl>
@@ -1154,9 +1232,7 @@
           </dd>
           <dt>
             <span class="chapter">
-              <a href="env.html">9. 
-		The Berkeley DB Environment
-        </a>
+              <a href="env.html">10.  The Berkeley DB Environment </a>
             </span>
           </dt>
           <dd>
@@ -1168,7 +1244,8 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="env_create.html">Creating a database environment</a>
+                  <a href="env_create.html">Creating a database
+        environment</a>
                 </span>
               </dt>
               <dt>
@@ -1178,7 +1255,8 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="env_open.html">Opening databases within the environment</a>
+                  <a href="env_open.html">Opening databases within the
+        environment</a>
                 </span>
               </dt>
               <dt>
@@ -1188,7 +1266,8 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="env_db_config.html">DB_CONFIG configuration file</a>
+                  <a href="env_db_config.html">DB_CONFIG configuration
+        file</a>
                 </span>
               </dt>
               <dt>
@@ -1200,17 +1279,17 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="env_naming.html#idp1300520">Specifying file naming to Berkeley DB</a>
+                      <a href="env_naming.html#idm140088467229120">Specifying file naming to Berkeley DB</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="env_naming.html#idp1314272">Filename resolution in Berkeley DB</a>
+                      <a href="env_naming.html#idm140088467198000">Filename resolution in Berkeley DB</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="env_naming.html#idp1317480">Examples</a>
+                      <a href="env_naming.html#idm140088467162768">Examples</a>
                     </span>
                   </dt>
                 </dl>
@@ -1244,16 +1323,15 @@
           </dd>
           <dt>
             <span class="chapter">
-              <a href="cam.html">10. 
-		Berkeley DB Concurrent Data Store Applications
-        </a>
+              <a href="cam.html">11.  Berkeley DB Data Store and Concurrent Data Store Applications</a>
             </span>
           </dt>
           <dd>
             <dl>
               <dt>
                 <span class="sect1">
-                  <a href="cam.html#cam_intro">Concurrent Data Store introduction</a>
+                  <a href="cam.html#cam_intro">Concurrent Data Store
+        introduction</a>
                 </span>
               </dt>
               <dt>
@@ -1266,13 +1344,35 @@
                   <a href="cam_app.html">Architecting Data Store and Concurrent Data Store applications</a>
                 </span>
               </dt>
+              <dt>
+                <span class="sect1">
+                  <a href="gsg_bdb.html">Quick Start Guide</a>
+                </span>
+              </dt>
+              <dd>
+                <dl>
+                  <dt>
+                    <span class="sect2">
+                      <a href="gsg_bdb.html#gsg_ds">Data Store Environment</a>
+                    </span>
+                  </dt>
+                  <dt>
+                    <span class="sect2">
+                      <a href="gsg_bdb.html#gsg_cds">Concurrent Data Store Environment</a>
+                    </span>
+                  </dt>
+                  <dt>
+                    <span class="sect2">
+                      <a href="gsg_bdb.html#gsg_tds">Transactional Data Store Environment</a>
+                    </span>
+                  </dt>
+                </dl>
+              </dd>
             </dl>
           </dd>
           <dt>
             <span class="chapter">
-              <a href="transapp.html">11. 
-		Berkeley DB Transactional Data Store Applications
-        </a>
+              <a href="transapp.html">12.  Berkeley DB Transactional Data Store Applications </a>
             </span>
           </dt>
           <dd>
@@ -1299,7 +1399,14 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="transapp_app.html">Architecting Transactional Data Store applications</a>
+                  <a href="transapp_app.html">Architecting Transactional Data
+        Store applications</a>
+                </span>
+              </dt>
+              <dt>
+                <span class="sect1">
+                  <a href="quick_start_transapp_app.html">Getting Started with Transactional Data
+        Store Applications</a>
                 </span>
               </dt>
               <dt>
@@ -1353,7 +1460,8 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="transapp_admin.html">Environment infrastructure</a>
+                  <a href="transapp_admin.html">Environment
+        infrastructure</a>
                 </span>
               </dt>
               <dt>
@@ -1368,7 +1476,8 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="transapp_archival.html">Database and log file archival</a>
+                  <a href="transapp_archival.html">Database and log file
+        archival</a>
                 </span>
               </dt>
               <dt>
@@ -1408,7 +1517,8 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="transapp_throughput.html">Transaction throughput</a>
+                  <a href="transapp_throughput.html">Transaction
+        throughput</a>
                 </span>
               </dt>
               <dt>
@@ -1420,9 +1530,7 @@
           </dd>
           <dt>
             <span class="chapter">
-              <a href="rep.html">12. 
-		Berkeley DB Replication
-        </a>
+              <a href="rep.html">13.  Berkeley DB Replication </a>
             </span>
           </dt>
           <dd>
@@ -1469,19 +1577,22 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="group_membership.html">Managing Replication Manager group membership</a>
+                  <a href="group_membership.html">Managing Replication Manager
+        group membership</a>
                 </span>
               </dt>
               <dd>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="group_membership.html#group_mem_add">Adding sites to a replication group</a>
+                      <a href="group_membership.html#group_mem_add">Adding sites to a replication
+            group</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="group_membership.html#group_mem_remove">Removing sites from a replication group</a>
+                      <a href="group_membership.html#group_mem_remove">Removing sites from a
+            replication group</a>
                     </span>
                   </dt>
                   <dt>
@@ -1510,75 +1621,81 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="rep_filename.html#rep_dir">Replication database directory considerations</a>
+                      <a href="rep_filename.html#rep_dir">Replication database directory
+            considerations</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="rep_filename.html#rep_files">Managing replication internal files</a>
-                    </span>
-                  </dt>
-                </dl>
-              </dd>
-              <dt>
-                <span class="sect1">
-                  <a href="rep_mgrmulti.html">Running Replication Manager in multiple processes</a>
-                </span>
-              </dt>
-              <dd>
-                <dl>
-                  <dt>
-                    <span class="sect2">
-                      <a href="rep_mgrmulti.html#idp2010856">One replication process and multiple subordinate processes</a>
-                    </span>
-                  </dt>
-                  <dt>
-                    <span class="sect2">
-                      <a href="rep_mgrmulti.html#idp1996440">Persistence of local site network address configuration</a>
-                    </span>
-                  </dt>
-                  <dt>
-                    <span class="sect2">
-                      <a href="rep_mgrmulti.html#idp2014600">Programming considerations</a>
-                    </span>
-                  </dt>
-                  <dt>
-                    <span class="sect2">
-                      <a href="rep_mgrmulti.html#idp1975032">Handling failure</a>
-                    </span>
-                  </dt>
-                  <dt>
-                    <span class="sect2">
-                      <a href="rep_mgrmulti.html#idp2021056">Other miscellaneous rules</a>
+                      <a href="rep_filename.html#rep_files">Managing replication internal
+            files</a>
                     </span>
                   </dt>
                 </dl>
               </dd>
               <dt>
                 <span class="sect1">
-                  <a href="rep_replicate.html">Running replication using the db_replicate utility</a>
+                  <a href="rep_mgrmulti.html">Running Replication Manager in
+        multiple processes</a>
                 </span>
               </dt>
               <dd>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="rep_replicate.html#idp2002488">One replication process and multiple subordinate processes</a>
+                      <a href="rep_mgrmulti.html#idm140088465952208">One replication process and multiple subordinate
+            processes</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="rep_replicate.html#idp1984208">Common use case</a>
+                      <a href="rep_mgrmulti.html#idm140088465915328">Persistence of local site network address
+            configuration</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="rep_replicate.html#idp2042064">Avoiding rollback</a>
+                      <a href="rep_mgrmulti.html#idm140088465893264">Programming considerations</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="rep_replicate.html#idp2047176">When to consider an integrated replication application</a>
+                      <a href="rep_mgrmulti.html#idm140088465932896">Handling failure</a>
+                    </span>
+                  </dt>
+                  <dt>
+                    <span class="sect2">
+                      <a href="rep_mgrmulti.html#idm140088465892080">Other miscellaneous rules</a>
+                    </span>
+                  </dt>
+                </dl>
+              </dd>
+              <dt>
+                <span class="sect1">
+                  <a href="rep_replicate.html">Running replication using the
+        db_replicate utility</a>
+                </span>
+              </dt>
+              <dd>
+                <dl>
+                  <dt>
+                    <span class="sect2">
+                      <a href="rep_replicate.html#idm140088465882064">One replication process and multiple subordinate processes</a>
+                    </span>
+                  </dt>
+                  <dt>
+                    <span class="sect2">
+                      <a href="rep_replicate.html#idm140088465921248">Common use case</a>
+                    </span>
+                  </dt>
+                  <dt>
+                    <span class="sect2">
+                      <a href="rep_replicate.html#idm140088465905984">Avoiding rollback</a>
+                    </span>
+                  </dt>
+                  <dt>
+                    <span class="sect2">
+                      <a href="rep_replicate.html#idm140088465842992">When to consider an integrated replication application</a>
                     </span>
                   </dt>
                 </dl>
@@ -1595,7 +1712,8 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="rep_mastersync.html">Synchronizing with a master</a>
+                  <a href="rep_mastersync.html">Synchronizing with a
+        master</a>
                 </span>
               </dt>
               <dd>
@@ -1612,12 +1730,12 @@
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="rep_mastersync.html#idp2071712">Blocked client operations</a>
+                      <a href="rep_mastersync.html#idm140088465836096">Blocked client operations</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="rep_mastersync.html#idp2093720">Clients too far out-of-date to synchronize</a>
+                      <a href="rep_mastersync.html#idm140088465761488">Clients too far out-of-date to synchronize</a>
                     </span>
                   </dt>
                 </dl>
@@ -1646,7 +1764,8 @@
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="rep_lease.html#masterlease_change_groupsize">Changing group size</a>
+                      <a href="rep_lease.html#masterlease_change_groupsize">Changing group
+            size</a>
                     </span>
                   </dt>
                 </dl>
@@ -1682,24 +1801,19 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="repmgr_channels.html">Using Replication Manager message channels</a>
+                  <a href="comm_repsites.html">Communicating between Replication Manager Sites</a>
                 </span>
               </dt>
               <dd>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="repmgr_channels.html#dbchannel_class">DB_CHANNEL</a>
+                      <a href="comm_repsites.html#conf_writeforw">Configuring for Write Forwarding</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="repmgr_channels.html#dbchannel_send">Sending messages over a message channel</a>
-                    </span>
-                  </dt>
-                  <dt>
-                    <span class="sect2">
-                      <a href="repmgr_channels.html#dbchannel_receive">Receiving messages</a>
+                      <a href="comm_repsites.html#repmgr_channels">Using Replication Manager message channels</a>
                     </span>
                   </dt>
                 </dl>
@@ -1709,6 +1823,25 @@
                   <a href="rep_twosite.html">Special considerations for two-site replication groups</a>
                 </span>
               </dt>
+              <dd>
+                <dl>
+                  <dt>
+                    <span class="sect2">
+                      <a href="rep_twosite.html#twosite_strict">Two-site strict configuration</a>
+                    </span>
+                  </dt>
+                  <dt>
+                    <span class="sect2">
+                      <a href="rep_twosite.html#twosite_prefmas">Preferred master mode</a>
+                    </span>
+                  </dt>
+                  <dt>
+                    <span class="sect2">
+                      <a href="rep_twosite.html#twosite_other">Other alternatives</a>
+                    </span>
+                  </dt>
+                </dl>
+              </dd>
               <dt>
                 <span class="sect1">
                   <a href="rep_partition.html">Network partitions</a>
@@ -1731,22 +1864,44 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="rep_ex_rq.html">Ex_rep_base: putting it all together</a>
+                  <a href="rep_ex_rq.html">Ex_rep_base: putting it all
+        together</a>
                 </span>
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="rep_ex_chan.html">Ex_rep_chan: a Replication Manager
-channel example</a>
+                  <a href="rep_ex_chan.html">Ex_rep_chan: a Replication Manager channel example</a>
                 </span>
               </dt>
             </dl>
           </dd>
           <dt>
             <span class="chapter">
-              <a href="xa.html">13. 
-		Distributed Transactions
-        </a>
+              <a href="bdb_slices.html">14. Berkeley DB Slice Support</a>
+            </span>
+          </dt>
+          <dd>
+            <dl>
+              <dt>
+                <span class="sect1">
+                  <a href="bdb_slices.html#slice-enable">Enabling Slices</a>
+                </span>
+              </dt>
+              <dt>
+                <span class="sect1">
+                  <a href="slice-apis.html">Slice APIs</a>
+                </span>
+              </dt>
+              <dt>
+                <span class="sect1">
+                  <a href="slice-keys.html">Key Design</a>
+                </span>
+              </dt>
+            </dl>
+          </dd>
+          <dt>
+            <span class="chapter">
+              <a href="xa.html">15.  Distributed Transactions </a>
             </span>
           </dt>
           <dd>
@@ -1758,7 +1913,7 @@ channel example</a>
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="ch13s02.html">Berkeley DB XA Implementation</a>
+                  <a href="ch15s02.html">Berkeley DB XA Implementation</a>
                 </span>
               </dt>
               <dt>
@@ -1770,32 +1925,27 @@ channel example</a>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="xa_build.html#idp2361160">Communicating with multiple Berkeley DB environments</a>
+                      <a href="xa_build.html#idm140088465204480">Communicating with multiple Berkeley DB environments</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="xa_build.html#idp2362104">Recovering from GTM failure</a>
+                      <a href="xa_build.html#idm140088465203136">Managing the Global Transaction ID (GID) name space</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="xa_build.html#idp2346192">Managing the Global Transaction ID (GID) name space</a>
+                      <a href="xa_build.html#idm140088465213824">Maintaining state for each distributed transaction.</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="xa_build.html#idp2341048">Maintaining state for each distributed transaction.</a>
+                      <a href="xa_build.html#idm140088465262896">Recovering from the failure of a single environment</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="xa_build.html#idp2359680">Recovering from the failure of a single environment</a>
-                    </span>
-                  </dt>
-                  <dt>
-                    <span class="sect2">
-                      <a href="xa_build.html#idp2362568">Recovering from GTM failure</a>
+                      <a href="xa_build.html#idm140088465271136">Recovering from GTM failure</a>
                     </span>
                   </dt>
                 </dl>
@@ -1814,17 +1964,17 @@ channel example</a>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="xa_xa_config.html#idp2369344">Update the Resource Manager File in Tuxedo</a>
+                      <a href="xa_xa_config.html#idm140088465201056">Update the Resource Manager File in Tuxedo</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="xa_xa_config.html#idp2394896">Build the Transaction Manager Server</a>
+                      <a href="xa_xa_config.html#idm140088465152288">Build the Transaction Manager Server</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="xa_xa_config.html#idp2341848">Update the UBBCONFIG File</a>
+                      <a href="xa_xa_config.html#idm140088465202144">Update the UBBCONFIG File</a>
                     </span>
                   </dt>
                 </dl>
@@ -1843,26 +1993,28 @@ channel example</a>
           </dd>
           <dt>
             <span class="chapter">
-              <a href="apprec.html">14. 
-		Application Specific Logging and Recovery
-        </a>
+              <a href="apprec.html">16.  Application Specific Logging and
+        Recovery </a>
             </span>
           </dt>
           <dd>
             <dl>
               <dt>
                 <span class="sect1">
-                  <a href="apprec.html#apprec_intro">Introduction to application specific logging and recovery</a>
+                  <a href="apprec.html#apprec_intro">Introduction to application
+        specific logging and recovery</a>
                 </span>
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="apprec_def.html">Defining application-specific log records</a>
+                  <a href="apprec_def.html">Defining application-specific log
+        records</a>
                 </span>
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="apprec_auto.html">Automatically generated functions</a>
+                  <a href="apprec_auto.html">Automatically generated
+        functions</a>
                 </span>
               </dt>
               <dt>
@@ -1874,9 +2026,7 @@ channel example</a>
           </dd>
           <dt>
             <span class="chapter">
-              <a href="program.html">15. 
-		Programmer Notes
-        </a>
+              <a href="program.html">17.  Programmer Notes </a>
             </span>
           </dt>
           <dd>
@@ -1888,7 +2038,8 @@ channel example</a>
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="program_errorret.html">Error returns to applications</a>
+                  <a href="program_errorret.html">Error returns to
+        applications</a>
                 </span>
               </dt>
               <dt>
@@ -1900,12 +2051,12 @@ channel example</a>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="program_i18n.html#idp2520544">Message Format</a>
+                      <a href="program_i18n.html#idm140088464929792">Message Format</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="program_i18n.html#idp2538760">Enable Globalization Support</a>
+                      <a href="program_i18n.html#idm140088464900656">Enable Globalization Support</a>
                     </span>
                   </dt>
                   <dt>
@@ -1939,19 +2090,21 @@ channel example</a>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="program_namespace.html#idp2554904">C Language Name Space</a>
+                      <a href="program_namespace.html#idm140088464810960">C Language Name
+            Space</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="program_namespace.html#idp2602504">Filesystem Name Space</a>
+                      <a href="program_namespace.html#idm140088464863584">Filesystem Name Space</a>
                     </span>
                   </dt>
                 </dl>
               </dd>
               <dt>
                 <span class="sect1">
-                  <a href="program_ram.html">Memory-only or Flash configurations</a>
+                  <a href="program_ram.html">Memory-only or Flash
+        configurations</a>
                 </span>
               </dt>
               <dt>
@@ -1976,7 +2129,8 @@ channel example</a>
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="program_perfmon.html">Performance Event Monitoring</a>
+                  <a href="program_perfmon.html">Performance Event
+        Monitoring</a>
                 </span>
               </dt>
               <dd>
@@ -1993,7 +2147,8 @@ channel example</a>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="program_perfmon.html#program_perfmon_examples">Example Scripts</a>
+                      <a href="program_perfmon.html#program_perfmon_examples">Example
+            Scripts</a>
                     </span>
                   </dt>
                   <dt>
@@ -2012,16 +2167,15 @@ channel example</a>
           </dd>
           <dt>
             <span class="chapter">
-              <a href="lock.html">16. 
-		The Locking Subsystem
-        </a>
+              <a href="lock.html">18.  The Locking Subsystem </a>
             </span>
           </dt>
           <dd>
             <dl>
               <dt>
                 <span class="sect1">
-                  <a href="lock.html#lock_intro">Introduction to the locking subsystem</a>
+                  <a href="lock.html#lock_intro">Introduction to the locking
+        subsystem</a>
                 </span>
               </dt>
               <dt>
@@ -2031,7 +2185,8 @@ channel example</a>
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="lock_max.html">Configuring locking: sizing the system</a>
+                  <a href="lock_max.html">Configuring locking: sizing the
+        system</a>
                 </span>
               </dt>
               <dt>
@@ -2046,7 +2201,8 @@ channel example</a>
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="lock_timeout.html">Deadlock detection using timers</a>
+                  <a href="lock_timeout.html">Deadlock detection using
+        timers</a>
                 </span>
               </dt>
               <dt>
@@ -2066,7 +2222,8 @@ channel example</a>
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="lock_twopl.html">Locking with transactions: two-phase locking</a>
+                  <a href="lock_twopl.html">Locking with transactions: two-phase
+        locking</a>
                 </span>
               </dt>
               <dt>
@@ -2076,28 +2233,29 @@ channel example</a>
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="lock_am_conv.html">Berkeley DB Transactional Data Store locking conventions</a>
+                  <a href="lock_am_conv.html">Berkeley DB Transactional Data
+        Store locking conventions</a>
                 </span>
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="lock_nondb.html">Locking and non-Berkeley DB applications</a>
+                  <a href="lock_nondb.html">Locking and non-Berkeley DB
+        applications</a>
                 </span>
               </dt>
             </dl>
           </dd>
           <dt>
             <span class="chapter">
-              <a href="log.html">17. 
-		The Logging Subsystem
-        </a>
+              <a href="log.html">19.  The Logging Subsystem </a>
             </span>
           </dt>
           <dd>
             <dl>
               <dt>
                 <span class="sect1">
-                  <a href="log.html#log_intro">Introduction to the logging subsystem</a>
+                  <a href="log.html#log_intro">Introduction to the logging
+        subsystem</a>
                 </span>
               </dt>
               <dt>
@@ -2114,9 +2272,7 @@ channel example</a>
           </dd>
           <dt>
             <span class="chapter">
-              <a href="mp.html">18. 
-		The Memory Pool Subsystem
-        </a>
+              <a href="mp.html">20.  The Memory Pool Subsystem </a>
             </span>
           </dt>
           <dd>
@@ -2149,9 +2305,7 @@ channel example</a>
           </dd>
           <dt>
             <span class="chapter">
-              <a href="txn.html">19. 
-		The Transaction Subsystem
-        </a>
+              <a href="txn.html">21.  The Transaction Subsystem </a>
             </span>
           </dt>
           <dd>
@@ -2175,17 +2329,17 @@ channel example</a>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="txn_limits.html#idp2957688">Transaction IDs</a>
+                      <a href="txn_limits.html#idm140088464167216">Transaction IDs</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="txn_limits.html#idp2829216">Cursors</a>
+                      <a href="txn_limits.html#idm140088464318496">Cursors</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="txn_limits.html#idp2866856">Multiple Threads of Control</a>
+                      <a href="txn_limits.html#idm140088464156080">Multiple Threads of Control</a>
                     </span>
                   </dt>
                 </dl>
@@ -2194,16 +2348,12 @@ channel example</a>
           </dd>
           <dt>
             <span class="chapter">
-              <a href="sequence.html">20. 
-		Sequences
-        </a>
+              <a href="sequence.html">22.  Sequences </a>
             </span>
           </dt>
           <dt>
             <span class="chapter">
-              <a href="tcl.html">21. 
-		Berkeley DB Extensions: Tcl
-        </a>
+              <a href="tcl.html">23.  Berkeley DB Extensions: Tcl </a>
             </span>
           </dt>
           <dd>
@@ -2217,12 +2367,12 @@ channel example</a>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="tcl.html#idp2971896">Installing as a Tcl Package</a>
+                      <a href="tcl.html#idm140088464144352">Installing as a Tcl Package</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="tcl.html#idp2962280">Loading Berkeley DB with Tcl</a>
+                      <a href="tcl.html#idm140088464158576">Loading Berkeley DB with Tcl</a>
                     </span>
                   </dt>
                 </dl>
@@ -2251,9 +2401,7 @@ channel example</a>
           </dd>
           <dt>
             <span class="chapter">
-              <a href="ext.html">22. 
-		Berkeley DB Extensions
-        </a>
+              <a href="ext.html">24.  Berkeley DB Extensions </a>
             </span>
           </dt>
           <dd>
@@ -2277,9 +2425,8 @@ channel example</a>
           </dd>
           <dt>
             <span class="chapter">
-              <a href="dumpload.html">23. 
-		Dumping and Reloading Databases
-        </a>
+              <a href="dumpload.html">25.  Dumping and Reloading Databases
+    </a>
             </span>
           </dt>
           <dd>
@@ -2303,9 +2450,7 @@ channel example</a>
           </dd>
           <dt>
             <span class="chapter">
-              <a href="refs.html">24. 
-		Additional References
-        </a>
+              <a href="refs.html">26. Additional References</a>
             </span>
           </dt>
           <dd>
@@ -2319,17 +2464,17 @@ channel example</a>
                 <dl>
                   <dt>
                     <span class="sect2">
-                      <a href="refs.html#idp2988328">Technical Papers on Berkeley DB</a>
+                      <a href="refs.html#idm140088464175536">Technical Papers on Berkeley DB</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="refs.html#idp3055488">Background on Berkeley DB Features</a>
+                      <a href="refs.html#idm140088463996800">Background on Berkeley DB Features</a>
                     </span>
                   </dt>
                   <dt>
                     <span class="sect2">
-                      <a href="refs.html#idp3049168">Database Systems Theory</a>
+                      <a href="refs.html#idm140088464020304">Database Systems Theory</a>
                     </span>
                   </dt>
                 </dl>

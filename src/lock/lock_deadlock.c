@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -71,11 +71,13 @@ __lock_detect_pp(dbenv, flags, atype, rejectp)
 	u_int32_t flags, atype;
 	int *rejectp;
 {
+	DB_ENV *slice;
 	DB_THREAD_INFO *ip;
 	ENV *env;
-	int ret;
+	int i, ret, t_ret, temp;
 
 	env = dbenv->env;
+	temp = 0;
 
 	ENV_REQUIRES_CONFIG(env,
 	    env->lk_handle, "DB_ENV->lock_detect", DB_INIT_LOCK);
@@ -103,6 +105,16 @@ __lock_detect_pp(dbenv, flags, atype, rejectp)
 	ENV_ENTER(env, ip);
 	REPLICATION_WRAP(env, (__lock_detect(env, atype, rejectp)), 0, ret);
 	ENV_LEAVE(env, ip);
+	SLICE_FOREACH(dbenv, slice, i) {
+		if ((t_ret = __lock_detect_pp(slice,
+			flags, atype, rejectp == NULL ? NULL : &temp)) != 0) {
+			if (ret == 0)
+				ret = t_ret;
+			break;
+		}
+		if (rejectp != NULL)
+			*rejectp += temp;
+	}
 	return (ret);
 }
 
@@ -128,14 +140,18 @@ __lock_detect(env, atype, rejectp)
 	int pri_set, ret, status;
 
 	/*
-	 * If this environment is a replication client, then we must use the
-	 * MINWRITE detection discipline.
+	 * If this environment is a replication client, then we force use of
+	 * MINWRITE in the hope that application-initiated transactions (which
+	 * must be read-only) are aborted instead of any transactions being
+	 * applied by replication message processing threads.
 	 */
 	if (IS_REP_CLIENT(env))
 		atype = DB_LOCK_MINWRITE;
 
-	copymap = tmpmap = NULL;
+	bitmap = copymap = tmpmap = NULL;
 	deadlist = NULL;
+	idmap = NULL;
+	pri_set = nlockers = nalloc = 0;
 
 	lt = env->lk_handle;
 	if (rejectp != NULL)
@@ -304,7 +320,7 @@ __lock_detect(env, atype, rejectp)
 
 			default:
 				killid = BAD_KILLID;
-				ret = EINVAL;
+				ret = USR_ERR(env, EINVAL);
 				goto dokill;
 			}
 
@@ -433,7 +449,7 @@ skip:		LOCK_DD(env, region);
 					if (__clock_expired(env,
 					    &now, &lockerp->lk_expire)) {
 						lp->status = DB_LSTAT_EXPIRED;
-						MUTEX_UNLOCK(
+						MUTEX_UNLOCK_NO_CTR(
 						    env, lp->mtx_lock);
 						if (rejectp != NULL)
 							++*rejectp;
@@ -620,7 +636,7 @@ again:		memset(bitmap, 0, count * sizeof(u_int32_t) * nentries);
 				if (__clock_expired(env,
 				    &now, &lockerp->lk_expire)) {
 					lp->status = DB_LSTAT_EXPIRED;
-					MUTEX_UNLOCK(env, lp->mtx_lock);
+					MUTEX_UNLOCK_NO_CTR(env, lp->mtx_lock);
 					if (rejectp != NULL)
 						++*rejectp;
 					continue;
@@ -922,7 +938,7 @@ __dd_abort(env, info, statusp)
 		UNLOCK_DD(env, region);
 	} else
 		ret = __lock_promote(lt, sh_obj, NULL, 0);
-	MUTEX_UNLOCK(env, lockp->mtx_lock);
+	MUTEX_UNLOCK_NO_CTR(env, lockp->mtx_lock);
 
 done:	OBJECT_UNLOCK(lt, region, info->last_ndx);
 err:	UNLOCK_LOCKERS(env, region);

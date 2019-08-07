@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1996, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1996, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -208,6 +208,7 @@ alloc:	if ((ret = __env_alloc(infop, len, &p)) == 0) {
 				__env_alloc_free(infop, bhp);
 				goto search;
 			}
+			atomic_init(&bhp->ref, 0);
 			c_mp->pages++;
 		}
 		MPOOL_REGION_UNLOCK(env, infop);
@@ -444,9 +445,10 @@ retry_search:	bhp = NULL;
 				if (bucket_priority > current_bhp->priority) {
 					bucket_priority = current_bhp->priority;
 					if (bhp != NULL)
-						atomic_dec(env, &bhp->ref);
+						(void)atomic_dec(env,
+						    &bhp->ref);
 					bhp = current_bhp;
-					atomic_inc(env, &bhp->ref);
+					(void)atomic_inc(env, &bhp->ref);
 				}
 				continue;
 			}
@@ -500,9 +502,9 @@ retry_search:	bhp = NULL;
 				 * releasing the current candidate, if any.
 				 */
 				if (bhp != NULL)
-					atomic_dec(env, &bhp->ref);
+					(void)atomic_dec(env, &bhp->ref);
 				bhp = mvcc_bhp;
-				atomic_inc(env, &bhp->ref);
+				(void)atomic_inc(env, &bhp->ref);
 			}
 
 			/*
@@ -519,9 +521,9 @@ retry_search:	bhp = NULL;
 is_obsolete:
 				obsolete = 1;
 				if (bhp != NULL)
-					atomic_dec(env, &bhp->ref);
+					(void)atomic_dec(env, &bhp->ref);
 				bhp = oldest_bhp;
-				atomic_inc(env, &bhp->ref);
+				(void)atomic_inc(env, &bhp->ref);
 				goto this_buffer;
 			}
 		}
@@ -589,7 +591,7 @@ is_obsolete:
 			MUTEX_READLOCK(env, hp->mtx_hash);
 			h_locked = 1;
 			DB_ASSERT(env, BH_REFCOUNT(bhp) > 0);
-			atomic_dec(env, &bhp->ref);
+			(void)atomic_dec(env, &bhp->ref);
 			goto retry_search;
 		}
 
@@ -600,7 +602,7 @@ is_obsolete:
 		 */
 		if (lru_generation != c_mp->lru_generation) {
 			DB_ASSERT(env, BH_REFCOUNT(bhp) > 0);
-			atomic_dec(env, &bhp->ref);
+			(void)atomic_dec(env, &bhp->ref);
 			MUTEX_UNLOCK(env, hp->mtx_hash);
 			MPOOL_REGION_LOCK(env, infop);
 			hp_saved = NULL;
@@ -623,9 +625,8 @@ this_buffer:	/*
 
 		/* We cannot block as the caller is probably holding locks. */
 		if ((ret = MUTEX_TRYLOCK(env, bhp->mtx_buf)) != 0) {
-			if (ret != DB_LOCK_NOTGRANTED) {
+			if (ret != DB_LOCK_NOTGRANTED)
 				goto err;
-			}
 			ret = 0;
 			goto next_hb;
 		}
@@ -692,7 +693,7 @@ this_buffer:	/*
 				goto next_hb;
 			} else if (ret != 0) {
 				DB_ASSERT(env, BH_REFCOUNT(bhp) > 0);
-				atomic_dec(env, &bhp->ref);
+				(void)atomic_dec(env, &bhp->ref);
 				DB_ASSERT(env, b_lock);
 				F_CLR(bhp, BH_EXCLUSIVE);
 				MUTEX_UNLOCK(env, bhp->mtx_buf);
@@ -773,14 +774,15 @@ this_buffer:	/*
 		 * allocated some frozen buffer headers.
 		 */
 		if (alloc_freeze) {
+			/* __memp_ bhfree(..., 0) unlocks both hp & bhp. */
+			h_locked = 0;
+			b_lock = 0;
 			if ((ret = __memp_bhfree(dbmp,
 			     infop, bh_mfp, hp, bhp, 0)) != 0)
 				goto err;
 			DB_ASSERT(env, bhp->mtx_buf != MUTEX_INVALID);
 			if ((ret = __mutex_free(env, &bhp->mtx_buf)) != 0)
 				goto err;
-			b_lock = 0;
-			h_locked = 0;
 
 			MVCC_MPROTECT(bhp->buf, bh_mfp->pagesize,
 			    PROT_READ | PROT_WRITE | PROT_EXEC);
@@ -810,6 +812,9 @@ this_buffer:	/*
 		 * reuse it. Otherwise, free it and keep looking.
 		 */
 		if (mfp != NULL && mfp->pagesize == bh_mfp->pagesize) {
+			/* __memp_ bhfree(..., 0) unlocks both hp & bhp. */
+			h_locked = 0;
+			b_lock = 0;
 			if ((ret = __memp_bhfree(dbmp,
 			     infop, bh_mfp, hp, bhp, 0)) != 0)
 				goto err;
@@ -818,6 +823,9 @@ this_buffer:	/*
 		}
 
 		freed_space += sizeof(*bhp) + bh_mfp->pagesize;
+		/* __memp_ bhfree(.., BH_FREE_FREEMEM) also unlocks hp & bhp. */
+		h_locked = 0;
+		b_lock = 0;
 		if ((ret = __memp_bhfree(dbmp,
 		    infop, bh_mfp, hp, bhp, BH_FREE_FREEMEM)) != 0)
 			goto err;
@@ -835,7 +843,7 @@ this_buffer:	/*
 		if (0) {
 next_hb:		if (bhp != NULL) {
 				DB_ASSERT(env, BH_REFCOUNT(bhp) > 0);
-				atomic_dec(env, &bhp->ref);
+				(void)atomic_dec(env, &bhp->ref);
 				if (b_lock) {
 					F_CLR(bhp, BH_EXCLUSIVE);
 					MUTEX_UNLOCK(env, bhp->mtx_buf);

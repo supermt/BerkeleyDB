@@ -1,7 +1,7 @@
 /*-
- * See the file LICENSE for redistribution information.
+ * Copyright (c) 1999, 2019 Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 1999, 2013 Oracle and/or its affiliates.  All rights reserved.
+ * See the file LICENSE for license information.
  *
  * $Id$
  */
@@ -49,7 +49,7 @@ __bam_db_create(dbp)
 	dbp->bt_internal = t;
 
 	t->bt_minkey = DEFMINKEYPAGE;		/* Btree */
-	t->bt_compare = __bam_defcmp;
+	t->bt_compare = __dbt_defcmp;
 	t->bt_prefix = __bam_defpfx;
 #ifdef HAVE_COMPRESSION
 	t->bt_compress = NULL;
@@ -161,11 +161,13 @@ __bam_set_flags(dbp, flagsp)
 	DB *dbp;
 	u_int32_t *flagsp;
 {
-	BTREE *t;
 	u_int32_t flags;
 
+#ifdef HAVE_COMPRESSION
+	BTREE *t;
 	t = dbp->bt_internal;
-
+#endif
+	
 	flags = *flagsp;
 	if (LF_ISSET(DB_DUP | DB_DUPSORT | DB_RECNUM | DB_REVSPLITOFF))
 		DB_ILLEGAL_AFTER_OPEN(dbp, "DB->set_flags");
@@ -213,10 +215,10 @@ __bam_set_flags(dbp, flagsp)
 #ifdef HAVE_COMPRESSION
 		if (DB_IS_COMPRESSED(dbp)) {
 			dbp->dup_compare = __bam_compress_dupcmp;
-			t->compress_dup_compare = __bam_defcmp;
+			t->compress_dup_compare = __dbt_defcmp;
 		} else
 #endif
-			dbp->dup_compare = __bam_defcmp;
+			dbp->dup_compare = __dbt_defcmp;
 	}
 
 	__bam_map_flags(dbp, flagsp, &dbp->flags);
@@ -306,7 +308,7 @@ __bam_get_bt_compress(dbp, compressp, decompressp)
 	COMPQUIET(compressp, NULL);
 	COMPQUIET(decompressp, NULL);
 
-	__db_errx(dbp->env, DB_STR("1026",
+	__db_errx(dbp->env, DB_STR("1017",
 	    "compression support has not been compiled in"));
 	return (EINVAL);
 #endif
@@ -354,7 +356,7 @@ __bam_set_bt_compress(dbp, compress, decompress)
 	/* Compression is incompatible with blob storage. */
 	if (dbp->blob_threshold > 0) {
 		__db_errx(dbp->env, DB_STR("1198",
-		    "compression cannot be used with blobs enabled."));
+		    "compression cannot be used with external files."));
 		return (EINVAL);
 	}
 
@@ -383,7 +385,7 @@ __bam_set_bt_compress(dbp, compress, decompress)
 	COMPQUIET(compress, NULL);
 	COMPQUIET(decompress, NULL);
 
-	__db_errx(dbp->env, DB_STR("1030",
+	__db_errx(dbp->env, DB_STR("1017",
 	    "compression support has not been compiled in"));
 	return (EINVAL);
 #endif
@@ -475,13 +477,15 @@ __bam_set_bt_prefix(dbp, func)
 }
 
 /*
- * __bam_copy_config
- *	Copy the configuration of one DB handle to another.
- * PUBLIC: void __bam_copy_config __P((DB *, DB*, u_int32_t));
+ * __bam_copy_config --
+ *	Copy the btree-specific configuration of one DB handle to another.
+ *
+ * PUBLIC: void __bam_copy_config __P((const DB *, DB *, u_int32_t));
  */
 void
 __bam_copy_config(src, dst, nparts)
-	DB *src, *dst;
+	const DB *src;
+	DB *dst;
 	u_int32_t nparts;
 {
 	BTREE *s, *d;
